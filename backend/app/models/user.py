@@ -10,7 +10,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     dni = Column(String, nullable=False)
-    role = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="client")
     account_status = Column(String, nullable=False, default="active")
     dni_verified = Column(Boolean, default=False)
     physical_clearance_status = Column(String, default="none")
