@@ -8,6 +8,7 @@ from app.utils.security import hash_password, verify_password
 
 router = APIRouter()
 
+# Agregar usuario a la base de datos. Este es el registrar
 @router.post("/users")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
     
@@ -33,6 +34,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     
     
     
+#Obtener usuarios de la base de datos
 @router.get("/users")
 def get_users(db: Session = Depends(get_db)):
 
