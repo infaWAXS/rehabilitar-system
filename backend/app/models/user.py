@@ -10,7 +10,7 @@ class User(Base):
     lastname = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
-    dni = Column(String, nullable=False)
+    dni = Column(String, nullable=True)
     role = Column(String, nullable=False, default="client")
     account_status = Column(String, nullable=False, default="active")
     dni_verified = Column(Boolean, default=False)
