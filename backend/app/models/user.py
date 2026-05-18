@@ -3,6 +3,7 @@ from sqlalchemy.sql import func
 from database.connection import Base
 
 
+
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
@@ -12,8 +13,9 @@ class User(Base):
     password = Column(String, nullable=False)
     dni = Column(String, nullable=True)
     role = Column(String, nullable=False, default="client")
-    account_status = Column(String, nullable=False, default="active")
+    account_status = Column(String, nullable=False, default="Active")
     dni_verified = Column(Boolean, default=False)
-    physical_clearance_status = Column(String, default="none")
+    medical_certificate_path = Column(String, nullable=True)
+    medical_certificate_status = Column(String, default="none")
     failed_login_attempts = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
