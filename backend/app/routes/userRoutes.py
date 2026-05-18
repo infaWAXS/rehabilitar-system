@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from app.models.user import User
-from app.schemas.userSchema import UserCreate, UserLogin
-from app.utils.security import hash_password, verify_password, create_access_token, verify_token
+from app.schemas.userSchema import ChangePasswordRequest, UpdateUserRequest, UserResponse
+from app.utils.dependencies import get_current_user, require_role
 
-from app.services.user_service import register_user, login_user
+
+from app.services.user_service import change_password
 
 
 
@@ -18,51 +19,40 @@ oauth2_scheme = OAuth2PasswordBearer(
 router = APIRouter()
 
 
+#El usuario actualmente autenticado
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
 
-#### REGISTRAR
-# Agregar usuario a la base de datos.
-@router.post("/users")
-def create_user(user: UserCreate, db: Session = Depends(get_db)):   
-    return register_user(user, db)
+
+
     
-    
-    
-    
-    
-    
-    
-    
-#Obtener usuarios de la base de datos
-@router.get("/users")
-def get_users(db: Session = Depends(get_db)):
+@router.get("/admin-only")
+def admin_only(token: str, db: Session = Depends(get_db)):
 
-    users = db.query(User).all()
+    current_user = get_current_user(token, db)
 
-    return users
-
-
-
-
-
-@router.post("/login")
-def login(user: UserLogin, db: Session = Depends(get_db)):
-    return login_user(user, db)
-
-
-
-
-@router.get("/me/{token}")
-def get_me(token: str):
-
-    email = verify_token(token)
-
-    if not email:
-
-        raise HTTPException(
-            status_code=401,
-            detail="Token inválido"
-        )
+    require_role(["admin"])(current_user)
 
     return {
-        "email": email
+        "message": "Ruta solo para admins"
     }
+    
+    
+@router.put("/change-password")
+def change_user_password(request: ChangePasswordRequest, token: str, db: Session = Depends(get_db)):
+
+    current_user = get_current_user(token, db)
+
+    return change_password(current_user, request.new_password, request.confirm_password,db)
+
+
+@router.put("users/update-info")
+def update_user_info(request: UpdateUserRequest, token: str, db: Session = Depends(get_db)):
+    
+    current_user = get_current_user(token, db)
+
+    return update_user_info(current_user, request.name, request.lastname, db)
+
+
+
