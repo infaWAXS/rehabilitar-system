@@ -6,19 +6,19 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 
 - Francis
   - Front: frontend/src/services/authService.js, frontend/src/services/usersService.js
-  - Back: backend/app/routes/authRoutes.py, backend/app/routes/userRoutes.py, backend/app/services/user_service.py
+  - Back: backend/app/routes/rutas_autenticacion.py, backend/app/routes/rutas_usuarios.py, backend/app/services/servicio_usuarios.py
 - Nahuel
   - Front: frontend/src/services/clientsService.js
-  - Back: backend/app/routes/clientRoutes.py, backend/app/services/client_service.py
+  - Back: backend/app/routes/rutas_clientes.py, backend/app/services/servicio_clientes.py
 - Angel
   - Front: frontend/src/services/activitiesService.js
-  - Back: backend/app/routes/activityRoutes.py, backend/app/services/activity_service.py
+  - Back: backend/app/routes/rutas_actividades.py, backend/app/services/servicio_actividades.py
 - Agustin
   - Front: frontend/src/services/reservationsService.js, frontend/src/services/waitlistService.js
-  - Back: backend/app/routes/reservationRoutes.py, backend/app/routes/waitlistRoutes.py, backend/app/services/reservation_service.py, backend/app/services/waitlist_service.py
+  - Back: backend/app/routes/rutas_reservas.py, backend/app/routes/rutas_lista_espera.py, backend/app/services/servicio_reservas.py, backend/app/services/servicio_lista_espera.py
 - Ezequiel
   - Front: frontend/src/services/attendanceService.js, frontend/src/services/paymentsService.js
-  - Back: backend/app/routes/attendanceRoutes.py, backend/app/routes/paymentRoutes.py, backend/app/services/attendance_service.py, backend/app/services/payment_service.py
+  - Back: backend/app/routes/rutas_asistencias.py, backend/app/routes/rutas_pagos.py, backend/app/services/servicio_asistencias.py, backend/app/services/servicio_pagos.py
 
 ## Francis - Gestion de usuarios y autenticacion
 
@@ -36,16 +36,16 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 ### Backend (API + archivos sugeridos)
 - Auth y login/registro:
   - Endpoint: POST /users, POST /login.
-  - Archivos: backend/app/routes/authRoutes.py, backend/app/services/user_service.py.
+  - Archivos: backend/app/routes/rutas_autenticacion.py, backend/app/services/servicio_usuarios.py.
 - Perfil y password:
   - Endpoint: GET /users/me, PUT /users/change-password, PUT /users/update-info.
-  - Archivos: backend/app/routes/userRoutes.py, backend/app/services/user_service.py.
+  - Archivos: backend/app/routes/rutas_usuarios.py, backend/app/services/servicio_usuarios.py.
 - Admin de usuarios:
   - Endpoint: GET /users, GET /users/{id}, PUT /users/disable/{id}, PUT /users/enable/{id}.
-  - Archivos: backend/app/routes/userRoutes.py, backend/app/services/user_service.py.
+  - Archivos: backend/app/routes/rutas_usuarios.py, backend/app/services/servicio_usuarios.py.
 - DNI y apto fisico:
   - Endpoint: POST /users/upload-medical-certificate, PUT /users/update-medical-clearance/{id}, PUT /users/reject-medical/{id}.
-  - Archivos: backend/app/routes/userRoutes.py, backend/app/services/user_service.py.
+  - Archivos: backend/app/routes/rutas_usuarios.py, backend/app/services/servicio_usuarios.py.
 
 ---
 
@@ -58,8 +58,8 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 
 ### Backend (API + archivos sugeridos)
 - Crear modulo de clientes:
-  - Archivo nuevo sugerido: backend/app/routes/clientRoutes.py.
-  - Archivo nuevo sugerido: backend/app/services/client_service.py.
+  - Archivo nuevo sugerido: backend/app/routes/rutas_clientes.py.
+  - Archivo nuevo sugerido: backend/app/services/servicio_clientes.py.
 - Endpoints esperados:
   - GET /clients.
   - GET /clients/{id}/conditions.
@@ -80,8 +80,8 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 
 ### Backend (API + archivos sugeridos)
 - Crear modulo de actividades:
-  - Archivo nuevo sugerido: backend/app/routes/activityRoutes.py.
-  - Archivo nuevo sugerido: backend/app/services/activity_service.py.
+  - Archivo nuevo sugerido: backend/app/routes/rutas_actividades.py.
+  - Archivo nuevo sugerido: backend/app/services/servicio_actividades.py.
 - Endpoints esperados:
   - POST /activities.
   - GET /activities.
@@ -105,11 +105,11 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 
 ### Backend (API + archivos sugeridos)
 - Crear modulo de reservas:
-  - Archivo nuevo sugerido: backend/app/routes/reservationRoutes.py.
-  - Archivo nuevo sugerido: backend/app/services/reservation_service.py.
+  - Archivo nuevo sugerido: backend/app/routes/rutas_reservas.py.
+  - Archivo nuevo sugerido: backend/app/services/servicio_reservas.py.
 - Crear modulo de lista de espera:
-  - Archivo nuevo sugerido: backend/app/routes/waitlistRoutes.py.
-  - Archivo nuevo sugerido: backend/app/services/waitlist_service.py.
+  - Archivo nuevo sugerido: backend/app/routes/rutas_lista_espera.py.
+  - Archivo nuevo sugerido: backend/app/services/servicio_lista_espera.py.
 - Endpoints esperados:
   - POST /reservations/fixed.
   - POST /reservations/individual.
@@ -129,11 +129,11 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 
 ### Backend (API + archivos sugeridos)
 - Crear modulo de asistencias:
-  - Archivo nuevo sugerido: backend/app/routes/attendanceRoutes.py.
-  - Archivo nuevo sugerido: backend/app/services/attendance_service.py.
+  - Archivo nuevo sugerido: backend/app/routes/rutas_asistencias.py.
+  - Archivo nuevo sugerido: backend/app/services/servicio_asistencias.py.
 - Crear modulo de pagos:
-  - Archivo nuevo sugerido: backend/app/routes/paymentRoutes.py.
-  - Archivo nuevo sugerido: backend/app/services/payment_service.py.
+  - Archivo nuevo sugerido: backend/app/routes/rutas_pagos.py.
+  - Archivo nuevo sugerido: backend/app/services/servicio_pagos.py.
 - Endpoints esperados:
   - POST /attendances/by-dni.
   - POST /attendances/{id}/comments.

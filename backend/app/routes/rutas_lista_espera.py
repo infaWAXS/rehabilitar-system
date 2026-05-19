@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-router = APIRouter(prefix="/waitlist", tags=["Waitlist"])
+router = APIRouter(prefix="/waitlist", tags=["Lista de espera"])
 
 
 @router.get("/health")

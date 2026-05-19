@@ -4,14 +4,14 @@ from fastapi import FastAPI
 from database.connection import engine, Base
 from app.models.user import User
 
-from app.routes.authRoutes import router as auth_router
-from app.routes.userRoutes import router as user_router
-from app.routes.clientRoutes import router as client_router
-from app.routes.activityRoutes import router as activity_router
-from app.routes.reservationRoutes import router as reservation_router
-from app.routes.waitlistRoutes import router as waitlist_router
-from app.routes.attendanceRoutes import router as attendance_router
-from app.routes.paymentRoutes import router as payment_router
+from app.routes.rutas_autenticacion import router as auth_router
+from app.routes.rutas_usuarios import router as user_router
+from app.routes.rutas_clientes import router as client_router
+from app.routes.rutas_actividades import router as activity_router
+from app.routes.rutas_reservas import router as reservation_router
+from app.routes.rutas_lista_espera import router as waitlist_router
+from app.routes.rutas_asistencias import router as attendance_router
+from app.routes.rutas_pagos import router as payment_router
 
 app = FastAPI()
 

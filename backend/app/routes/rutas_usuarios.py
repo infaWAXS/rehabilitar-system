@@ -7,11 +7,11 @@ import shutil
 
 from database.connection import get_db
 from app.models.user import User
-from app.schemas.userSchema import ChangePasswordRequest, UpdateUserRequest, UserResponse
+from app.schemas.esquema_usuario import ChangePasswordRequest, UpdateUserRequest, UserResponse
 from app.utils.dependencies import get_current_user, require_role
 
 
-from app.services.user_service import change_medical_clearance_status, change_password, change_user_status, get_all_users, get_user_by_id
+from app.services.servicio_usuarios import change_medical_clearance_status, change_password, change_user_status, get_all_users, get_user_by_id
 
 
 
@@ -23,7 +23,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 router = APIRouter(
     prefix="/users",
-    tags=["Users"]
+    tags=["Usuarios"]
 )
 
 

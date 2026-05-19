@@ -128,9 +128,9 @@ npm start
 	- `apiClient.js` contiene la configuracion comun de llamadas HTTP.
 
 - Backend modular en `backend/app/routes/` y `backend/app/services/`:
-	- auth/usuarios: `authRoutes.py`, `userRoutes.py`, `user_service.py`
-	- clientes: `clientRoutes.py`, `client_service.py`
-	- actividades: `activityRoutes.py`, `activity_service.py`
-	- reservas/lista espera: `reservationRoutes.py`, `waitlistRoutes.py`, `reservation_service.py`, `waitlist_service.py`
-	- asistencias/pagos: `attendanceRoutes.py`, `paymentRoutes.py`, `attendance_service.py`, `payment_service.py`
+	- auth/usuarios: `rutas_autenticacion.py`, `rutas_usuarios.py`, `servicio_usuarios.py`
+	- clientes: `rutas_clientes.py`, `servicio_clientes.py`
+	- actividades: `rutas_actividades.py`, `servicio_actividades.py`
+	- reservas/lista espera: `rutas_reservas.py`, `rutas_lista_espera.py`, `servicio_reservas.py`, `servicio_lista_espera.py`
+	- asistencias/pagos: `rutas_asistencias.py`, `rutas_pagos.py`, `servicio_asistencias.py`, `servicio_pagos.py`
 

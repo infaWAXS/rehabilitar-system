@@ -5,17 +5,17 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from app.models.user import User
-from app.schemas.userSchema import UserCreate, UserLogin, UserResponse
+from app.schemas.esquema_usuario import UserCreate, UserLogin, UserResponse
 from app.utils.dependencies import get_current_user, require_role
 from app.utils.security import hash_password, verify_password, create_access_token, verify_token
 
-from app.services.user_service import register_user, login_user
+from app.services.servicio_usuarios import register_user, login_user
 
 
 
 
 
-router = APIRouter()
+router = APIRouter(tags=["Autenticación"])
 
 
 

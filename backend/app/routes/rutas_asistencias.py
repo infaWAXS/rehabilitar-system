@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-router = APIRouter(prefix="/attendances", tags=["Attendances"])
+router = APIRouter(prefix="/attendances", tags=["Asistencias"])
 
 
 @router.get("/health")
