@@ -1,7 +1,7 @@
 # # Responsable legacy: Francis y Agustin - logica de negocio de usuarios/auth.
 from urllib import request
 
-from backend.app.schemas.userSchema import UserLogin
+from app.schemas.userSchema import UserLogin
 from fastapi import HTTPException
 
 from sqlalchemy.orm import Session

@@ -64,25 +64,51 @@ rehabilitar-system/
 
 ## Arranque rapido
 
-### Frontend
+### Requisitos previos
+- Python 3.11+ instalado.
+- Node.js instalado.
+- Estar en la raíz del repositorio.
+
+### Preparación inicial (una sola vez)
+Desde la raíz del proyecto:
 
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 cd frontend
 npm install
-npm start
+cd ..
 ```
 
-### Backend
+### Activar el entorno virtual
+Si querés trabajar dentro del entorno virtual en PowerShell, desde la raíz del proyecto usa:
+
+```powershell
+.\.venv\Scripts\Activate
+pip install fastapi uvicorn sqlalchemy pydantic email-validator bcrypt
+```
+
+Para salir del entorno virtual, ejecuta:
+
+```powershell
+deactivate
+```
+
+### Iniciar el backend
+Desde la raíz del proyecto:
 
 ```powershell
 cd backend
-..\.venv\Scripts\python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+..\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Levantar ambos desde raiz (PowerShell)
+### Iniciar el frontend
+Desde la raíz del proyecto: (Abrir otra terminal)
 
 ```powershell
-Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location "C:\UNLP\2026 PRIMER SEMESTRE\ING2\rehabilitar-system\frontend"; npm start'; Set-Location "C:\UNLP\2026 PRIMER SEMESTRE\ING2\rehabilitar-system\backend"; ..\.venv\Scripts\python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+cd frontend
+npm start
 ```
 
 ## Documentacion del sprint
