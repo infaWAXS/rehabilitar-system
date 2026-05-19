@@ -156,28 +156,28 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 
 | HU | Responsable |
 |---|---|
-| Registrar usuario | Francis |
-| Iniciar sesión | Francis |
+| Registrar usuario | Agustin |
+| Iniciar sesión | Agustin |
 | Cerrar sesión | Francis |
 | Recuperar contraseña | Francis |
 | Restablecer contraseña | Francis |
-| Cambiar contraseña | Francis |
+| Cambiar contraseña | Agustin |
 | Subir DNI | Nahuel |
-| Ver perfil | Francis |
-| Editar perfil | Francis |
+| Ver perfil | Agustin |
+| Editar perfil | Agustin |
 | Buscar empleado | Francis |
-| Filtrar empleado | Agustin |
+| Filtrar empleado | Francis |
 | Eliminar cuenta admin | Francis |
 | Eliminar cuenta usuario | Francis |
 | Crear cuenta | Francis |
-| Adjuntar apto físico | Nahuel |
-| Verificar apto físico | Nahuel |
+| Adjuntar apto físico | Agustin |
+| Verificar apto físico | Agustin |
 | Modificar información de usuario | Nahuel |
 | Listar condiciones de cliente | Nahuel |
-| Modificar empleado | Agustin |
-| Búsqueda de usuarios | Agustin |
+| Modificar empleado | Francis |
+| Búsqueda de usuarios | Francis |
 | Listar empleados | Agustin |
-| Listar clientes | Agustin |
+| Listar clientes | Francis |
 | Listar administrativos | Agustin |
 | Solicitar reintegro de cuenta | Nahuel |
 | Reintegrar cuenta | Nahuel |
@@ -193,11 +193,11 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 | Listar dias disponibles | Angel |
 | Listar salas disponibles | Angel |
 | Listar especializaciones | Angel |
-| Inscribirse a actividad fija | Agustin |
-| Inscribirse a actividad individual | Agustin |
-| Ver mis reservas | Agustin |
-| Dar de baja en lista de espera | Agustin |
-| Listar lista de espera | Agustin |
+| Inscribirse a actividad fija | Francis |
+| Inscribirse a actividad individual | Francis |
+| Ver mis reservas | Francis |
+| Dar de baja en lista de espera | Francis |
+| Listar lista de espera | Francis |
 | Registrar asistencia por DNI | Ezequiel |
 | Dejar comentario en asistencia | Ezequiel |
 | Eliminar comentario en asistencia | Ezequiel |
@@ -206,4 +206,4 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 | Inscribir actividad individual | Ezequiel |
 | Ver suscripciones | Ezequiel |
 | Pagar Mercado Pago | Ezequiel |
-| Cancelar turno | Agustin |
+| Cancelar turno | Francis |

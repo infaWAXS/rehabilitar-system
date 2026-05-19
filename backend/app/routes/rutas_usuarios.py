@@ -7,11 +7,11 @@ import shutil
 
 from database.connection import get_db
 from app.models.user import User
-from app.schemas.esquema_usuario import ChangePasswordRequest, UpdateUserRequest, UserResponse
+from app.schemas.esquema_usuario import ChangePasswordRequest, UpdateUserRequest, UserResponse, UserSearchRequest
 from app.utils.dependencies import get_current_user, require_role
 
 
-from app.services.servicio_usuarios import change_medical_clearance_status, change_password, change_user_status, get_all_users, get_user_by_id
+from app.services.servicio_usuarios import change_medical_clearance_status, change_password, change_user_status, get_all_users, get_user_by_id, search_users, modify_employee
 
 
 
@@ -123,7 +123,7 @@ def upload_medical_certificate(
 
     current_user.medical_certificate_path = file_path
 
-    current_user.physical_clearance_status = "pending"
+    current_user.medical_certificate_status = "pending"
 
     db.commit()
 
@@ -148,8 +148,34 @@ def reject_medical_certificate(user_id: int, token: str, db: Session = Depends(g
 
     require_role(["admin"])(current_user)
 
-    return change_medical_clearance_status(user_id, "rejected", db)
+    return change_medical_clearance_status(user_id, db, status="rejected")
 
 
+# Endpoint para buscar usuarios con filtros avanzados
+@router.get("/search", response_model=list[UserResponse])
+def search_users_endpoint(token: str, db: Session = Depends(get_db), search: str = None, role: str = None, status: str = None):
+    current_user = get_current_user(token, db)
+    
+    require_role(["admin"])(current_user)
+    
+    return search_users(db, search=search, role=role, status=status)
 
 
+# Endpoint para modificar datos de un empleado
+@router.put("/{user_id}/modify", response_model=UserResponse)
+def modify_employee_endpoint(user_id: int, request: UpdateUserRequest, token: str, db: Session = Depends(get_db)):
+    current_user = get_current_user(token, db)
+    
+    require_role(["admin"])(current_user)
+    
+    return modify_employee(user_id, request.name, request.lastname, db)
+
+
+# Endpoint para listar clientes (usuarios con rol "client")
+@router.get("/clients/list", response_model=list[UserResponse])
+def list_clients(token: str, db: Session = Depends(get_db)):
+    current_user = get_current_user(token, db)
+    
+    require_role(["admin"])(current_user)
+    
+    return get_all_users(db, role="client")

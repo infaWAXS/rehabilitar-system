@@ -80,4 +80,40 @@ class UpdateUserRequest(BaseModel):
     name: Optional[str] = None
 
     lastname: Optional[str] = None
+
+
+#Esquema para solicitar recuperación de contraseña.
+class PasswordRecoveryRequest(BaseModel):
+
+    email: EmailStr
+
+
+#Esquema para restablecer la contraseña con token.
+class PasswordResetRequest(BaseModel):
+
+    token: str
+
+    new_password: str
+
+    confirm_password: str
     
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, value):
+
+        if len(value) < 6:
+
+            raise ValueError(
+                "La contraseña debe tener al menos 6 caracteres"
+            )
+        return value
+
+
+#Esquema para búsqueda de usuarios.
+class UserSearchRequest(BaseModel):
+
+    search: Optional[str] = None
+
+    role: Optional[str] = None
+
+    status: Optional[str] = None

@@ -3,6 +3,8 @@ from fastapi import FastAPI
 
 from database.connection import engine, Base
 from app.models.user import User
+from app.models.reservation import Reservation
+from app.models.waitlist import Waitlist
 
 from app.routes.rutas_autenticacion import router as auth_router
 from app.routes.rutas_usuarios import router as user_router

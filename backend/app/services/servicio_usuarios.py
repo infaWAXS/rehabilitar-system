@@ -1,5 +1,6 @@
 # # Responsable legacy: Francis y Agustin - logica de negocio de usuarios/auth.
 from urllib import request
+from sqlalchemy import or_
 
 from app.schemas.esquema_usuario import UserLogin
 from fastapi import HTTPException
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 
-from app.utils.security import hash_password, verify_password, create_access_token
+from app.utils.security import hash_password, verify_password, create_access_token, verify_token
 from app.exceptions.http_exceptions import email_already_exists_exception, unauthorized_exception, forbidden_exception, user_not_found_exception
 
 
@@ -204,6 +205,105 @@ def change_medical_clearance_status(user_id: int, db: Session):
     db.refresh(user)
 
     return user
+
+
+# Genera un token de recuperación de contraseña para el usuario con el email especificado.
+def request_password_recovery(email: str, db: Session):
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
+        raise user_not_found_exception()
+    
+    # Generar token con expiración de 1 hora
+    recovery_token = create_access_token(
+        data={"sub": user.email, "type": "recovery"}
+    )
+    
+    return {
+        "message": "Se ha enviado un enlace de recuperación a tu email",
+        "token": recovery_token,
+        "email": user.email
+    }
+
+
+# Restablece la contraseña del usuario usando un token válido.
+def reset_password(token: str, new_password: str, confirm_password: str, db: Session):
+    if new_password != confirm_password:
+        raise HTTPException(
+            status_code=400,
+            detail="Las contraseñas no coinciden"
+        )
+    
+    if len(new_password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="La contraseña debe tener al menos 6 caracteres"
+        )
+    
+    email = verify_token(token)
+    
+    if not email:
+        raise HTTPException(
+            status_code=401,
+            detail="Token inválido o expirado"
+        )
+    
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
+        raise user_not_found_exception()
+    
+    hashed_password = hash_password(new_password)
+    user.password = hashed_password
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "message": "Contraseña restablecida correctamente"
+    }
+
+
+# Busca usuarios por nombre, email o DNI con filtros opcionales.
+def search_users(db: Session, search: str = None, role: str = None, status: str = None):
+    query = db.query(User)
+    
+    if search:
+        query = query.filter(
+            or_(
+                User.name.ilike(f"%{search}%"),
+                User.lastname.ilike(f"%{search}%"),
+                User.email.ilike(f"%{search}%"),
+                User.dni.ilike(f"%{search}%")
+            )
+        )
+    
+    if role:
+        query = query.filter(User.role == role)
+    
+    if status:
+        query = query.filter(User.account_status == status)
+    
+    return query.all()
+
+
+# Modifica los datos de un empleado (solo campos permitidos).
+def modify_employee(employee_id: int, name: str = None, lastname: str = None, db: Session = None):
+    employee = db.query(User).filter(User.id == employee_id).first()
+    
+    if not employee:
+        raise user_not_found_exception()
+    
+    if name is not None:
+        employee.name = name
+    
+    if lastname is not None:
+        employee.lastname = lastname
+    
+    db.commit()
+    db.refresh(employee)
+    
+    return employee
 
 
 

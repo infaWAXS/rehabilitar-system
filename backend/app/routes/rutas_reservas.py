@@ -1,8 +1,150 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from database.connection import get_db
+from app.models.reservation import Reservation
+from app.schemas.esquema_reservas import ReservationCreate, ReservationResponse, ReservationUpdate
+from app.utils.dependencies import get_current_user
+from app.models.user import User
+from app.services.servicio_reservas import (
+    create_reservation, 
+    get_user_reservations, 
+    get_reservation_by_id,
+    cancel_reservation,
+    update_reservation_payment_status,
+    confirm_reservation
+)
 
 router = APIRouter(prefix="/reservations", tags=["Reservas"])
 
 
-@router.get("/health")
+# Crear una nueva reserva
+@router.post("", response_model=ReservationResponse)
+def create_new_reservation(
+    request: ReservationCreate, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return create_reservation(
+        current_user.id, 
+        request.activity_id,
+        request.reservation_type,
+        request.reservation_date,
+        db
+    )
+
+
+# Crear reserva para actividad fija
+@router.post("/fixed", response_model=ReservationResponse)
+def inscribe_fixed_activity(
+    request: ReservationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return create_reservation(
+        current_user.id,
+        request.activity_id,
+        "fixed",
+        request.reservation_date,
+        db
+    )
+
+
+# Crear reserva para actividad individual
+@router.post("/individual", response_model=ReservationResponse)
+def inscribe_individual_activity(
+    request: ReservationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return create_reservation(
+        current_user.id,
+        request.activity_id,
+        "individual",
+        request.reservation_date,
+        db
+    )
+
+
+# Obtener mis reservas
+@router.get("/me", response_model=list[ReservationResponse])
+def get_my_reservations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return get_user_reservations(current_user.id, db)
+
+
+# Obtener reserva específica
+@router.get("/{reservation_id}", response_model=ReservationResponse)
+def get_reservation(
+    reservation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    reservation = get_reservation_by_id(reservation_id, db)
+    
+    # Verificar que el usuario sea el propietario o admin
+    if reservation.user_id != current_user.id and current_user.role != "admin":
+        from app.exceptions.http_exceptions import forbidden_exception
+        raise forbidden_exception()
+    
+    return reservation
+
+
+# Cancelar reserva
+@router.put("/{reservation_id}/cancel", response_model=ReservationResponse)
+def cancel_user_reservation(
+    reservation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    reservation = get_reservation_by_id(reservation_id, db)
+    
+    # Verificar que el usuario sea el propietario o admin
+    if reservation.user_id != current_user.id and current_user.role != "admin":
+        from app.exceptions.http_exceptions import forbidden_exception
+        raise forbidden_exception()
+    
+    return cancel_reservation(reservation_id, db)
+
+
+# Actualizar estado de pago
+@router.put("/{reservation_id}/payment", response_model=ReservationResponse)
+def update_payment_status(
+    reservation_id: int,
+    request: ReservationUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    reservation = get_reservation_by_id(reservation_id, db)
+    
+    # Solo admin puede actualizar pagos
+    if current_user.role != "admin":
+        from app.exceptions.http_exceptions import forbidden_exception
+        raise forbidden_exception()
+    
+    return update_reservation_payment_status(reservation_id, request.payment_status, db)
+
+
+# Confirmar reserva
+@router.put("/{reservation_id}/confirm", response_model=ReservationResponse)
+def confirm_user_reservation(
+    reservation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    reservation = get_reservation_by_id(reservation_id, db)
+    
+    # Verificar que el usuario sea el propietario o admin
+    if reservation.user_id != current_user.id and current_user.role != "admin":
+        from app.exceptions.http_exceptions import forbidden_exception
+        raise forbidden_exception()
+    
+    return confirm_reservation(reservation_id, db)
+
+
+@router.get("/health", tags=["Health"])
 def reservations_module_health():
     return {"module": "reservations", "status": "ready"}
+
