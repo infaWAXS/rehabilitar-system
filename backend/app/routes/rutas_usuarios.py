@@ -11,7 +11,7 @@ from app.schemas.esquema_usuario import ChangePasswordRequest, UpdateUserRequest
 from app.utils.dependencies import get_current_user, require_role
 
 
-from app.services.servicio_usuarios import change_medical_clearance_status, change_password, change_user_status, get_all_users, get_user_by_id, search_users, modify_employee
+from app.services.servicio_usuarios import change_medical_clearance_status, change_password, change_user_status, delete_user, get_all_users, get_user_by_id, search_users, modify_employee
 
 
 
@@ -75,6 +75,16 @@ def get_users(token: str, db: Session = Depends(get_db), role: str = None, statu
     require_role(["admin"])(current_user)
 
     return get_all_users(db, role=role, status=status)
+
+
+# Endpoint para buscar usuarios con filtros avanzados (debe ir ANTES de /{user_id})
+@router.get("/search", response_model=list[UserResponse])
+def search_users_endpoint(token: str, db: Session = Depends(get_db), search: str = None, role: str = None, status: str = None):
+    current_user = get_current_user(token, db)
+
+    require_role(["admin"])(current_user)
+
+    return search_users(db, search=search, role=role, status=status)
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -151,16 +161,6 @@ def reject_medical_certificate(user_id: int, token: str, db: Session = Depends(g
     return change_medical_clearance_status(user_id, db, status="rejected")
 
 
-# Endpoint para buscar usuarios con filtros avanzados
-@router.get("/search", response_model=list[UserResponse])
-def search_users_endpoint(token: str, db: Session = Depends(get_db), search: str = None, role: str = None, status: str = None):
-    current_user = get_current_user(token, db)
-    
-    require_role(["admin"])(current_user)
-    
-    return search_users(db, search=search, role=role, status=status)
-
-
 # Endpoint para modificar datos de un empleado
 @router.put("/{user_id}/modify", response_model=UserResponse)
 def modify_employee_endpoint(user_id: int, request: UpdateUserRequest, token: str, db: Session = Depends(get_db)):
@@ -168,14 +168,56 @@ def modify_employee_endpoint(user_id: int, request: UpdateUserRequest, token: st
     
     require_role(["admin"])(current_user)
     
-    return modify_employee(user_id, request.name, request.lastname, db)
+    return modify_employee(user_id, request.name, request.lastname, request.email, request.specialization, db)
+
+
+# Endpoint para que el admin suba el apto físico de un cliente específico
+@router.post("/{user_id}/upload-medical-certificate")
+def admin_upload_certificate(user_id: int, token: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    current_user = get_current_user(token, db)
+    require_role(["admin"])(current_user)
+
+    from app.exceptions.http_exceptions import user_not_found_exception
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise user_not_found_exception()
+
+    file_path = f"uploads/certificates/{user_id}_{file.filename}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    target.medical_certificate_path = file_path
+    target.medical_certificate_status = "pending"
+    db.commit()
+
+    return {"message": "Certificado subido correctamente"}
+
+
+# Elimina la propia cuenta del usuario autenticado (hard delete)
+@router.delete("/me")
+def delete_my_account(token: str, db: Session = Depends(get_db)):
+    current_user = get_current_user(token, db)
+    name = f"{current_user.name} {current_user.lastname}"
+    db.delete(current_user)
+    db.commit()
+    return {"message": f"Cuenta de {name} eliminada correctamente"}
+
+
+# Elimina una cuenta de usuario (admin, hard delete)
+@router.delete("/{user_id}")
+def delete_user_endpoint(user_id: int, token: str, db: Session = Depends(get_db)):
+    current_user = get_current_user(token, db)
+    require_role(["admin"])(current_user)
+    return delete_user(user_id, db)
 
 
 # Endpoint para listar clientes (usuarios con rol "client")
 @router.get("/clients/list", response_model=list[UserResponse])
-def list_clients(token: str, db: Session = Depends(get_db)):
+def list_clients(token: str, db: Session = Depends(get_db), search: str = None, status: str = None):
     current_user = get_current_user(token, db)
     
-    require_role(["admin"])(current_user)
+    require_role(["admin", "receptionist"])(current_user)
     
-    return get_all_users(db, role="client")
+    if search:
+        return search_users(db, search=search, role="client", status=status)
+    return get_all_users(db, role="client", status=status)

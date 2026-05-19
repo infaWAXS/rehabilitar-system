@@ -8,6 +8,7 @@ import Login from './pages/public/Login';
 import Registro from './pages/public/Registro';
 import RecuperarContrasena from './pages/public/RecuperarContrasena';
 import RestablecerContrasena from './pages/public/RestablecerContrasena';
+import Staff from './pages/public/Staff';
 
 // ── Perfil compartido (Francis) ─────────────────────────
 import VerPerfil from './pages/client/perfil/VerPerfil';
@@ -44,8 +45,8 @@ import MisSuscripciones from './pages/client/pagos/MisSuscripciones';
 import GestionCuentaCliente from './pages/client/cuenta/GestionCuentaCliente';
 
 // ── Kinesiólogo (Angel + Ezequiel) ───────────────────────
-import MisActividadesKinesiologo from './pages/kinesiologist/actividades/MisActividades';
-import RegistrarAsistenciaKinesiologo from './pages/kinesiologist/asistencias/RegistrarAsistencia';
+import MisActividadesProfesor from './pages/kinesiologist/actividades/MisActividades';
+import RegistrarAsistenciaProfesor from './pages/kinesiologist/asistencias/RegistrarAsistencia';
 
 function App() {
   return (
@@ -57,6 +58,7 @@ function App() {
         <Route path="/registro" element={<Registro />} />
         <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
         <Route path="/restablecer-contrasena" element={<RestablecerContrasena />} />
+        <Route path="/staff" element={<Staff />} />
 
         {/* Perfil (todos los roles) */}
         <Route path="/perfil" element={<VerPerfil />} />
@@ -86,9 +88,9 @@ function App() {
         <Route path="/cliente/suscripciones" element={<MisSuscripciones />} />
         <Route path="/cliente/cuenta" element={<GestionCuentaCliente />} />
 
-        {/* Kinesiólogo */}
-        <Route path="/kinesiologo/actividades" element={<MisActividadesKinesiologo />} />
-        <Route path="/kinesiologo/asistencias" element={<RegistrarAsistenciaKinesiologo />} />
+        {/* Profesor */}
+        <Route path="/profesor/actividades" element={<MisActividadesProfesor />} />
+        <Route path="/profesor/asistencias" element={<RegistrarAsistenciaProfesor />} />
 
         {/* Redirect por defecto */}
         <Route path="*" element={<Navigate to="/" replace />} />

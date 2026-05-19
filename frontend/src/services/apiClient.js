@@ -1,23 +1,18 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-function buildHeaders(extraHeaders = {}) {
+export async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('access_token');
-  const headers = {
-    'Content-Type': 'application/json',
-    ...extraHeaders,
-  };
 
+  // El backend espera el token como query param ?token=xxx
+  let url = `${API_BASE_URL}${path}`;
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    const sep = url.includes('?') ? '&' : '?';
+    url = `${url}${sep}token=${encodeURIComponent(token)}`;
   }
 
-  return headers;
-}
-
-export async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(url, {
     ...options,
-    headers: buildHeaders(options.headers),
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   });
 
   const text = await response.text();

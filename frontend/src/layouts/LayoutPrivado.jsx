@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import '../assets/styles/variables.css';
+import { logout, clearUserData, getRole, getUserName } from '../services/authService';
 
 /* ── Menús por rol ─────────────────────────────────────── */
 const menus = {
@@ -18,14 +19,14 @@ const menus = {
     { label: 'Mi Cuenta',    ruta: '/cliente/cuenta' },
     { label: 'Mi Perfil',    ruta: '/perfil' },
   ],
-  kinesiologo: [
-    { label: 'Mis Actividades', ruta: '/kinesiologo/actividades' },
-    { label: 'Asistencias',     ruta: '/kinesiologo/asistencias' },
+  profesor: [
+    { label: 'Mis Actividades', ruta: '/profesor/actividades' },
+    { label: 'Asistencias',     ruta: '/profesor/asistencias' },
     { label: 'Mi Perfil',       ruta: '/perfil' },
   ],
   recepcionista: [
-    { label: 'Clientes',     ruta: '/recepcionista/clientes' },
-    { label: 'Asistencias',  ruta: '/recepcionista/asistencias' },
+    { label: 'Clientes',     ruta: '/admin/clientes' },
+    { label: 'Asistencias',  ruta: '/admin/asistencias' },
     { label: 'Mi Perfil',    ruta: '/perfil' },
   ],
 };
@@ -133,21 +134,98 @@ const s = {
     background: 'var(--color-fondo)',
     cursor: 'pointer',
   },
+  /* Modal confirmar logout */
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.35)',
+    zIndex: 1000,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modal: {
+    background: '#fff',
+    borderRadius: '12px',
+    padding: '28px 32px',
+    maxWidth: '360px',
+    width: '100%',
+    boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
+  },
+  modalTitulo: {
+    fontSize: '18px',
+    fontWeight: '700',
+    marginBottom: '10px',
+    color: 'var(--color-texto)',
+  },
+  modalTexto: {
+    fontSize: '14px',
+    color: 'var(--color-texto-suave)',
+    marginBottom: '24px',
+    lineHeight: 1.5,
+  },
+  modalBotones: {
+    display: 'flex',
+    gap: '10px',
+    justifyContent: 'flex-end',
+  },
+  modalCancelar: {
+    padding: '9px 18px',
+    borderRadius: '8px',
+    border: '1px solid var(--color-borde)',
+    background: '#fff',
+    fontSize: '14px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    color: 'var(--color-texto)',
+  },
+  modalConfirmar: {
+    padding: '9px 18px',
+    borderRadius: '8px',
+    border: 'none',
+    background: '#dc2626',
+    color: '#fff',
+    fontSize: '14px',
+    cursor: 'pointer',
+    fontWeight: '700',
+  },
 };
 
 function LayoutPrivado({ children, titulo = '' }) {
   const ubicacion = useLocation();
-  // Selector de rol solo para desarrollo — reemplazar con contexto de auth real
+  const navigate = useNavigate();
+
   const [rol, setRol] = useState('admin');
+  const [nombreUsuario, setNombreUsuario] = useState('');
+  const [confirmarVisible, setConfirmarVisible] = useState(false);
+
+  useEffect(() => {
+    const roleGuardado = getRole();
+    const nombreGuardado = getUserName();
+    // Mapear roles del backend al nombre del menú
+    const mapaRol = { admin: 'admin', client: 'cliente', professor: 'profesor', receptionist: 'recepcionista' };
+    if (roleGuardado) setRol(mapaRol[roleGuardado] || roleGuardado);
+    if (nombreGuardado) setNombreUsuario(nombreGuardado);
+  }, []);
+
   const itemsMenu = menus[rol] || [];
+
+  const cerrarSesion = async () => {
+    setConfirmarVisible(false);
+    try {
+      await logout();
+    } catch (_) {}
+    clearUserData();
+    navigate('/');
+  };
 
   return (
     <div style={s.wrapper}>
       {/* Sidebar */}
       <aside style={s.sidebar}>
-        <div style={s.sidebarLogo}>
+        <Link to="/" style={{ ...s.sidebarLogo, textDecoration: 'none' }}>
           Rehabilit<span style={s.sidebarAR}>AR</span>
-        </div>
+        </Link>
         <nav style={s.nav}>
           {itemsMenu.map((item) => (
             <Link
@@ -160,9 +238,9 @@ function LayoutPrivado({ children, titulo = '' }) {
           ))}
         </nav>
         <div style={s.sidebarFooter}>
-          <Link to="/login" style={s.cerrarSesion}>
+          <button onClick={() => setConfirmarVisible(true)} style={s.cerrarSesion}>
             Cerrar sesión
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -170,26 +248,26 @@ function LayoutPrivado({ children, titulo = '' }) {
       <div style={s.main}>
         <header style={s.navbar}>
           <span style={s.navbarTitulo}>{titulo}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Selector temporal de rol para desarrollo */}
-            <select
-              style={s.rolSelector}
-              value={rol}
-              onChange={(e) => setRol(e.target.value)}
-              title="Cambiar rol (solo desarrollo)"
-            >
-              <option value="admin">Admin</option>
-              <option value="cliente">Cliente</option>
-              <option value="kinesiologo">Kinesiólogo</option>
-              <option value="recepcionista">Recepcionista</option>
-            </select>
-            <span style={s.navbarUsuario}>Usuario Demo</span>
-          </div>
+          <span style={s.navbarUsuario}>{nombreUsuario || 'Mi cuenta'}</span>
         </header>
         <main style={s.contenido}>
           {children}
         </main>
       </div>
+
+      {/* Modal confirmar cierre de sesión */}
+      {confirmarVisible && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <p style={s.modalTitulo}>Cerrar sesión</p>
+            <p style={s.modalTexto}>¿Estás seguro que querés cerrar la sesión?</p>
+            <div style={s.modalBotones}>
+              <button style={s.modalCancelar} onClick={() => setConfirmarVisible(false)}>Cancelar</button>
+              <button style={s.modalConfirmar} onClick={cerrarSesion}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

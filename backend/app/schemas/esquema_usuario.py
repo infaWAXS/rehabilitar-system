@@ -15,8 +15,10 @@ class UserCreate(BaseModel):
     lastname: str
     email: EmailStr
     password: str
-    
-    
+    dni: Optional[str] = None
+    role: Optional[str] = "client"           # client | admin | receptionist | professor
+    specialization: Optional[str] = None     # obligatorio si role == "professor"
+
     #Valida que la contraseña tenga al menos 6 caracteres.
     @field_validator("password")
     @classmethod
@@ -52,6 +54,17 @@ class UserResponse(BaseModel):
     email: EmailStr
 
     role: str
+
+    specialization: Optional[str] = None
+
+    account_status: Optional[str] = None
+
+    dni: Optional[str] = None
+
+    medical_certificate_status: Optional[str] = None
+
+    class Config:
+        from_attributes = True
     
 
 #Esquema para cambiar la contraseña del usuario.
@@ -74,12 +87,16 @@ class ChangePasswordRequest(BaseModel):
         return value
     
 
-#Esquema para actualizar el nombre y apellido del usuario.
+#Esquema para actualizar el nombre, apellido, email y especialización del usuario.
 class UpdateUserRequest(BaseModel):
 
     name: Optional[str] = None
 
     lastname: Optional[str] = None
+
+    email: Optional[EmailStr] = None
+
+    specialization: Optional[str] = None
 
 
 #Esquema para solicitar recuperación de contraseña.
@@ -117,3 +134,20 @@ class UserSearchRequest(BaseModel):
     role: Optional[str] = None
 
     status: Optional[str] = None
+
+
+# Datos públicos de un miembro del staff (sin información sensible).
+class StaffPublicResponse(BaseModel):
+
+    id: int
+
+    name: str
+
+    lastname: str
+
+    role: str
+
+    specialization: Optional[str] = None
+
+    class Config:
+        from_attributes = True

@@ -23,8 +23,17 @@ def register_user(user_data, db: Session):
     ).first()
 
     if existing_user:
-
         raise email_already_exists_exception()
+
+    # Validar que profesores tengan especialidad asignada
+    role = getattr(user_data, "role", "client") or "client"
+    specialization = getattr(user_data, "specialization", None)
+
+    if role == "professor" and not specialization:
+        raise HTTPException(
+            status_code=400,
+            detail="Un profesor debe tener una especialidad asignada"
+        )
 
     hashed_password = hash_password(
         user_data.password
@@ -34,7 +43,10 @@ def register_user(user_data, db: Session):
         name=user_data.name,
         lastname=user_data.lastname,
         email=user_data.email,
-        password=hashed_password
+        password=hashed_password,
+        role=role,
+        dni=getattr(user_data, "dni", None),
+        specialization=specialization,
     )
 
     db.add(new_user)
@@ -43,9 +55,7 @@ def register_user(user_data, db: Session):
 
     db.refresh(new_user)
 
-    return {
-        "message": "Usuario creado correctamente"
-    }
+    return new_user
    
     
 #Valida si el email existe en la base de datos, si no existe, lanza una excepción HTTP 404. 
@@ -63,7 +73,7 @@ def login_user(request: UserLogin, db: Session):
         raise user_not_found_exception()
     
 
-    if existing_user.account_status != "active":
+    if existing_user.account_status.lower() != "active":
 
         raise HTTPException(
             status_code=403,
@@ -99,7 +109,10 @@ def login_user(request: UserLogin, db: Session):
 
     return {
         "access_token": access_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "role": existing_user.role,
+        "name": existing_user.name,
+        "lastname": existing_user.lastname,
     }
     
 
@@ -212,7 +225,10 @@ def request_password_recovery(email: str, db: Session):
     user = db.query(User).filter(User.email == email).first()
     
     if not user:
-        raise user_not_found_exception()
+        raise HTTPException(
+            status_code=404,
+            detail="El correo no está registrado en el sistema"
+        )
     
     # Generar token con expiración de 1 hora
     recovery_token = create_access_token(
@@ -264,6 +280,20 @@ def reset_password(token: str, new_password: str, confirm_password: str, db: Ses
     }
 
 
+# Elimina permanentemente una cuenta de usuario (hard delete).
+def delete_user(user_id: int, db: Session):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise user_not_found_exception()
+
+    name = f"{user.name} {user.lastname}"
+    db.delete(user)
+    db.commit()
+
+    return {"message": f"Cuenta de {name} eliminada correctamente"}
+
+
 # Busca usuarios por nombre, email o DNI con filtros opcionales.
 def search_users(db: Session, search: str = None, role: str = None, status: str = None):
     query = db.query(User)
@@ -288,7 +318,7 @@ def search_users(db: Session, search: str = None, role: str = None, status: str 
 
 
 # Modifica los datos de un empleado (solo campos permitidos).
-def modify_employee(employee_id: int, name: str = None, lastname: str = None, db: Session = None):
+def modify_employee(employee_id: int, name: str = None, lastname: str = None, email: str = None, specialization: str = None, db: Session = None):
     employee = db.query(User).filter(User.id == employee_id).first()
     
     if not employee:
@@ -300,10 +330,55 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, db
     if lastname is not None:
         employee.lastname = lastname
     
+    if email is not None and email != employee.email:
+        existing = db.query(User).filter(User.email == email, User.id != employee_id).first()
+        if existing:
+            raise email_already_exists_exception()
+        employee.email = email
+    
+    if specialization is not None:
+        employee.specialization = specialization
+    
     db.commit()
     db.refresh(employee)
     
     return employee
+
+
+# Devuelve la lista pública de staff activo (profesores y recepcionistas) con filtros opcionales.
+def get_public_staff(db: Session, search: str = None, specialization: str = None):
+    query = db.query(User).filter(
+        User.role.in_(["professor", "receptionist"]),
+        User.account_status == "active"
+    )
+
+    if search:
+        query = query.filter(
+            or_(
+                User.name.ilike(f"%{search}%"),
+                User.lastname.ilike(f"%{search}%")
+            )
+        )
+
+    if specialization:
+        query = query.filter(User.specialization.ilike(f"%{specialization}%"))
+
+    return query.all()
+
+
+# Devuelve las especializaciones distintas de los profesores activos.
+def get_staff_specializations(db: Session) -> list:
+    rows = (
+        db.query(User.specialization)
+        .filter(
+            User.role == "professor",
+            User.specialization.isnot(None),
+            User.account_status == "active"
+        )
+        .distinct()
+        .all()
+    )
+    return [r[0] for r in rows if r[0]]
 
 
 

@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient';
+import { apiRequest, API_BASE_URL } from './apiClient';
 
 export function getCurrentUser() {
   return apiRequest('/users/me');
@@ -7,6 +7,50 @@ export function getCurrentUser() {
 export function getUsers(params = '') {
   const query = params ? `?${params}` : '';
   return apiRequest(`/users/${query}`);
+}
+
+export function searchUsers(search = '', role = '', status = '') {
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  if (role) params.append('role', role);
+  if (status) params.append('status', status);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return apiRequest(`/users/search${qs}`);
+}
+
+export function getClients(search = '', status = '') {
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  if (status) params.append('status', status);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return apiRequest(`/users/clients/list${qs}`);
+}
+
+export function getUserById(userId) {
+  return apiRequest(`/users/${userId}`);
+}
+
+export function modifyUser(userId, data) {
+  return apiRequest(`/users/${userId}/modify`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export function adminUploadCertificate(userId, file) {
+  const token = localStorage.getItem('access_token');
+  const formData = new FormData();
+  formData.append('file', file);
+  const url = `${API_BASE_URL}/users/${userId}/upload-medical-certificate?token=${encodeURIComponent(token)}`;
+  return fetch(url, { method: 'POST', body: formData }).then(r => r.json());
+}
+
+export function deleteUser(userId) {
+  return apiRequest(`/users/${userId}`, { method: 'DELETE' });
+}
+
+export function deleteMyAccount() {
+  return apiRequest('/users/me', { method: 'DELETE' });
 }
 
 export function updateUserInfo(data) {
@@ -21,4 +65,35 @@ export function changePassword(data) {
     method: 'PUT',
     body: JSON.stringify(data),
   });
+}
+
+// Sube el certificado médico del usuario autenticado (multipart/form-data).
+export function uploadMedicalCertificate(file) {
+  const token = localStorage.getItem('access_token');
+  const formData = new FormData();
+  formData.append('file', file);
+  const url = `${API_BASE_URL}/users/upload-medical-certificate?token=${encodeURIComponent(token)}`;
+  return fetch(url, { method: 'POST', body: formData }).then(r => r.json());
+}
+
+// Sube el certificado médico usando un token explícito (post-registro).
+export function uploadMedicalCertificateWithToken(token, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const url = `${API_BASE_URL}/users/upload-medical-certificate?token=${encodeURIComponent(token)}`;
+  return fetch(url, { method: 'POST', body: formData }).then(r => r.json());
+}
+
+// Devuelve la lista pública de staff activo con filtros opcionales.
+export function getStaff(search = '', specialization = '') {
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  if (specialization) params.append('specialization', specialization);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return apiRequest(`/staff${qs}`);
+}
+
+// Devuelve las especializaciones disponibles para el filtro del staff.
+export function getStaffSpecializations() {
+  return apiRequest('/staff/specializations');
 }
