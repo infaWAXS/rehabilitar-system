@@ -151,4 +151,59 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 - Front: pantalla funcional, validaciones minimas, manejo de errores basico.
 - Back: endpoint operativo, validaciones basicas, respuesta consistente.
 - Integracion: front consume endpoint real o mock acordado.
-- Evidencia: 1 captura de UI + 1 request/response por HU en el PR.
+
+## Tabla consolidada de HUs del Sprint 1
+
+| HU | Responsable |
+|---|---|
+| Registrar usuario | Francis |
+| Iniciar sesión | Francis |
+| Cerrar sesión | Francis |
+| Recuperar contraseña | Francis |
+| Restablecer contraseña | Francis |
+| Cambiar contraseña | Francis |
+| Subir DNI | Nahuel |
+| Ver perfil | Francis |
+| Editar perfil | Francis |
+| Buscar empleado | Francis |
+| Filtrar empleado | Agustin |
+| Eliminar cuenta admin | Francis |
+| Eliminar cuenta usuario | Francis |
+| Crear cuenta | Francis |
+| Adjuntar apto físico | Nahuel |
+| Verificar apto físico | Nahuel |
+| Modificar información de usuario | Nahuel |
+| Listar condiciones de cliente | Nahuel |
+| Modificar empleado | Agustin |
+| Búsqueda de usuarios | Agustin |
+| Listar empleados | Agustin |
+| Listar clientes | Agustin |
+| Listar administrativos | Agustin |
+| Solicitar reintegro de cuenta | Nahuel |
+| Reintegrar cuenta | Nahuel |
+| Suspender cuenta | Nahuel |
+| Crear actividad | Angel |
+| Renunciar actividad | Angel |
+| Cancelar actividad | Angel |
+| Ver Actividad | Angel |
+| Filtrar actividades | Angel |
+| Buscar actividades | Angel |
+| Listar profesores disponibles | Angel |
+| Listar horarios disponibles | Angel |
+| Listar dias disponibles | Angel |
+| Listar salas disponibles | Angel |
+| Listar especializaciones | Angel |
+| Inscribirse a actividad fija | Agustin |
+| Inscribirse a actividad individual | Agustin |
+| Ver mis reservas | Agustin |
+| Dar de baja en lista de espera | Agustin |
+| Listar lista de espera | Agustin |
+| Registrar asistencia por DNI | Ezequiel |
+| Dejar comentario en asistencia | Ezequiel |
+| Eliminar comentario en asistencia | Ezequiel |
+| Modificar comentario en asistencia | Ezequiel |
+| Inscribirse a plan | Ezequiel |
+| Inscribir actividad individual | Ezequiel |
+| Ver suscripciones | Ezequiel |
+| Pagar Mercado Pago | Ezequiel |
+| Cancelar turno | Agustin |
