@@ -1,3 +1,4 @@
+# # Responsable legacy: Francis y Agustin - hashing y JWT.
 import bcrypt
 
 from jose import jwt, JWTError

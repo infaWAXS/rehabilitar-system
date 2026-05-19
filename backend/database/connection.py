@@ -1,3 +1,4 @@
+# # Responsable legacy: Francis y Agustin - infraestructura base de BD local.
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 

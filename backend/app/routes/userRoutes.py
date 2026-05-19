@@ -1,3 +1,4 @@
+# # Responsable legacy: Francis y Agustin - gestion de usuarios.
 from backend.app.exceptions.http_exceptions import forbidden_exception
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.security import OAuth2PasswordBearer

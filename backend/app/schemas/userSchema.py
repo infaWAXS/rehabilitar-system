@@ -1,3 +1,4 @@
+# # Responsable legacy: Francis y Agustin - contratos de datos de usuarios.
 ##En este archivo estan los esquemas en formate de clases de las entidades del sistema
 ##No es la tabla en la base de datos, es la informacion con la que los usuarios van a interactuar
 

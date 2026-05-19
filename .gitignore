@@ -1,7 +1,22 @@
-node_modules/
+# Python
 __pycache__/
-.env
-venv/
 *.pyc
+.venv/
+venv/
+
+# Variables de entorno
+.env
+
+# SQLite local
 database.db
 
+# Frontend
+frontend/node_modules/
+frontend/build/
+
+# Node (si se ejecuta npm por error en la raiz)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db

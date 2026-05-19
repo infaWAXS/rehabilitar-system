@@ -1,0 +1,68 @@
+/* =============================================
+   RehabilitAR — Paleta de colores del logo
+   ============================================= */
+
+:root {
+  /* Colores principales (del degradado teal→verde del logo) */
+  --color-primario: #1AABAB;
+  --color-primario-oscuro: #0D8A8A;
+  --color-primario-suave: #D4F1F1;
+
+  --color-secundario: #4DC24D;
+  --color-secundario-oscuro: #38A838;
+  --color-secundario-suave: #D9F5D9;
+
+  --color-acento: #7ED321; /* verde lima de los pies del logo */
+
+  /* Fondos */
+  --color-fondo: #F0FBFB;
+  --color-fondo-sidebar: #0D3535;
+  --color-fondo-sidebar-hover: #1A5050;
+  --color-fondo-card: #FFFFFF;
+
+  /* Texto */
+  --color-texto: #1A2E2E;
+  --color-texto-suave: #4A6868;
+  --color-texto-claro: #FFFFFF;
+
+  /* Bordes */
+  --color-borde: #C8E8E8;
+
+  /* Estados */
+  --color-error: #D9534F;
+  --color-exito: #4DC24D;
+  --color-advertencia: #F0AD4E;
+
+  /* Espaciado */
+  --navbar-height: 60px;
+  --sidebar-width: 240px;
+  --border-radius: 8px;
+  --sombra: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Reset base */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--color-fondo);
+  color: var(--color-texto);
+}
+
+a {
+  color: var(--color-primario);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-primario-oscuro);
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}

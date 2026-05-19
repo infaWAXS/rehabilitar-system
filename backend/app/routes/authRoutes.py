@@ -1,3 +1,4 @@
+# Responsable legacy: Francis y Agustin - autenticacion (registro/login).
 from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session

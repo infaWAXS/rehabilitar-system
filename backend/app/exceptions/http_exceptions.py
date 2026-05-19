@@ -1,3 +1,4 @@
+# Responsable legacy Francis + Agustin - excepciones del dominio de usuarios/auth.
 from fastapi import HTTPException
 
 

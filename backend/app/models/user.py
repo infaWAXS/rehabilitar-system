@@ -1,3 +1,4 @@
+# Responsable legacy: Francis + Agustin - modulo de usuarios y autenticacion.
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
 from database.connection import Base

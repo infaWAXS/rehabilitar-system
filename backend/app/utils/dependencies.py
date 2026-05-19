@@ -1,3 +1,4 @@
+# # Responsable legacy: Francis y Agustin - dependencias de autenticacion/autorizacion.
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
