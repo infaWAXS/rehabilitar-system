@@ -9,6 +9,7 @@ venv/
 
 # SQLite local
 database.db
+*.db
 
 # Frontend
 frontend/node_modules/

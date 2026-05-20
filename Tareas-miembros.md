@@ -162,7 +162,7 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 | Recuperar contraseña | Francis |
 | Restablecer contraseña | Francis |
 | Cambiar contraseña | Agustin |
-| Subir DNI | Nahuel |
+| Subir DNI | Agustin |
 | Ver perfil | Agustin |
 | Editar perfil | Agustin |
 | Buscar empleado | Francis |
@@ -195,15 +195,13 @@ Este archivo define que debe hacer cada integrante en frontend y backend, con ru
 | Listar especializaciones | Angel |
 | Inscribirse a actividad fija | Francis |
 | Inscribirse a actividad individual | Francis |
-| Ver mis reservas | Francis |
-| Dar de baja en lista de espera | Francis |
-| Listar lista de espera | Francis |
+| Ver mis reservas | Ezequiel |
+| Dar de baja en lista de espera | Nahuel |
+| Listar lista de espera | Nahuel |
 | Registrar asistencia por DNI | Ezequiel |
 | Dejar comentario en asistencia | Ezequiel |
 | Eliminar comentario en asistencia | Ezequiel |
 | Modificar comentario en asistencia | Ezequiel |
-| Inscribirse a plan | Ezequiel |
-| Inscribir actividad individual | Ezequiel |
 | Ver suscripciones | Ezequiel |
 | Pagar Mercado Pago | Ezequiel |
-| Cancelar turno | Francis |
+| Cancelar turno | Ezequiel |
