@@ -435,7 +435,7 @@ Dado que la vista de empleados tiene filtros aplicados y el sistema muestra resu
 Cuando el administrador presiona “limpiar filtros”,
 Entonces el sistema elimina los filtros aplicados y muestra la lista completa de empleados.
 ## ID: Listar clientes
-Título: Como recepcionista quiero listar clientes para verificar sus reservas y estado de pago.
+Título: Como administrador quiero listar clientes para verificar sus reservas y estado de pago.
 
 Criterios de aceptación
 Escenario 1: Listado con resultados
@@ -793,77 +793,95 @@ Cuando el admin con mail “admin@gmail.com” presiona la opción “Especiliza
 Entonces el sistema notificará que no hay especializaciones disponibles.
 
 # 4-Gestión de reservas de turnos
-## ID: Inscribir actividad fija
-Título: Como cliente quiero pagar la cuota para poder acceder a una actividad fija.
+ID: Inscribir actividad fija
+Título: Como cliente quiero inscribirme en una actividad fija para asegurar mi turno en la clase periódica.
 
 Reglas de Negocio:
-Debe aplicar un 20% de descuento a los mayores de 65 años
+Debe aplicar un 20% de descuento a los mayores de 65 años.
+Los clientes no abonados deben abonar al menos el 50% del valor como seña
 
 Criterios de aceptación
-Escenario 1: inscripción exitoso
-Dado un cliente de 50 años, las condiciones son las adecuadas para un pago exitoso y la actividad “Rehabilitar Codo”  tiene cupos
-Cuando el cliente selecciona la actividad “Rehabilitar codo” y presiona “Pagar con mercado pago”
-Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra el pago del cliente e inscribe al cliente a la actividad “Rehabilitar Codo”
+Escenario 1: Inscripción confirmada por suscripción activa (abonado)
+Dado que el cliente está autenticado y tiene una suscripción activa que cubre la actividad fija "Rehabilitar Codo" y la actividad tiene cupo disponible,
+Cuando el cliente selecciona la actividad “Rehabilitar codo” y presiona “Inscribirse”
+Entonces el sistema crea la inscripción en estado “confirmada”, decrementa el cupo disponible, inscribe al cliente en la actividad y notifica la confirmación al usuario.
 
-Escenario 2: inscripción exitoso con descuento
-Dado un cliente de 70 años, las condiciones son las adecuadas para un pago exitoso y la actividad “Rehabilitar Codo”  tiene cupos
-Cuando el cliente selecciona la actividad “Rehabilitar codo” y presiona “Pagar con mercado pago”
-Entonces el sistema hace el 20% de descuento, redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra el pago del cliente e inscribe al cliente en la actividad “Rehabilitar Codo”.
+Escenario 2: Inscripción confirmada con pago total(no abonado)
+Dado que el cliente no abonado está autenticado las condiciones son las adecuadas para un pago exitoso y la actividad “Rehabilitar Codo”  tiene cupos
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Abonar Total”
+Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “confirmada”, inscribe al cliente en la actividad “Rehabilitar Codo”, decrementa el cupo disponible y notifica al usuario
 
-Escenario 3: inscripción fallido por error en el pago
+Escenario 3: Inscripción confirmada con seña (no abonado)
+Dado que el cliente no abonado está autenticado las condiciones son las adecuadas para un pago exitoso y la actividad “Rehabilitar Codo”  tiene cupos
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Abonar con seña”
+Entonces el sistema calcula el valor de la seña, redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “Pendiente”, inscribe al cliente en la actividad “Rehabilitar Codo”, decrementa el cupo disponible y notifica al usuario.
+
+Escenario 4: Inscripción confirmada por pago con descuento (no abonado)
+Dado un cliente que está autenticado, las condiciones son las adecuadas para un pago exitoso, la actividad “Rehabilitar Codo”  tiene cupos y cumple con alguna condición de descuento (Mayor de 65 años, descuento por mes, u otros)
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Confirmar Pago”
+Entonces el sistema aplica el descuento, redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “confirmada”, inscribe al cliente en la actividad “Rehabilitar Codo”, decrementa el cupo disponible y notifica al usuario
+
+Escenario 5: Inscripción confirmada en lista de espera abonado
+Dado que el cliente está autenticado, tiene una suscripción activa y la actividad "Rehabilitar Codo" tiene 0 cupos
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Esperar en la Lista”
+Entonces el sistema añade al cliente a la lista de espera con prioridad y notifica al usuario
+
+Escenario 6: Inscripción confirmada en lista de espera no abonado
+Dado que el cliente no abonado está autenticado, y la actividad "Rehabilitar Codo" tiene 0 cupos
+Cuando el cliente no abonado selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Esperar en la Lista”
+Entonces el sistema añade al cliente a la lista de espera sin prioridad y notifica al usuario
+
+Escenario 7: Inscripción confirmada con créditos
+Dado que el cliente abonado está autenticado, tiene un crédito para la actividad "Rehabilitar Codo" que tiene cupos,
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Usar crédito”
+Entonces el sistema crea la inscripción en estado “confirmada”, decrementa el cupo y el crédito, inscribe al cliente en la actividad y notifica la confirmación al usuario.
+
+Escenario 8: inscripción fallida por error en el pago
 Dado un cliente con condiciones que no son adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo” y presiona “Pagar con mercado pago”
-Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta e informa que hubo un error en el pago por lo que no se pudo llevar a cabo la inscripción
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona un método de pago.
+Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta e informa que hubo un error en el pago y cancela la inscripción.
 
-Escenario 4: inscripción cancelada
-Dado un cliente de 70 años y las condiciones son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo” presiona “Cancelar”
+Escenario 9: inscripción cancelada
+Dado un usuario autenticado y la actividad “Rehabilitar Codo” tiene cupos
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Cancelar”
 Entonces el sistema cancela la operación y redirige al inicio
-
-Escenario 5: inscripción fallido por falta de cupo
-Dado un cliente de 40 años, la actividad “Rehabilitar Codo” no tiene cupos y las condiciones son adecuadas para un pago exitoso.
-Cuando el cliente presiona “Pagar con mercado pago”
-Entonces el sistema informa que no hay más cupo.
-
-Escenario 6: inscripción exitoso con descuento del mes anterior
-Dado un cliente de 40 años, la actividad “Rehabilitar Codo” no tiene cupos, las condiciones son adecuadas para un pago exitoso y tiene un 30% de descuento del mes pasado
-Cuando el cliente presiona “Pagar con mercado pago”
-Entonces el sistema hace el 30% de descuento, redirige al usuario a “Pagar Mercado Pago”, espera respuesta y registra el pago del cliente.
 ## ID: Inscribir actividad individual
-Título: Como cliente quiero pagar la seña para acceder a una actividad individual.
+Nota: el cliente puede ser abonado o no abonado
+Título: Como cliente quiero inscribirme a  una actividad individual para reservar un turno.
 Reglas de Negocio:
-El cliente debe abonar al menos el 50% del valor de la clase como seña
+Los clientes no abonados deben abonar al menos el 50% del valor como seña
 
 Criterios de aceptación
-Escenario 1: inscripción con seña parcial exitoso
-Dado un cliente, una actividad “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, ingresa el importe 100 y  presiona “Pagar con Mercado Pago”
-Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta y registra el pago del cliente, la parte que falta e inscribe al cliente a la clase “Rehabilitar codo”
+Escenario 1: inscripción con pago total
+Dado un cliente autenticado, una actividad individual  “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Abonar total”
+Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “confirmada”, inscribe al cliente a la clase “Rehabilitar codo” y notifica al usuario.
 
-Escenario 2: inscripción con seña total exitoso
-Dado un cliente, una actividad “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, ingresa el importe 100 y  presiona “Pagar con Mercado Pago”
-Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta y registra el pago total e inscribe al cliente a la clase “Rehabilitar codo”.
+Escenario 2: inscripción con seña exitoso
+Dado un cliente autenticado, una actividad individual “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Abonar con seña”
+Entonces el sistema calcula el valor de la seña, redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “pendiente”, inscribe al cliente a la clase “Rehabilitar codo” y notifica al usuario.
 
-Escenario 3: inscripción fallido por monto menor al mínimo
-Dado un cliente, una actividad “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, ingresa el importe 40 y  presiona “Pagar con Mercado Pago”
-Entonces el sistema informa que se debe pagar mínimo el 50% del total
+Escenario 3: Inscripción pendiente en lista de espera abonado
+Dado que el cliente está autenticado, y la actividad individual  "Rehabilitar Codo" tiene 0 cupos
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Esperar en la Lista”
+Entonces el sistema añade al cliente a la lista de espera general y notifica al usuario
 
-Escenario 4: inscripción fallido por error en el pago
-Dado un cliente, una actividad “Rehabilitar codo” que cuesta 100 pesos, con cupos disponibles y las condiciones no son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, ingresa el importe 100 y  presiona “Pagar con Mercado Pago”
-Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta e informa que hubo un error en el pago por lo que no se pudo llevar a cabo la inscripción
+Escenario 4: Inscripción confirmada con créditos
+Dado que el cliente abonado está autenticado, tiene un crédito para la actividad individual "Rehabilitar Codo" que tiene cupos,
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Usar crédito”
+Entonces el sistema crea la inscripción en estado “confirmada”, decrementa el cupo y el crédito, inscribe al cliente en la actividad y notifica la confirmación al usuario.
 
-Escenario 5: Inscripción cancelada
-Dado un cliente, una actividad “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, ingresa el importe 100 y  presiona “Cancelar”
+Escenario 5: inscripción fallido por error en el pago
+Dado un cliente, una actividad  individual “Rehabilitar codo” que cuesta 100 pesos, con cupos disponibles y las condiciones no son las adecuadas para un pago exitoso
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona un método de pago.
+Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta e informa que hubo un error en el pago por lo que no se pudo llevar a cabo la inscripción.
+
+Escenario 6: Inscripción cancelada
+Dado un cliente, una actividad individual  “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
+Cuando el cliente selecciona la actividad “Rehabilitar codo”, selecciona “Inscribirse” y  presiona “Cancelar”
 Entonces el sistema cancela la operación y redirige al inicio
 
-Escenario 6: inscripción fallida por falta de cupo
-Dado un cliente, la actividad “Rehabilitar Codo” no tiene cupos y las condiciones son adecuadas para un pago exitoso.
-Cuando el cliente presiona “Pagar con mercado pago”
-Entonces el sistema informa que no hay más cupo.
 ## ID: Ver mis reservas
 Título: como cliente quiero ver mis reservas para recordar qué actividades tengo en el futuro.
 
@@ -1022,24 +1040,6 @@ Cuando el profesor modifica el comentario y presiona “Cancelar”
 Entonces el sistema cancela la operación
 
 # 7-Gestión de Pago
-
-## ID: Inscribirse a Plan
-Título: Como cliente quiero contratar un plan para tener mejores beneficios cobertura de actividades.
-Reglas de negocio:
-- Las suscripciones pueden cubrir acceso a actividades fijas y créditos canjeables para las mismas
-
-Criterios de aceptación:
-Escenario 1: Compra de plan exitosa
-Dado que un cliente autenticado quiere adquirir un plan y las condiciones son las adecuadas para un pago exitoso.
-Cuando el cliente selecciona uno de los planes y presiona “Suscribirse”
-Entonces el sistema redirige al usuario a “Pagar Mercadopago, espera respuesta, registra al usuario como cliente abonado y activa todos sus beneficios.
-
-Escenario 2: Compra de plan rechazada
-Dado que un cliente autenticado quiere adquirir un plan y las condiciones no son las adecuadas para un pago exitoso.
-Cuando el cliente selecciona uno de los planes y presiona “Suscribirse”
-Entonces el sistema redirige al usuario a “Pagar Mercadopago, espera respuesta e informa que hubo un error en el pago y cancela la operación.
-## ID: Inscribirse actividad individual
-
 ## ID: Ver planes y abonos (Ver suscripciones)
 Título: Como usuario quiero ver los planes y abonos para comparar las opciones disponibles y elegir la que mejor se adapte a mis necesidades.
 
@@ -1333,95 +1333,5 @@ Escenario 3: Visualización vacía con filtro sin resultados
 Dado que el filtro aplicado no coincide con ningún usuario
 Cuando el administrador aplica el filtro
 Entonces el sistema muestra el listado vacío y un mensaje informativo
-
-======================================================ID: Inscribir actividad fija
-Título: Como cliente quiero inscribirme en una actividad fija para asegurar mi turno en la clase periódica.
-
-Reglas de Negocio:
-Debe aplicar un 20% de descuento a los mayores de 65 años.
-Los clientes no abonados deben abonar al menos el 50% del valor como seña
-
-Criterios de aceptación
-Escenario 1: Inscripción confirmada por suscripción activa (abonado)
-Dado que el cliente está autenticado y tiene una suscripción activa que cubre la actividad fija "Rehabilitar Codo" y la actividad tiene cupo disponible,
-Cuando el cliente selecciona la actividad “Rehabilitar codo” y presiona “Inscribirse”
-Entonces el sistema crea la inscripción en estado “confirmada”, decrementa el cupo disponible, inscribe al cliente en la actividad y notifica la confirmación al usuario.
-
-Escenario 2: Inscripción confirmada con pago total(no abonado)
-Dado que el cliente no abonado está autenticado las condiciones son las adecuadas para un pago exitoso y la actividad “Rehabilitar Codo”  tiene cupos
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Abonar Total”
-Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “confirmada”, inscribe al cliente en la actividad “Rehabilitar Codo”, decrementa el cupo disponible y notifica al usuario
-
-Escenario 3: Inscripción confirmada con seña (no abonado)
-Dado que el cliente no abonado está autenticado las condiciones son las adecuadas para un pago exitoso y la actividad “Rehabilitar Codo”  tiene cupos
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Abonar con seña”
-Entonces el sistema calcula el valor de la seña, redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “Pendiente”, inscribe al cliente en la actividad “Rehabilitar Codo”, decrementa el cupo disponible y notifica al usuario.
-
-Escenario 4: Inscripción confirmada por pago con descuento (no abonado)
-Dado un cliente que está autenticado, las condiciones son las adecuadas para un pago exitoso, la actividad “Rehabilitar Codo”  tiene cupos y cumple con alguna condición de descuento (Mayor de 65 años, descuento por mes, u otros)
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Confirmar Pago”
-Entonces el sistema aplica el descuento, redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “confirmada”, inscribe al cliente en la actividad “Rehabilitar Codo”, decrementa el cupo disponible y notifica al usuario
-
-Escenario 5: Inscripción confirmada en lista de espera abonado
-Dado que el cliente está autenticado, tiene una suscripción activa y la actividad "Rehabilitar Codo" tiene 0 cupos
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Esperar en la Lista”
-Entonces el sistema añade al cliente a la lista de espera con prioridad y notifica al usuario
-
-Escenario 6: Inscripción confirmada en lista de espera no abonado
-Dado que el cliente no abonado está autenticado, y la actividad "Rehabilitar Codo" tiene 0 cupos
-Cuando el cliente no abonado selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Esperar en la Lista”
-Entonces el sistema añade al cliente a la lista de espera sin prioridad y notifica al usuario
-
-Escenario 7: Inscripción confirmada con créditos
-Dado que el cliente abonado está autenticado, tiene un crédito para la actividad "Rehabilitar Codo" que tiene cupos,
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Usar crédito”
-Entonces el sistema crea la inscripción en estado “confirmada”, decrementa el cupo y el crédito, inscribe al cliente en la actividad y notifica la confirmación al usuario.
-
-Escenario 8: inscripción fallida por error en el pago
-Dado un cliente con condiciones que no son adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona un método de pago.
-Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta e informa que hubo un error en el pago y cancela la inscripción.
-
-Escenario 9: inscripción cancelada
-Dado un usuario autenticado y la actividad “Rehabilitar Codo” tiene cupos
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Cancelar”
-Entonces el sistema cancela la operación y redirige al inicio
-## ID: Inscribir actividad individual
-Nota: el cliente puede ser abonado o no abonado
-Título: Como cliente quiero inscribirme a  una actividad individual para reservar un turno.
-Reglas de Negocio:
-Debe aplicar un 20% de descuento a los mayores de 65 años.
-Los clientes no abonados deben abonar al menos el 50% del valor como seña
-
-Criterios de aceptación
-Escenario 1: inscripción con pago total
-Dado un cliente autenticado, una actividad individual  “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Abonar total”
-Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “confirmada”, inscribe al cliente a la clase “Rehabilitar codo” y notifica al usuario.
-
-Escenario 2: inscripción con seña exitoso
-Dado un cliente autenticado, una actividad individual “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Abonar con seña”
-Entonces el sistema calcula el valor de la seña, redirige al usuario a “Pagar Mercado Pago”, espera respuesta, registra la inscripción como “pendiente”, inscribe al cliente a la clase “Rehabilitar codo” y notifica al usuario.
-
-Escenario 3: Inscripción pendiente en lista de espera abonado
-Dado que el cliente está autenticado, y la actividad individual  "Rehabilitar Codo" tiene 0 cupos
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Esperar en la Lista”
-Entonces el sistema añade al cliente a la lista de espera general y notifica al usuario
-
-Escenario 4: Inscripción confirmada con créditos
-Dado que el cliente abonado está autenticado, tiene un crédito para la actividad individual "Rehabilitar Codo" que tiene cupos,
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Usar crédito”
-Entonces el sistema crea la inscripción en estado “confirmada”, decrementa el cupo y el crédito, inscribe al cliente en la actividad y notifica la confirmación al usuario.
-
-Escenario 5: inscripción fallido por error en el pago
-Dado un cliente, una actividad  individual “Rehabilitar codo” que cuesta 100 pesos, con cupos disponibles y las condiciones no son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona un método de pago.
-Entonces el sistema redirige al usuario a “Pagar Mercado Pago”, espera respuesta e informa que hubo un error en el pago por lo que no se pudo llevar a cabo la inscripción.
-
-Escenario 6: Inscripción cancelada
-Dado un cliente, una actividad individual  “Rehabilitar codo” que cuesta 100 pesos con cupos disponibles y las condiciones son las adecuadas para un pago exitoso
-Cuando el cliente selecciona la actividad “Rehabilitar codo”, selecciona “Inscribirse” y  presiona “Cancelar”
-Entonces el sistema cancela la operación y redirige al inicio
 
 
