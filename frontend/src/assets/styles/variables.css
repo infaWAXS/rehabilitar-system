@@ -1,8 +1,19 @@
+/* Tipografía */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
 /* =============================================
    RehabilitAR — Paleta de colores del logo
    ============================================= */
 
 :root {
+  /* Tipografía */
+  --font-familia: 'Poppins', sans-serif;
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
   /* Colores principales (del degradado teal→verde del logo) */
   --color-primario: #1AABAB;
   --color-primario-oscuro: #0D8A8A;
@@ -48,7 +59,7 @@
 }
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--font-familia);
   background-color: var(--color-fondo);
   color: var(--color-texto);
 }
