@@ -1,20 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import '../assets/styles/variables.css';
-import { logout, clearUserData, getRole, getUserName } from '../services/authService';
+import { logout, clearUserData, getRole, getUserName, getAccountStatus } from '../services/authService';
 
 /* ── Menús por rol ─────────────────────────────────────── */
 const menus = {
   admin: [
-    { label: 'Usuarios',     ruta: '/admin/usuarios' },
-    { label: 'Clientes',     ruta: '/admin/clientes' },
-    { label: 'Actividades',  ruta: '/admin/actividades' },
-    { label: 'Asistencias',  ruta: '/admin/asistencias' },
-  ],
-  cliente: [
-    { label: 'Mis Reservas', ruta: '/cliente/reservas' },
-    { label: 'Mi Cuenta',    ruta: '/cliente/cuenta' },
-    { label: 'Mi Perfil',    ruta: '/perfil' },
+    { label: 'Usuarios',      ruta: '/admin/usuarios' },
+    { label: 'Clientes',      ruta: '/admin/clientes' },
+    { label: 'Aptos Físicos', ruta: '/admin/clientes/aptos-fisicos' },
+    { label: 'Actividades',   ruta: '/admin/actividades' },
   ],
   profesor: [
     { label: 'Mis Actividades', ruta: '/profesor/actividades' },
@@ -22,8 +17,13 @@ const menus = {
     { label: 'Mi Perfil',       ruta: '/perfil' },
   ],
   recepcionista: [
+    { label: 'Actividades',  ruta: '/admin/actividades' },
     { label: 'Clientes',     ruta: '/admin/clientes' },
-    { label: 'Asistencias',  ruta: '/admin/asistencias' },
+    { label: 'Mi Perfil',    ruta: '/perfil' },
+  ],
+  cliente: [
+    { label: 'Mis Reservas', ruta: '/cliente/reservas' },
+    { label: 'Mi Cuenta',    ruta: '/cliente/cuenta' },
     { label: 'Mi Perfil',    ruta: '/perfil' },
   ],
 };
@@ -186,6 +186,26 @@ const s = {
     cursor: 'pointer',
     fontWeight: '700',
   },
+  banner: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 60,
+    background: '#fef3c7',
+    borderBottom: '1px solid #f59e0b',
+    padding: '10px 24px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    flexWrap: 'wrap',
+    fontSize: '14px',
+    color: '#92400e',
+    fontWeight: '500',
+  },
+  bannerLink: {
+    color: '#b45309',
+    fontWeight: '700',
+    textDecoration: 'underline',
+  },
 };
 
 function LayoutPrivado({ children, titulo = '' }) {
@@ -195,6 +215,7 @@ function LayoutPrivado({ children, titulo = '' }) {
   const [rol, setRol] = useState('admin');
   const [nombreUsuario, setNombreUsuario] = useState('');
   const [confirmarVisible, setConfirmarVisible] = useState(false);
+  const [estadoCuenta, setEstadoCuenta] = useState('active');
 
   useEffect(() => {
     const roleGuardado = getRole();
@@ -203,9 +224,13 @@ function LayoutPrivado({ children, titulo = '' }) {
     const mapaRol = { admin: 'admin', client: 'cliente', professor: 'profesor', receptionist: 'recepcionista' };
     if (roleGuardado) setRol(mapaRol[roleGuardado] || roleGuardado);
     if (nombreGuardado) setNombreUsuario(nombreGuardado);
+    setEstadoCuenta(getAccountStatus());
   }, []);
 
+  const tieneSidebar = rol !== 'cliente' || ubicacion.pathname.startsWith('/cliente/') || ubicacion.pathname.startsWith('/perfil');
   const itemsMenu = menus[rol] || [];
+  const estaSuspendido = rol === 'cliente' && estadoCuenta === 'suspended';
+  const enPaginaCuenta = ubicacion.pathname === '/cliente/cuenta';
 
   const cerrarSesion = async () => {
     setConfirmarVisible(false);
@@ -218,36 +243,54 @@ function LayoutPrivado({ children, titulo = '' }) {
 
   return (
     <div style={s.wrapper}>
-      {/* Sidebar */}
-      <aside style={s.sidebar}>
-        <Link to="/" style={{ ...s.sidebarLogo, textDecoration: 'none' }}>
-          Rehabilit<span style={s.sidebarAR}>AR</span>
-        </Link>
-        <nav style={s.nav}>
-          {itemsMenu.map((item) => (
-            <Link
-              key={item.ruta}
-              to={item.ruta}
-              style={s.navItem(ubicacion.pathname.startsWith(item.ruta))}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div style={s.sidebarFooter}>
-          <button onClick={() => setConfirmarVisible(true)} style={s.cerrarSesion}>
-            Cerrar sesión
-          </button>
-        </div>
-      </aside>
+      {/* Sidebar — solo roles con panel lateral */}
+      {tieneSidebar && (
+        <aside style={s.sidebar}>
+          <Link to="/" style={{ ...s.sidebarLogo, textDecoration: 'none' }}>
+            Rehabilit<span style={s.sidebarAR}>AR</span>
+          </Link>
+          <nav style={s.nav}>
+            {itemsMenu.map((item) => (
+              <Link
+                key={item.ruta}
+                to={item.ruta}
+                style={s.navItem(ubicacion.pathname.startsWith(item.ruta))}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <div style={s.sidebarFooter}>
+            <button onClick={() => setConfirmarVisible(true)} style={s.cerrarSesion}>
+              Cerrar sesión
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* Contenido principal */}
-      <div style={s.main}>
-        <header style={s.navbar}>
+      <div style={{ ...s.main, marginLeft: tieneSidebar ? 'var(--sidebar-width)' : 0 }}>
+        {/* Banner cuenta suspendida */}
+        {estaSuspendido && (
+          <div style={s.banner}>
+            <span>&#9888; Tu cuenta está suspendida.</span>
+            <Link to="/cliente/cuenta" style={s.bannerLink}>
+              Ir a Gestión de cuenta para solicitar el reintegro →
+            </Link>
+          </div>
+        )}
+        <header style={{ ...s.navbar, top: estaSuspendido ? '45px' : 0 }}>
           <span style={s.navbarTitulo}>{titulo}</span>
           <span style={s.navbarUsuario}>{nombreUsuario || 'Mi cuenta'}</span>
         </header>
-        <main style={s.contenido}>
+        <main style={{
+          ...s.contenido,
+          ...(estaSuspendido && !enPaginaCuenta ? {
+            pointerEvents: 'none',
+            opacity: 0.55,
+            userSelect: 'none',
+          } : {}),
+        }}>
           {children}
         </main>
       </div>

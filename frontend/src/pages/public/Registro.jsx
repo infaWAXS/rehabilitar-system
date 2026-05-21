@@ -1,8 +1,14 @@
+// HU Registrar usuario - Responsable: Agustin
+// E1/E2/E3: registro exitoso (con/sin apto, con/sin prof) → cuenta creada + redirige a /login
+// E4: email ya registrado → error "El correo ya se encuentra registrado"
+// E5: password < 6 chars → error validación frontend (esquema_usuario.py también lo valida)
+// E6: error validación DNI (foto) → pendiente (sistema externo de validación de identidad)
+// E7: error doble autenticación (2FA via mail) → pendiente (no implementado)
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LayoutPublico from '../../layouts/LayoutPublico';
 import { register, login } from '../../services/authService';
-import { uploadMedicalCertificateWithToken } from '../../services/usersService';
+import { uploadMedicalCertificateWithToken, uploadDniWithToken } from '../../services/usersService';
 
 const s = {
   campo: { marginBottom: '16px' },
@@ -35,7 +41,8 @@ const s = {
 
 function Registro() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ nombre: '', apellido: '', dni: '', email: '', contrasena: '', confirmar: '' });
+  const [form, setForm] = useState({ nombre: '', apellido: '', email: '', contrasena: '', confirmar: '' });
+  const [dniFile, setDniFile] = useState(null);   // E6: foto DNI para sistema externo de validación
   const [aptoFile, setAptoFile] = useState(null);
   const [error, setError] = useState('');
   const [exito, setExito] = useState('');
@@ -59,20 +66,28 @@ function Registro() {
 
     setCargando(true);
     try {
+      // E1/E2/E3: se registra el usuario sin número de DNI manual
+      // El DNI se valida mediante foto + sistema externo (E6 pendiente)
       await register({
         name: form.nombre,
         lastname: form.apellido,
         email: form.email,
         password: form.contrasena,
-        dni: form.dni || undefined,
       });
 
-      // Si hay apto físico, hacer login automático para obtener token y subir el archivo
-      if (aptoFile) {
+      // Subir foto de DNI y/o apto físico con token temporal post-registro
+      if (dniFile || aptoFile) {
         try {
           const loginData = await login({ email: form.email, password: form.contrasena });
           if (loginData?.access_token) {
-            await uploadMedicalCertificateWithToken(loginData.access_token, aptoFile);
+            if (dniFile) {
+              // E6: envía foto al backend; sistema externo la validará (pendiente)
+              await uploadDniWithToken(loginData.access_token, dniFile);
+            }
+            if (aptoFile) {
+              // E3: sube apto físico → medical_certificate_status = "pending"
+              await uploadMedicalCertificateWithToken(loginData.access_token, aptoFile);
+            }
           }
         } catch {
           // Si falla la subida, el usuario puede subirlo desde su perfil
@@ -110,10 +125,6 @@ function Registro() {
           </div>
         </div>
         <div style={s.campo}>
-          <label style={s.label}>DNI</label>
-          <input style={s.input} name="dni" value={form.dni} onChange={cambio} placeholder="Ej: 12345678" />
-        </div>
-        <div style={s.campo}>
           <label style={s.label}>Correo electrónico</label>
           <input style={s.input} type="email" name="email" value={form.email} onChange={cambio} required />
         </div>
@@ -126,6 +137,20 @@ function Registro() {
           <input style={s.input} type="password" name="confirmar" value={form.confirmar} onChange={cambio} required />
         </div>
         <div style={s.campo}>
+          {/* E6: foto del DNI → se enviará al sistema externo de validación de identidad */}
+          <label style={s.label}>
+            Foto del DNI <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(frente, obligatorio)</span>
+          </label>
+          <input
+            style={{ ...s.input, padding: '7px 14px' }}
+            type="file"
+            accept="image/*"
+            required
+            onChange={(e) => setDniFile(e.target.files[0] || null)}
+          />
+        </div>
+        <div style={s.campo}>
+          {/* E2: sin apto → cuenta activa sin permisos hasta adjuntar. E3: con apto → estado "pendiente" */}
           <label style={s.label}>
             Apto físico <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(opcional, PDF o imagen)</span>
           </label>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getActivities, cancelActivity } from '../../../services/activitiesService';
+import { getRole } from '../../../services/authService';
 
 const TIPO_LABEL = { fixed: 'Fija', individual: 'Individual' };
 
@@ -36,6 +37,11 @@ const s = {
     background: 'transparent', color: 'var(--color-texto)', fontSize: '12px', fontWeight: '600',
     cursor: 'pointer', textDecoration: 'none', display: 'inline-block',
   },
+  botonVer: {
+    padding: '5px 12px', borderRadius: '6px', border: '1px solid var(--color-primario)',
+    background: 'transparent', color: 'var(--color-primario)', fontSize: '12px', fontWeight: '600',
+    textDecoration: 'none', display: 'inline-block',
+  },
   accionesCell: { display: 'flex', gap: '6px', alignItems: 'center' },
 };
 
@@ -43,6 +49,7 @@ function ListaActividades() {
   const [actividades, setActividades] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const rol = getRole();
 
   const cargar = () => {
     setCargando(true);
@@ -69,7 +76,9 @@ function ListaActividades() {
     <LayoutPrivado titulo="Actividades">
       <div style={s.cabecera}>
         <h2 style={s.titulo}>Actividades</h2>
-        <Link to="/admin/actividades/crear" style={s.botonCrear}>+ Nueva actividad</Link>
+        {rol === 'admin' && (
+          <Link to="/admin/actividades/crear" style={s.botonCrear}>+ Nueva actividad</Link>
+        )}
       </div>
 
       {error && <div style={s.error}>{error}</div>}
@@ -111,12 +120,19 @@ function ListaActividades() {
                   <td style={s.td}>{a.capacity}</td>
                   <td style={s.td}>
                     <div style={s.accionesCell}>
-                      <Link to={`/admin/actividades/editar/${a.id}`} style={s.botonEditar}>
-                        Editar
+                      <Link to={`/admin/actividades/${a.id}`} style={s.botonVer}>
+                        Ver listado
                       </Link>
-                      <button style={s.botonCancelar} onClick={() => handleCancelar(a.id, a.name)}>
-                        Cancelar
-                      </button>
+                      {rol === 'admin' && (
+                        <>
+                          <Link to={`/admin/actividades/editar/${a.id}`} style={s.botonEditar}>
+                            Editar
+                          </Link>
+                          <button style={s.botonCancelar} onClick={() => handleCancelar(a.id, a.name)}>
+                            Cancelar
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -1,6 +1,10 @@
+// HU Ver perfil - Responsable: Agustin
+// E1: usuario autenticado selecciona "Mi Perfil" → sistema muestra datos del perfil (GET /users/me)
+// HU Subir DNI: el campo "Estado del DNI" refleja si la foto fue validada por el sistema externo (dni_verified)
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
-import { getCurrentUser } from '../../../services/usersService';
+import { getCurrentUser, uploadMedicalCertificate } from '../../../services/usersService';
 
 const s = {
   seccion: {
@@ -27,6 +31,10 @@ function VerPerfil() {
   const [usuario, setUsuario] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [aptoFile, setAptoFile] = useState(null);
+  const [aptoSubiendo, setAptoSubiendo] = useState(false);
+  const [aptoError, setAptoError] = useState('');
+  const [aptoExito, setAptoExito] = useState('');
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -44,6 +52,32 @@ function VerPerfil() {
 
     cargarDatos();
   }, []);
+
+  // HU Adjuntar apto físico (Agustin)
+  // E1: cliente sube apto → POST /users/upload-medical-certificate → status = "pending"
+  // E2: no selecciona archivo → validación HTML evita el envío
+  // E3: re-sube apto (vencido o rechazado) → mismo flujo, backend reemplaza el archivo anterior
+  const subirApto = async (e) => {
+    e.preventDefault();
+    if (!aptoFile) {
+      setAptoError('Debés seleccionar un archivo.');
+      return;
+    }
+    setAptoSubiendo(true);
+    setAptoError('');
+    setAptoExito('');
+    try {
+      await uploadMedicalCertificate(aptoFile);
+      setAptoExito('Apto físico enviado. Quedará pendiente de revisión por el administrador.');
+      setAptoFile(null);
+      const datos = await getCurrentUser();
+      setUsuario(datos);
+    } catch (err) {
+      setAptoError('No se pudo subir el archivo. Intentá de nuevo.');
+    } finally {
+      setAptoSubiendo(false);
+    }
+  };
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
@@ -123,8 +157,8 @@ function VerPerfil() {
             </div>
           </div>
 
-          {/* ── Apto Físico ──────────────────────────────── */}
-          <div style={s.seccion}>
+          {/* ── Apto Físico — solo clientes ─────────────── */}
+          {usuario.role === 'client' && <div style={s.seccion}>
             <p style={s.titulo}>Apto Físico</p>
             <div style={s.campo}>
               <label style={s.label}>Estado del Apto Físico</label>
@@ -140,7 +174,34 @@ function VerPerfil() {
                 <p style={s.valor}>{usuario.medical_certificate_path.split('/').pop()}</p>
               </div>
             )}
-          </div>
+            <div style={{ borderTop: '1px solid var(--color-borde)', paddingTop: '18px', marginTop: '8px' }}>
+              <label style={s.label}>
+                {usuario.medical_certificate_path ? 'Renovar apto físico' : 'Subir apto físico'}
+              </label>
+              <form onSubmit={subirApto} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  required
+                  onChange={(e) => setAptoFile(e.target.files[0] || null)}
+                  style={{ fontSize: '13px', color: 'var(--color-texto)' }}
+                />
+                <button
+                  type="submit"
+                  disabled={aptoSubiendo}
+                  style={{
+                    padding: '7px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                    background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))',
+                    color: '#fff', fontWeight: '600', fontSize: '13px',
+                  }}
+                >
+                  {aptoSubiendo ? 'Enviando...' : 'Enviar certificado'}
+                </button>
+              </form>
+              {aptoError && <p style={{ color: '#dc2626', fontSize: '13px', marginTop: '8px' }}>{aptoError}</p>}
+              {aptoExito && <p style={{ color: '#16a34a', fontSize: '13px', marginTop: '8px' }}>{aptoExito}</p>}
+            </div>
+          </div>}
 
           {/* ── Información del Registro ──────────────────── */}
           <div style={s.seccion}>
@@ -152,7 +213,26 @@ function VerPerfil() {
           </div>
 
           <p style={{ fontSize: '13px', color: 'var(--color-texto-suave)', marginTop: '20px', textAlign: 'center' }}>
-            Para editar tus datos o cambiar tu contraseña, dirigite a <strong>Mi Cuenta</strong>.
+            <Link
+              to="/perfil/editar"
+              style={{
+                display: 'inline-block', padding: '9px 20px', borderRadius: '8px',
+                background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))',
+                color: '#fff', fontWeight: '700', fontSize: '14px', textDecoration: 'none', marginRight: '10px',
+              }}
+            >
+              Editar perfil
+            </Link>
+            <Link
+              to="/cliente/cuenta"
+              style={{
+                display: 'inline-block', padding: '9px 20px', borderRadius: '8px',
+                border: '1px solid var(--color-borde)', background: 'transparent',
+                color: 'var(--color-texto)', fontWeight: '600', fontSize: '14px', textDecoration: 'none',
+              }}
+            >
+              Cambiar contraseña
+            </Link>
           </p>
         </>
       ) : (

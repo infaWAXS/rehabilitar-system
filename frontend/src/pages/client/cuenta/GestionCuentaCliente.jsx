@@ -1,9 +1,14 @@
-// Responsable: Francis
-import React, { useState } from 'react';
+// Responsable: Francis (gestion de cuenta) | Agustin (cambiar contraseña - ver comentarios abajo)
+// HU Solicitar reintegro de cuenta (Nahuel)
+// E1: motivo ingresado + cuenta suspendida → solicitud registrada, estado = "pending_reintegration"
+// E2: motivo vacío → error de validación (frontend + backend)
+// E3: cuenta no suspendida → mensaje informativo (backend devuelve 400)
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { changePassword, clearUserData } from '../../../services/authService';
-import { deleteMyAccount } from '../../../services/usersService';
+import { deleteMyAccount, getCurrentUser } from '../../../services/usersService';
+import { requestReintegration } from '../../../services/clientsService';
 
 const s = {
   seccion: {
@@ -67,6 +72,16 @@ function GestionCuentaCliente() {
   const [reintegroExito, setReintegroExito] = useState('');
   const [reintegroError, setReintegroError] = useState('');
   const [reintegroCargando, setReintegroCargando] = useState(false);
+  const [reintegroMotivo, setReintegroMotivo] = useState('');
+  const [usuarioId, setUsuarioId] = useState(null);
+  const [cuentaSuspendida, setCuentaSuspendida] = useState(false);
+
+  useEffect(() => {
+    getCurrentUser().then((u) => {
+      setUsuarioId(u.id);
+      setCuentaSuspendida(u.account_status === 'suspended');
+    }).catch(() => {});
+  }, []);
 
   const cambioCampo = (e) => setPassForm({ ...passForm, [e.target.name]: e.target.value });
 
@@ -113,14 +128,19 @@ function GestionCuentaCliente() {
     e.preventDefault();
     setReintegroError('');
     setReintegroExito('');
+    // E2: motivo vacío → error de validación
+    if (!reintegroMotivo.trim()) {
+      setReintegroError('El motivo es obligatorio.');
+      return;
+    }
     setReintegroCargando(true);
-
     try {
-      // Aquí iría la llamada al endpoint de reintegro cuando esté disponible
-      // await requestReintegration();
-      setReintegroExito('Tu solicitud de reintegro ha sido enviada. Un administrador la revisará pronto.');
-      setTimeout(() => setReintegroExito(''), 5000);
+      // E1: solicitud enviada → pending_reintegration
+      await requestReintegration(usuarioId, reintegroMotivo.trim());
+      setReintegroExito('Tu solicitud de reintegro fue enviada. Un administrador la revisará pronto.');
+      setReintegroMotivo('');
     } catch (err) {
+      // E3: cuenta no suspendida → backend devuelve 400
       setReintegroError(err.message || 'No se pudo enviar la solicitud de reintegro.');
     } finally {
       setReintegroCargando(false);
@@ -130,6 +150,11 @@ function GestionCuentaCliente() {
   return (
     <LayoutPrivado titulo="Mi Cuenta">
 
+      {/* HU Cambiar contraseña (Agustin)
+           E1: nueva ≥ 6 chars + coinciden → PUT /users/change-password → logout → /login
+           E2: < 6 chars → error en frontend (validación local)
+           E3: no coinciden → error en frontend (validación local)
+           E4: cancelar → limpia el formulario, no llama al backend */}
       {/* ── Cambiar contraseña ─────────────────────── */}
       <div style={s.seccion}>
         <p style={s.titulo}>Cambiar contraseña</p>
@@ -168,13 +193,29 @@ function GestionCuentaCliente() {
         <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)', marginBottom: '16px', lineHeight: 1.5 }}>
           Si tu cuenta ha sido suspendida y creés que fue un error, puedes solicitar que un administrador la revise para reintegrarte al sistema.
         </p>
-        <form onSubmit={solicitarReintegro}>
-          {reintegroError && <div style={s.error}>{reintegroError}</div>}
-          {reintegroExito && <div style={s.exito}>{reintegroExito}</div>}
-          <button type="submit" style={reintegroCargando ? s.botonDisabled : s.boton} disabled={reintegroCargando}>
-            {reintegroCargando ? 'Enviando...' : 'Solicitar reintegro'}
-          </button>
-        </form>
+        {!cuentaSuspendida ? (
+          <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)' }}>
+            Esta opción solo está disponible cuando tu cuenta está suspendida.
+          </p>
+        ) : (
+          <form onSubmit={solicitarReintegro}>
+            {reintegroError && <div style={s.error}>{reintegroError}</div>}
+            {reintegroExito && <div style={s.exito}>{reintegroExito}</div>}
+            <div style={s.campo}>
+              <label style={s.label}>Motivo *</label>
+              <textarea
+                style={{ ...s.input, resize: 'vertical', minHeight: '80px' }}
+                value={reintegroMotivo}
+                onChange={(e) => setReintegroMotivo(e.target.value)}
+                placeholder="Explicá por qué solicitás el reintegro..."
+                required
+              />
+            </div>
+            <button type="submit" style={reintegroCargando ? s.botonDisabled : s.boton} disabled={reintegroCargando}>
+              {reintegroCargando ? 'Enviando...' : 'Solicitar reintegro'}
+            </button>
+          </form>
+        )}
       </div>
 
       {/* ── Zona de peligro ───────────────────────── */}

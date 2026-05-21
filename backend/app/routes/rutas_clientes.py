@@ -36,7 +36,10 @@ def get_client_conditions(id: int, token: str, db: Session = Depends(get_db)):
     return servicio_clientes.obtener_condiciones_cliente(id, db)
 
 
-# HU: Solicitar reintegro - solo el propio cliente con cuenta suspendida, motivo obligatorio
+# HU Solicitar reintegro de cuenta (Nahuel)
+# E1: motivo ingresado + cuenta suspendida → solicitud registrada, estado = "pending_reintegration"
+# E2: motivo vacío → validación automática por SuspendRequest (Field min_length=1)
+# E3: cuenta no suspendida → 400 Bad Request
 @router.post("/{id}/reintegration-request")
 def post_reintegration_request(id: int, token: str, body: ReintegrationRequest, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
@@ -45,7 +48,10 @@ def post_reintegration_request(id: int, token: str, body: ReintegrationRequest, 
     return servicio_clientes.registrar_reintegro(id, body.motivo, db)
 
 
-# HU: Suspender cuenta - solo admin, motivo obligatorio
+# HU Suspender cuenta (Nahuel)
+# E1: motivo ingresado → cuenta pasa a "suspended", notificación mail (TODO)
+# E2: cancelar → manejado en frontend, no llega al backend
+# E3: motivo vacío → validación automática por SuspendRequest (Field min_length=1)
 @router.put("/{id}/suspend")
 def put_suspend_client(id: int, token: str, body: SuspendRequest, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
@@ -53,7 +59,10 @@ def put_suspend_client(id: int, token: str, body: SuspendRequest, db: Session = 
     return servicio_clientes.suspender_cliente(id, body.motivo, db)
 
 
-# HU: Reintegrar cuenta - solo admin, motivo opcional
+# HU Reintegrar cuenta (Nahuel)
+# E1: con solicitud pendiente → admin aprueba, cuenta pasa a "active", notificación mail (TODO)
+# E2: sin solicitud previa → admin reintegra directamente, mismo resultado
+# E3: rechazo → ver endpoint /reject-reintegration
 @router.put("/{id}/reinstate")
 def put_reinstate_client(id: int, token: str, body: ReinstateRequest, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
@@ -61,7 +70,8 @@ def put_reinstate_client(id: int, token: str, body: ReinstateRequest, db: Sessio
     return servicio_clientes.reincorporar_cliente(id, body.motivo, db)
 
 
-# HU: Reintegrar cuenta - Escenario 3: admin rechaza la solicitud de reintegro
+# HU Reintegrar cuenta - Escenario 3: admin rechaza la solicitud de reintegro
+# E3: cuenta vuelve a "suspended", notificación mail al cliente (TODO)
 @router.put("/{id}/reject-reintegration")
 def put_reject_reintegration(id: int, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)

@@ -1,4 +1,5 @@
-# # Responsable legacy: Francis y Agustin - logica de negocio de usuarios/auth.
+# Responsable: Agustin - logica de negocio de registro e inicio de sesion.
+# Francis: resto de funciones de gestion de usuarios.
 from urllib import request
 from sqlalchemy import or_
 
@@ -16,6 +17,12 @@ from app.exceptions.http_exceptions import email_already_exists_exception, unaut
 #Valida si el email ya existe, si no existe, hashea la contraseña y crea un nuevo usuario en la base de datos. 
 #Si el email ya existe, lanza una excepción HTTP 409. 
 #Si el usuario se crea correctamente, devuelve un mensaje de éxito. 
+# HU Registrar usuario (Agustin)
+# E1/E2/E3: crea el usuario; la cuenta queda activa sin dni_verified hasta que el sistema externo valide la foto
+# E4: email ya existe → lanza email_already_exists_exception (HTTP 409)
+# E5: password < 6 chars → validado por el schema UserCreate (field_validator)
+# E6: validacion DNI via foto → pendiente (upload en /users/upload-dni + sistema externo)
+# E7: doble autenticacion (2FA via mail) → pendiente de implementar
 def register_user(user_data, db: Session):
 
     existing_user = db.query(User).filter(
@@ -62,6 +69,13 @@ def register_user(user_data, db: Session):
 #Si el email existe, verifica si la contraseña es correcta. 
 #Si la contraseña es incorrecta, lanza una excepción HTTP 401. 
 #Si la contraseña es correcta, genera un token de acceso JWT y lo devuelve en la respuesta.       
+# HU Iniciar sesion (Agustin)
+# E1: credenciales OK + cuenta activa → reinicia failed_login_attempts, devuelve JWT
+# E2: email no encontrado → user_not_found_exception (HTTP 404)
+# E3: password incorrecta, intentos < 3 → incrementa failed_login_attempts, HTTP 401
+# E4: 3er intento → account_status="disabled"; TODO (Agustin): enviar mail de recuperacion + reiniciar contador
+# E5: cuenta suspendida → puede ingresar pero con funcionalidad limitada (ver banner en frontend)
+# E5b: cuenta disabled → HTTP 403
 def login_user(request: UserLogin, db: Session):
 
 
@@ -73,7 +87,7 @@ def login_user(request: UserLogin, db: Session):
         raise user_not_found_exception()
     
 
-    if existing_user.account_status.lower() != "active":
+    if existing_user.account_status.lower() == "disabled":
 
         raise HTTPException(
             status_code=403,
@@ -113,12 +127,17 @@ def login_user(request: UserLogin, db: Session):
         "role": existing_user.role,
         "name": existing_user.name,
         "lastname": existing_user.lastname,
+        "account_status": existing_user.account_status,
     }
     
 
 
 
-#Cambia la contraseña del usuario actual. 
+# HU Cambiar contraseña (Agustin)
+# E1: nueva contraseña válida + coinciden → hashea y guarda, responde 200
+# E2: < 6 chars → validado por ChangePasswordRequest schema (field_validator)
+# E3: no coinciden → HTTP 400 "Las contraseñas no coinciden"
+# E4: cancelar → el front no llama a este endpoint
 def change_password(current_user: User, new_password: str, confirm_password: str, db: Session):
     if new_password != confirm_password:
         raise HTTPException(
@@ -140,13 +159,13 @@ def change_password(current_user: User, new_password: str, confirm_password: str
     
     
     
-#Actualiza el nombre y apellido del usuario actual.
+# HU Editar perfil (Agustin) - E1: actualiza nombre y/o apellido; E2: validado por required en front
 def update_user_info(current_user: User, name: str, lastname: str, db: Session):
-    if request.name is not None:
-        current_user.name = request.name
+    if name is not None:
+        current_user.name = name
 
-    if request.lastname is not None:
-        current_user.lastname = request.lastname
+    if lastname is not None:
+        current_user.lastname = lastname
     
     db.commit()
 
@@ -202,7 +221,10 @@ def change_user_status(user_id: int, status: str, db: Session):
     
         
 
-def change_medical_clearance_status(user_id: int, db: Session):
+# HU Verificar apto físico (admin)
+# E1: admin aprueba → medical_certificate_status = "approved"
+# E2: admin desaprueba → medical_certificate_status = "rejected"
+def change_medical_clearance_status(user_id: int, db: Session, status: str = "approved"):
 
     user = db.query(User).filter(
         User.id == user_id
@@ -211,7 +233,7 @@ def change_medical_clearance_status(user_id: int, db: Session):
     if not user:
         raise user_not_found_exception()
 
-    user.physical_clearance_status = "approved"
+    user.medical_certificate_status = status  # Fix: era physical_clearance_status (campo inexistente)
 
     db.commit()
 
@@ -295,9 +317,9 @@ def delete_user(user_id: int, db: Session):
 
 
 # Busca usuarios por nombre, email o DNI con filtros opcionales.
-def search_users(db: Session, search: str = None, role: str = None, status: str = None):
+def search_users(db: Session, search: str = None, role: str = None, status: str = None, roles: list = None):
     query = db.query(User)
-    
+
     if search:
         query = query.filter(
             or_(
@@ -307,13 +329,15 @@ def search_users(db: Session, search: str = None, role: str = None, status: str 
                 User.dni.ilike(f"%{search}%")
             )
         )
-    
-    if role:
+
+    if roles:
+        query = query.filter(User.role.in_(roles))
+    elif role:
         query = query.filter(User.role == role)
-    
+
     if status:
         query = query.filter(User.account_status == status)
-    
+
     return query.all()
 
 

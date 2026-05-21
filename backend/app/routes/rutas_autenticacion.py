@@ -1,4 +1,5 @@
-# Responsable legacy: Francis y Agustin - autenticacion (registro/login).
+# Responsable: Agustin - endpoints de registro e inicio de sesion.
+# Francis: recuperacion de contrasena, logout, staff.
 from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -19,8 +20,10 @@ router = APIRouter(tags=["Autenticación"])
 
 
 
-#### REGISTRAR
-# Agregar usuario a la base de datos.
+# HU Registrar usuario (Agustin)
+# E1/E2/E3: crea cuenta → HTTP 201 + UserResponse. Foto DNI se sube por separado en POST /users/upload-dni
+# E4: email duplicado → HTTP 409
+# E5: password < 6 chars → HTTP 422 (validado por UserCreate schema)
 @router.post("/users", response_model=UserResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):   
     return register_user(user, db)
@@ -44,6 +47,12 @@ def get_users(db: Session = Depends(get_db)):
 
 
 
+# HU Iniciar sesion (Agustin)
+# E1: OK → devuelve {access_token, role, name, lastname}
+# E2: email no encontrado → HTTP 404
+# E3: password incorrecta < 3 intentos → HTTP 401, incrementa contador
+# E4: 3er intento → cuenta deshabilitada HTTP 401; TODO: enviar mail recuperacion
+# E5: cuenta suspendida → HTTP 403
 @router.post("/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
     return login_user(user, db)

@@ -10,8 +10,9 @@ import RecuperarContrasena from './pages/public/RecuperarContrasena';
 import RestablecerContrasena from './pages/public/RestablecerContrasena';
 import Staff from './pages/public/Staff';
 
-// ── Perfil compartido (Francis) ─────────────────────────
+// ── Perfil compartido (Agustin) ─────────────────────────
 import VerPerfil from './pages/client/perfil/VerPerfil';
+import EditarPerfil from './pages/client/perfil/EditarPerfil';
 
 // ── Admin: Usuarios (Francis) ───────────────────────────
 import ListaUsuarios from './pages/admin/usuarios/ListaUsuarios';
@@ -21,6 +22,7 @@ import DetalleUsuario from './pages/admin/usuarios/DetalleUsuario';
 // ── Admin: Clientes (Nahuel) ─────────────────────────────
 import ListaClientes from './pages/admin/clientes/ListaClientes';
 import GestionCuentaAdmin from './pages/admin/clientes/GestionCuentaAdmin';
+import AptosFisicosAdmin from './pages/admin/clientes/AptosFisicosAdmin';
 
 // ── Admin: Actividades (Angel) ───────────────────────────
 import ListaActividades from './pages/admin/actividades/ListaActividades';
@@ -62,6 +64,7 @@ function App() {
         <Route path="/staff" element={<Staff />} />
 
         {/* Perfil (todos los roles) */}
+        <Route path="/perfil/editar" element={<EditarPerfil />} />
         <Route path="/perfil" element={<VerPerfil />} />
 
         {/* Admin — Usuarios */}
@@ -71,6 +74,7 @@ function App() {
 
         {/* Admin — Clientes */}
         <Route path="/admin/clientes" element={<ListaClientes />} />
+        <Route path="/admin/clientes/aptos-fisicos" element={<AptosFisicosAdmin />} />
         <Route path="/admin/clientes/:id" element={<GestionCuentaAdmin />} />
 
         {/* Admin — Actividades */}

@@ -1,19 +1,30 @@
+// HU Listar clientes (Francis)
+// E1: hay clientes → tabla con estado de cuenta, apto físico y condición de abonado
+// E2: sin clientes → "No hay clientes registrados." (sin filtros) o "No se encontraron clientes con los filtros aplicados."
+// E3: limpiar filtros → limpiarFiltros() resetea a FILTROS_VACIOS y recarga lista completa
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getClients } from '../../../services/usersService';
 
-const STATUS_LABEL = { active: 'Activo', disabled: 'Deshabilitado' };
-const CERT_LABEL = { pending: 'Pendiente', approved: 'Aprobado', rejected: 'Rechazado' };
+const STATUS_LABEL = { active: 'Activo', disabled: 'Deshabilitado', suspended: 'Suspendido', pending_reintegration: 'Reintegro pend.' };
+const CERT_LABEL = { pending: 'Pendiente', approved: 'Aprobado', rejected: 'Rechazado', none: 'Sin apto' };
 
 const CHIP_ESTADO = {
-  active:   { background: '#dcfce7', color: '#15803d' },
-  disabled: { background: '#fef2f2', color: '#dc2626' },
+  active:                { background: '#dcfce7', color: '#15803d' },
+  disabled:              { background: '#fef2f2', color: '#dc2626' },
+  suspended:             { background: '#fef2f2', color: '#dc2626' },
+  pending_reintegration: { background: '#fef9c3', color: '#854d0e' },
 };
 const CHIP_CERT = {
   pending:  { background: '#fef9c3', color: '#854d0e' },
   approved: { background: '#dcfce7', color: '#15803d' },
   rejected: { background: '#fef2f2', color: '#dc2626' },
+  none:     { background: '#f3f4f6', color: '#6b7280' },
+};
+const CHIP_ABONADO = {
+  si:  { background: '#dbeafe', color: '#1d4ed8' },
+  no:  { background: '#f3f4f6', color: '#6b7280' },
 };
 
 const s = {
@@ -126,6 +137,7 @@ function ListaClientes() {
                 <th style={s.th}>DNI</th>
                 <th style={s.th}>Estado cuenta</th>
                 <th style={s.th}>Apto fisico</th>
+                <th style={s.th}>Abonado</th>
                 <th style={s.th}></th>
               </tr>
             </thead>
@@ -148,6 +160,11 @@ function ListaClientes() {
                     ) : (
                       <span style={{ color: 'var(--color-texto-suave)', fontSize: '13px' }}>Sin apto</span>
                     )}
+                  </td>
+                  <td style={s.td}>
+                    <span style={{ ...s.chip, ...(c.es_abonado ? CHIP_ABONADO.si : CHIP_ABONADO.no) }}>
+                      {c.es_abonado ? 'Abonado' : 'No abonado'}
+                    </span>
                   </td>
                   <td style={s.td}>
                     <Link to={`/admin/clientes/${c.id}`} style={s.link}>Ver detalle</Link>

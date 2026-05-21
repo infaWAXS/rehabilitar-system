@@ -37,3 +37,13 @@ export function cancelActivity(activityId) {
   return apiRequest(`/activities/${activityId}`, { method: 'DELETE' });
 }
 
+/**
+ * HU Listar condiciones de cliente (Nahuel)
+ * E1: hay inscriptos → lista con condición de acceso
+ * E2: sin inscriptos → lista vacía
+ * Lista los clientes inscriptos en una actividad con su condición de acceso.
+ */
+export function getActivityClients(activityId) {
+  return apiRequest(`/activities/${activityId}/clients`);
+}
+

@@ -5,7 +5,10 @@ from typing import List, Optional
 from database.connection import get_db
 from app.models.activity import Activity
 from app.models.room import Room
+from app.models.reservation import Reservation
+from app.models.user import User
 from app.schemas.esquema_actividad import ActivityCreate, ActivityUpdate, ActivityResponse
+from app.schemas.esquema_reservas import ClientConditionResponse
 from app.utils.dependencies import require_role, get_current_user
 
 router = APIRouter(prefix="/activities", tags=["activities"])
@@ -113,3 +116,50 @@ def cancelar_actividad(
 
     actividad.status = "cancelled"
     db.commit()
+
+
+# ── Listar condiciones de cliente ──────────────────────────────────────────────
+
+# HU Listar condiciones de cliente (Nahuel)
+# E1: hay inscriptos → retorna lista con condición de acceso por cliente
+# E2: sin inscriptos → retorna lista vacía []
+@router.get("/{activity_id}/clients", response_model=List[ClientConditionResponse])
+def listar_clientes_actividad(
+    activity_id: int,
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Admin/recepcionista: lista los clientes inscriptos en una actividad con su condición de acceso."""
+    current_user = get_current_user(token, db)
+    require_role(["admin", "receptionist"])(current_user)
+
+    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    # E1: join Reservation → User para inscriptos activos
+    registros = (
+        db.query(Reservation, User)
+        .join(User, Reservation.user_id == User.id)
+        .filter(
+            Reservation.activity_id == activity_id,
+            Reservation.status.in_(["pending", "confirmed"]),
+        )
+        .all()
+    )
+
+    # E2: lista vacía si no hay inscriptos
+    resultado = []
+    for res, user in registros:
+        resultado.append(
+            ClientConditionResponse(
+                user_id=user.id,
+                name=user.name,
+                lastname=user.lastname,
+                email=user.email,
+                reservation_type=res.reservation_type,
+                payment_status=res.payment_status,
+                es_abonado=(res.reservation_type == "fixed"),
+            )
+        )
+    return resultado

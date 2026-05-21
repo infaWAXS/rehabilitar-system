@@ -17,18 +17,18 @@ const MENUS_ROL = {
     { label: 'Mi Perfil',       ruta: '/perfil' },
   ],
   receptionist: [
+    { label: 'Actividades', ruta: '/admin/actividades' },
     { label: 'Clientes',    ruta: '/admin/clientes' },
-    { label: 'Asistencias', ruta: '/admin/asistencias' },
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
 };
 
 /* ── Menú del sidebar de admin ─────────────────────────── */
 const MENU_ADMIN = [
-  { label: 'Usuarios',    ruta: '/admin/usuarios' },
-  { label: 'Clientes',    ruta: '/admin/clientes' },
-  { label: 'Actividades', ruta: '/admin/actividades' },
-  { label: 'Asistencias', ruta: '/admin/asistencias' },
+  { label: 'Usuarios',      ruta: '/admin/usuarios' },
+  { label: 'Clientes',      ruta: '/admin/clientes' },
+  { label: 'Aptos Físicos', ruta: '/admin/clientes/aptos-fisicos' },
+  { label: 'Actividades',   ruta: '/admin/actividades' },
 ];
 
 const s = {
@@ -347,6 +347,45 @@ const s = {
     alignSelf: 'flex-start',
   }),
   actVacio: { color: 'var(--color-texto-suave)', fontSize: '14px' },
+  actBotones: { display: 'flex', gap: '8px', marginTop: '8px' },
+  actBtnVer: {
+    flex: 1, padding: '8px 0', borderRadius: '7px', border: '1px solid var(--color-primario)',
+    background: 'transparent', color: 'var(--color-primario)', fontSize: '13px', fontWeight: '600',
+    cursor: 'pointer',
+  },
+  actBtnInscribir: {
+    flex: 1, padding: '8px 0', borderRadius: '7px', border: 'none',
+    background: 'var(--color-primario)', color: '#fff', fontSize: '13px', fontWeight: '600',
+    cursor: 'pointer',
+  },
+  /* Modal detalle actividad */
+  actModalOverlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+    zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+  },
+  actModal: {
+    background: '#fff', borderRadius: '14px', padding: '28px 28px 24px',
+    maxWidth: '480px', width: '100%', boxShadow: '0 16px 48px rgba(0,0,0,0.2)',
+    display: 'flex', flexDirection: 'column', gap: '8px',
+  },
+  actModalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' },
+  actModalTitulo: { fontSize: '18px', fontWeight: '800', color: 'var(--color-texto)', margin: 0 },
+  actModalClose: {
+    background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px',
+    color: 'var(--color-texto-suave)', lineHeight: 1, padding: '0 4px',
+  },
+  actModalRow: { display: 'flex', gap: '8px', fontSize: '14px', color: 'var(--color-texto)' },
+  actModalLabel: { fontWeight: '600', minWidth: '110px', color: 'var(--color-texto-suave)', fontSize: '13px' },
+  actModalDivider: { height: '1px', background: 'var(--color-borde)', margin: '8px 0' },
+  actModalActions: { display: 'flex', gap: '10px', marginTop: '12px' },
+  actModalBtnInscribir: {
+    flex: 1, padding: '11px 0', borderRadius: '8px', border: 'none',
+    background: 'var(--color-primario)', color: '#fff', fontWeight: '700', fontSize: '14px', cursor: 'pointer',
+  },
+  actModalBtnCerrar: {
+    flex: 1, padding: '11px 0', borderRadius: '8px', border: '1px solid var(--color-borde)',
+    background: '#fff', color: 'var(--color-texto)', fontWeight: '600', fontSize: '14px', cursor: 'pointer',
+  },
   footer: {
     borderTop: '1px solid var(--color-borde)',
     textAlign: 'center',
@@ -416,6 +455,7 @@ function InicioPublico() {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [confirmarVisible, setConfirmarVisible] = useState(false);
   const [actividades, setActividades] = useState([]);
+  const [actividadDetalle, setActividadDetalle] = useState(null);
   const dropdownRef = useRef(null);
 
   const token   = getToken();
@@ -425,6 +465,8 @@ function InicioPublico() {
 
   const estaLogueado = !!token;
   const esAdmin      = role === 'admin';
+  const tieneSidebar = estaLogueado && role !== 'client';
+  const itemsSidebar = esAdmin ? MENU_ADMIN : (MENUS_ROL[role] || []);
 
   // Cargar actividades activas al montar
   useEffect(() => {
@@ -450,6 +492,11 @@ function InicioPublico() {
     try { await logout(); } catch (_) {}
     clearUserData();
     navigate('/');
+  };
+
+  const handleInscribirse = (act) => {
+    if (!estaLogueado) { navigate('/login'); return; }
+    navigate('/cliente/reservas/inscribir', { state: { actividadId: act.id } });
   };
 
   const pedirConfirmacion = () => {
@@ -492,7 +539,7 @@ function InicioPublico() {
               <p style={s.cardText}>Usá el menú arriba a la derecha para navegar.</p>
               {role === 'client'       && <Link to="/cliente/actividades"    style={s.cardLink}>Ver actividades →</Link>}
               {role === 'professor'   && <Link to="/profesor/actividades"      style={s.cardLink}>Mis actividades →</Link>}
-              {role === 'receptionist' && <Link to="/admin/clientes"             style={s.cardLink}>Ver clientes →</Link>}
+              {role === 'receptionist' && <Link to="/admin/actividades"             style={s.cardLink}>Ver actividades →</Link>}
               {role === 'admin'        && <Link to="/admin/usuarios"          style={s.cardLink}>Gestión de usuarios →</Link>}
             </>
           )}
@@ -542,12 +589,16 @@ function InicioPublico() {
                 )}
                 {a.professor && <span style={s.actProfesor}>👤 {a.professor}</span>}
                 <span style={s.actPrecio}>${Number(a.price).toLocaleString('es-AR')}</span>
+                <div style={s.actBotones}>
+                  <button style={s.actBtnVer} onClick={() => setActividadDetalle(a)}>Ver</button>
+                  <button style={s.actBtnInscribir} onClick={() => handleInscribirse(a)}>Inscribirse</button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </section>
-      
+
       <footer style={s.footer}>RehabilitAR — Plataforma de gestión para centro de kinesiología</footer>
     </>
   );
@@ -606,12 +657,12 @@ function InicioPublico() {
         </div>
       </header>
 
-      {/* ── Layout: admin con sidebar, resto sin sidebar ── */}
-      {esAdmin ? (
+      {/* ── Layout: roles con sidebar (admin/profesor/recepcionista) vs sin sidebar ── */}
+      {tieneSidebar ? (
         <div style={s.adminWrapper}>
           <aside style={s.adminSidebar}>
             <nav style={s.adminNav}>
-              {MENU_ADMIN.map(item => (
+              {itemsSidebar.map(item => (
                 <Link key={item.ruta} to={item.ruta} style={s.adminNavItem}>
                   {item.label}
                 </Link>
@@ -640,6 +691,83 @@ function InicioPublico() {
             <div style={s.modalBotones}>
               <button style={s.modalCancelar} onClick={() => setConfirmarVisible(false)}>Cancelar</button>
               <button style={s.modalConfirmar} onClick={cerrarSesion}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal detalle de actividad */}
+      {actividadDetalle && (
+        <div style={s.actModalOverlay} onClick={() => setActividadDetalle(null)}>
+          <div style={s.actModal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.actModalHeader}>
+              <h3 style={s.actModalTitulo}>{actividadDetalle.name}</h3>
+              <button style={s.actModalClose} onClick={() => setActividadDetalle(null)}>✕</button>
+            </div>
+
+            <span style={s.actChip(actividadDetalle.activity_type)}>
+              {actividadDetalle.activity_type === 'individual' ? 'Individual' : 'Clase fija'}
+            </span>
+
+            <div style={s.actModalDivider} />
+
+            <div style={s.actModalRow}>
+              <span style={s.actModalLabel}>Sala</span>
+              <span>Sala {actividadDetalle.room_id}</span>
+            </div>
+            <div style={s.actModalRow}>
+              <span style={s.actModalLabel}>Especialidad</span>
+              <span>{actividadDetalle.specialization}</span>
+            </div>
+            {actividadDetalle.schedule && (
+              <div style={s.actModalRow}>
+                <span style={s.actModalLabel}>Horario</span>
+                <span>{actividadDetalle.schedule}</span>
+              </div>
+            )}
+            {actividadDetalle.specific_date && (
+              <div style={s.actModalRow}>
+                <span style={s.actModalLabel}>Fecha</span>
+                <span>
+                  {new Date(actividadDetalle.specific_date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  {actividadDetalle.time_slot && ` · ${actividadDetalle.time_slot}`}
+                </span>
+              </div>
+            )}
+            {actividadDetalle.professor && (
+              <div style={s.actModalRow}>
+                <span style={s.actModalLabel}>Profesor</span>
+                <span>{actividadDetalle.professor}</span>
+              </div>
+            )}
+            <div style={s.actModalRow}>
+              <span style={s.actModalLabel}>Precio</span>
+              <span>${Number(actividadDetalle.price).toLocaleString('es-AR')}</span>
+            </div>
+            <div style={s.actModalRow}>
+              <span style={s.actModalLabel}>Cupos</span>
+              <span>{actividadDetalle.capacity}</span>
+            </div>
+            {actividadDetalle.description && (
+              <div style={s.actModalRow}>
+                <span style={s.actModalLabel}>Descripción</span>
+                <span>{actividadDetalle.description}</span>
+              </div>
+            )}
+            {actividadDetalle.requirements && (
+              <div style={s.actModalRow}>
+                <span style={s.actModalLabel}>Requisitos</span>
+                <span>{actividadDetalle.requirements}</span>
+              </div>
+            )}
+
+            <div style={s.actModalDivider} />
+
+            <div style={s.actModalActions}>
+              <button style={s.actModalBtnCerrar} onClick={() => setActividadDetalle(null)}>Cerrar</button>
+              <button style={s.actModalBtnInscribir} onClick={() => { setActividadDetalle(null); handleInscribirse(actividadDetalle); }}>
+                Inscribirse
+              </button>
             </div>
           </div>
         </div>

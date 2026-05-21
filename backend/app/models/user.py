@@ -12,7 +12,8 @@ class User(Base):
     lastname = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
-    dni = Column(String, nullable=True)
+    dni = Column(String, nullable=True)           # Número DNI (rellenado por sistema externo tras validar la foto)
+    dni_photo_path = Column(String, nullable=True) # Ruta foto DNI subida - validación pendiente por sistema externo
     role = Column(String, nullable=False, default="client")
     specialization = Column(String, nullable=True)
     account_status = Column(String, nullable=False, default="active")

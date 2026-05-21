@@ -1,6 +1,6 @@
 // Responsable: Francis
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { reserveFixed, reserveIndividual } from '../../../services/reservationsService';
 import { addToWaitlist } from '../../../services/waitlistService';
@@ -155,6 +155,7 @@ function generarProximosTurnos(cantidad = 10) {
 
 function InscribirActividad() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [paso, setPaso] = useState(0);
   const [actividades, setActividades] = useState([]);
   const [cargandoActividades, setCargandoActividades] = useState(true);
@@ -171,12 +172,15 @@ function InscribirActividad() {
   const turnos = useMemo(() => generarProximosTurnos(), []);
 
   useEffect(() => {
+    const idFromState = location.state?.actividadId;
     getActivities()
       .then((data) => {
         const lista = Array.isArray(data) ? data : (data.activities || []);
         const normalizadas = lista.map(normalizarActividad);
         setActividades(normalizadas);
-        if (normalizadas.length > 0) {
+        if (idFromState) {
+          setActividadId(String(idFromState));
+        } else if (normalizadas.length > 0) {
           setActividadId(String(normalizadas[0].id));
         }
       })
@@ -184,7 +188,7 @@ function InscribirActividad() {
         setActividades([]);
       })
       .finally(() => setCargandoActividades(false));
-  }, []);
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     if (!fecha && turnos.length > 0) {

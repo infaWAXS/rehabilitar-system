@@ -43,11 +43,12 @@ export function changePassword(new_password, confirm_password) {
 
 // ── Helpers de sesión (localStorage) ─────────────────────
 
-export function saveUserData({ access_token, role, name, lastname }) {
+export function saveUserData({ access_token, role, name, lastname, account_status }) {
   localStorage.setItem('access_token', access_token);
   localStorage.setItem('user_role', role);
   localStorage.setItem('user_name', name);
   localStorage.setItem('user_lastname', lastname || '');
+  localStorage.setItem('account_status', account_status || 'active');
 }
 
 export function clearUserData() {
@@ -55,6 +56,7 @@ export function clearUserData() {
   localStorage.removeItem('user_role');
   localStorage.removeItem('user_name');
   localStorage.removeItem('user_lastname');
+  localStorage.removeItem('account_status');
 }
 
 export function getToken() {
@@ -63,6 +65,10 @@ export function getToken() {
 
 export function getRole() {
   return localStorage.getItem('user_role');
+}
+
+export function getAccountStatus() {
+  return localStorage.getItem('account_status') || 'active';
 }
 
 export function getUserName() {

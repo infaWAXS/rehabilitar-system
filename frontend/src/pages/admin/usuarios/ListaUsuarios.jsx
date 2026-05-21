@@ -1,3 +1,10 @@
+// HU Búsqueda de usuarios (Francis)
+// E1: búsqueda con resultados → tabla con usuarios coincidentes
+// E2: búsqueda sin resultados → "No se encontraron usuarios."
+// HU Listar empleados (Agustin) — filtrar por rol professor/receptionist
+// E1: hay empleados → tabla con resultados
+// E2: sin empleados para el rol → "No se encontraron usuarios."
+// E3: limpiar filtros → limpiar() resetea busqueda y rol, recarga todos los usuarios
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';

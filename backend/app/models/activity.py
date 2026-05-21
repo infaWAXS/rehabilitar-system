@@ -23,7 +23,7 @@ class Activity(Base):
     schedule = Column(String(200), nullable=True)         # "Lunes, Miércoles · 09:00–10:00" (clases fijas)
     specific_date = Column(Date, nullable=True)           # fecha puntual (solo clases individuales)
     time_slot = Column(String(10), nullable=True)         # "15:00" (hora del turno individual)
-    professor = Column(String(120), nullable=True)        # nombre del kinesiólogo (opcional para clases individuales)
+    professor = Column(String(120), nullable=True)        # nombre del profesor (opcional)
     price = Column(Numeric(10, 2), nullable=False)
     capacity = Column(Integer, nullable=False)            # cupos ofrecidos (≤ Room.capacity)
     description = Column(String(500), nullable=True)

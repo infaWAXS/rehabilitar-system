@@ -84,6 +84,15 @@ export function uploadMedicalCertificateWithToken(token, file) {
   return fetch(url, { method: 'POST', body: formData }).then(r => r.json());
 }
 
+// HU Registrar usuario (Agustin) - E6: sube foto del DNI post-registro para validación externa.
+// TODO (Agustin): cuando el sistema externo valide, dni_verified pasará a true y se poblará el dni.
+export function uploadDniWithToken(token, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const url = `${API_BASE_URL}/users/upload-dni?token=${encodeURIComponent(token)}`;
+  return fetch(url, { method: 'POST', body: formData }).then(r => r.json());
+}
+
 // Devuelve la lista pública de staff activo con filtros opcionales.
 export function getStaff(search = '', specialization = '') {
   const params = new URLSearchParams();
@@ -96,4 +105,19 @@ export function getStaff(search = '', specialization = '') {
 // Devuelve las especializaciones disponibles para el filtro del staff.
 export function getStaffSpecializations() {
   return apiRequest('/staff/specializations');
+}
+
+// HU Verificar apto físico (admin) - devuelve clientes con medical_certificate_status = "pending".
+export function getPendingMedical() {
+  return apiRequest('/users/pending-medical');
+}
+
+// HU Verificar apto físico (admin) - E1: aprueba el apto físico del cliente (status → "approved").
+export function approveMedical(userId) {
+  return apiRequest(`/users/update-medical-clearance/${userId}`, { method: 'PUT' });
+}
+
+// HU Verificar apto físico (admin) - E2: desaprueba el apto físico del cliente (status → "rejected").
+export function rejectMedical(userId) {
+  return apiRequest(`/users/reject-medical/${userId}`, { method: 'PUT' });
 }

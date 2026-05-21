@@ -1,3 +1,12 @@
+// HU Crear cuenta (Francis) - Responsable: Agustin
+// E1: recepcionista creada → POST /users (role=receptionist) → cuenta activa
+// E2: cuenta de profesor creada con especialidad → POST /users (role=professor, specialization) → cuenta activa
+// E3: cuenta de cliente creada, opcionalmente con apto físico → POST /users (role=client) [+ POST /{id}/upload-medical-certificate]
+// E4: cuenta de admin creada → POST /users (role=admin) → cuenta activa
+// E5: email ya registrado → el backend retorna 400/409 → se muestra error
+// E6: profesor sin especialidad → validación frontend evita envío
+// E7: contraseña < 6 caracteres → validación frontend evita envío
+// TODO (sistema): enviar credenciales por email al usuario creado (backend pendiente)
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';

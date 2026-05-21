@@ -87,14 +87,12 @@ class ChangePasswordRequest(BaseModel):
         return value
     
 
-#Esquema para actualizar el nombre, apellido, email y especialización del usuario.
+#Esquema para actualizar el nombre, apellido y especialización del usuario.
 class UpdateUserRequest(BaseModel):
 
     name: Optional[str] = None
 
     lastname: Optional[str] = None
-
-    email: Optional[EmailStr] = None
 
     specialization: Optional[str] = None
 

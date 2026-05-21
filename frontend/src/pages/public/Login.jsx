@@ -1,3 +1,10 @@
+// HU Iniciar sesión - Responsable: Agustin
+// E1: credenciales correctas, cuenta activa → saveUserData + redirige a /
+// E2: email inexistente → "El correo no está registrado en el sistema"
+// E3: contraseña incorrecta (< 3 intentos) → "Correo o contraseña incorrectos", incrementa contador
+// E4: 3er intento fallido → cuenta deshabilitada (back); TODO (Agustin): enviar mail recuperación + reiniciar contador
+// E5: cuenta deshabilitada → "Tu cuenta está deshabilitada."
+// E5-suspendida: cuenta suspendida → permite ingresar; LayoutPrivado mostrará banner y contenido inhabilitado
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import LayoutPublico from '../../layouts/LayoutPublico';
@@ -52,8 +59,8 @@ function Login() {
       navigate('/');
     } catch (err) {
       const msg = err.message || '';
-      if (msg.toLowerCase().includes('deshabilitada') || msg.toLowerCase().includes('suspendida')) {
-        setError('Tu cuenta está suspendida. Contactate con el centro.');
+      if (msg.toLowerCase().includes('deshabilitada')) {
+        setError('Tu cuenta está deshabilitada. Contactate con el centro.');
       } else if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('404')) {
         setError('El correo no está registrado en el sistema.');
       } else {

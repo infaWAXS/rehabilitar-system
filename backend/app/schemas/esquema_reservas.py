@@ -56,6 +56,23 @@ class WaitlistResponse(BaseModel):
         from_attributes = True
 
 
+class ClientConditionResponse(BaseModel):
+    """HU Listar condiciones de cliente (Nahuel)
+    E1: hay inscriptos → lista con condición de acceso por cliente
+    E2: sin inscriptos → lista vacía
+    """
+    user_id: int
+    name: str
+    lastname: str
+    email: str
+    reservation_type: str   # "fixed" | "individual"
+    payment_status: str     # "pending" | "partial" | "completed"
+    es_abonado: bool        # True si reservation_type == "fixed"
+
+    class Config:
+        from_attributes = True
+
+
 class WaitlistDetailResponse(BaseModel):
     """Esquema de respuesta detallada de lista de espera con datos de contacto del cliente.
     HU: Listar lista de espera - dos colas separadas con datos de contacto.

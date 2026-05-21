@@ -1,3 +1,12 @@
+// HU Modificar información de usuario (Nahuel)
+// E1: modificación exitosa → guardar() llama modifyUser(id, payload) → PUT /users/{id}/modify
+// E2: cambio de especialidad profesor → select de especialidad visible solo si role=professor
+// E3: profesor con clases asignadas → TODO backend (desvincular clases pendiente módulo Angel)
+// E4: cancelar → cancelar() restaura form al estado original sin llamada a la API
+// HU Modificar empleado (Francis)
+// E1: modificación exitosa → mismo flujo guardar()
+// E2: cancelar → cancelar() restaura form sin cambios
+// E3: validación → nombre y apellido son requeridos; email es solo lectura (no editable)
 import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';

@@ -7,7 +7,35 @@ from fastapi import HTTPException
 
 
 def obtener_todos_los_clientes(db: Session):
-    return db.query(User).filter(User.role == "client").all()
+    clientes = db.query(User).filter(User.role == "client").all()
+    resultado = []
+    for c in clientes:
+        # NOTA: un cliente es "abonado" cuando tiene una suscripcion mensual activa.
+        # La suscripcion mensual incluye 4-5 clases por semana (actividades fijas).
+        # TODO (Ezequiel): cuando se implemente el modelo Subscription, reemplazar
+        # esta query por: db.query(Subscription).filter(Subscription.user_id == c.id,
+        #   Subscription.status == "active").first() is not None
+        # Por ahora se aproxima consultando si tiene reservas fijas activas.
+        es_abonado = db.query(Reservation).filter(
+            Reservation.user_id == c.id,
+            Reservation.reservation_type == "fixed",
+            Reservation.status != "cancelled",
+        ).first() is not None
+        resultado.append({
+            "id": c.id,
+            "name": c.name,
+            "lastname": c.lastname,
+            "email": c.email,
+            "dni": c.dni,
+            "role": c.role,
+            "specialization": c.specialization,
+            "account_status": c.account_status,
+            "dni_verified": c.dni_verified,
+            "medical_certificate_status": c.medical_certificate_status,
+            "created_at": c.created_at,
+            "es_abonado": es_abonado,
+        })
+    return resultado
 
 
 def obtener_condiciones_cliente(cliente_id: int, db: Session):
