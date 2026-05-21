@@ -89,6 +89,7 @@ Si querés trabajar dentro del entorno virtual en PowerShell, desde la raíz del
 ```powershell
 .\.venv\Scripts\Activate
 pip install fastapi uvicorn sqlalchemy pydantic email-validator bcrypt
+Ruta: http://127.0.0.1:8000/docs
 ```
 
 Para salir del entorno virtual, ejecuta:
