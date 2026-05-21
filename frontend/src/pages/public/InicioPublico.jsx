@@ -1,15 +1,13 @@
+// Responsable: Francis
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getToken, getRole, getUserName, clearUserData, logout } from '../../services/authService';
-import { getRooms } from '../../services/roomsService';
+import { getActivities } from '../../services/activitiesService';
 
 /* ── Menús por rol (no-admin) ──────────────────────────── */
 const MENUS_ROL = {
   client: [
-    { label: 'Ver mis actividades', ruta: '/cliente/actividades' },
     { label: 'Mis Reservas',        ruta: '/cliente/reservas' },
-    { label: 'Lista de Espera',     ruta: '/cliente/lista-espera' },
-    { label: 'Suscripciones',       ruta: '/cliente/suscripciones' },
     { label: 'Mi Cuenta',           ruta: '/cliente/cuenta' },
     { label: 'Mi Perfil',           ruta: '/perfil' },
   ],
@@ -318,6 +316,37 @@ const s = {
     fontSize: '14px',
     lineHeight: 1.5,
   },
+  gridActividades: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+    gap: '16px',
+  },
+  actCard: {
+    background: '#fff',
+    border: '1px solid var(--color-borde)',
+    borderRadius: '12px',
+    padding: '18px',
+    boxShadow: 'var(--sombra)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  actNombre: { fontWeight: '700', fontSize: '16px', color: 'var(--color-texto)' },
+  actSala: { fontSize: '12px', fontWeight: '600', color: 'var(--color-primario)', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  actHorario: { fontSize: '13px', color: 'var(--color-texto-suave)' },
+  actProfesor: { fontSize: '13px', color: 'var(--color-texto-suave)' },
+  actPrecio: { fontSize: '15px', fontWeight: '700', color: 'var(--color-texto)', marginTop: '4px' },
+  actChip: (tipo) => ({
+    display: 'inline-block',
+    padding: '3px 10px',
+    borderRadius: '999px',
+    fontSize: '11px',
+    fontWeight: '600',
+    background: tipo === 'individual' ? '#f3e8ff' : '#dbeafe',
+    color: tipo === 'individual' ? '#7e22ce' : '#1d4ed8',
+    alignSelf: 'flex-start',
+  }),
+  actVacio: { color: 'var(--color-texto-suave)', fontSize: '14px' },
   footer: {
     borderTop: '1px solid var(--color-borde)',
     textAlign: 'center',
@@ -384,9 +413,9 @@ const s = {
 
 function InicioPublico() {
   const navigate = useNavigate();
-  const [rooms, setRooms] = useState([]);
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [confirmarVisible, setConfirmarVisible] = useState(false);
+  const [actividades, setActividades] = useState([]);
   const dropdownRef = useRef(null);
 
   const token   = getToken();
@@ -397,8 +426,11 @@ function InicioPublico() {
   const estaLogueado = !!token;
   const esAdmin      = role === 'admin';
 
+  // Cargar actividades activas al montar
   useEffect(() => {
-    getRooms().then(data => setRooms(data.rooms || [])).catch(() => setRooms([]));
+    getActivities({ status: 'active' })
+      .then((data) => setActividades(Array.isArray(data) ? data : []))
+      .catch(() => {});
   }, []);
 
   // Cerrar dropdown al hacer click fuera
@@ -489,25 +521,33 @@ function InicioPublico() {
       </section>
 
       <section style={s.seccion}>
-        <h2 style={s.seccionTitulo}>Salas disponibles</h2>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 32 }}>
-          {rooms.length === 0 && <span>No hay salas registradas.</span>}
-          {rooms.map(room => (
-            <div key={room.id} style={{
-              background: '#fff',
-              border: '1px solid var(--color-borde)',
-              borderRadius: 12,
-              padding: 16,
-              minWidth: 180,
-              boxShadow: 'var(--sombra)',
-            }}>
-              <div style={{ fontWeight: 700, fontSize: 16 }}>{room.name}</div>
-              <div style={{ color: 'var(--color-texto-suave)', fontSize: 13 }}>Tipo: {room.type}</div>
-            </div>
-          ))}
-        </div>
+        <h2 style={s.seccionTitulo}>Salas Disponibles</h2>
+        {actividades.length === 0 ? (
+          <p style={s.actVacio}>No hay actividades disponibles en este momento.</p>
+        ) : (
+          <div style={s.gridActividades}>
+            {actividades.map((a) => (
+              <div key={a.id} style={s.actCard}>
+                <span style={s.actSala}>Sala {a.room_id}</span>
+                <span style={s.actNombre}>{a.name}</span>
+                <span style={s.actChip(a.activity_type)}>
+                  {a.activity_type === 'individual' ? 'Individual' : 'Fija'}
+                </span>
+                {a.schedule && <span style={s.actHorario}>📅 {a.schedule}</span>}
+                {a.specific_date && (
+                  <span style={s.actHorario}>
+                    📅 {new Date(a.specific_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    {a.time_slot && ` · ${a.time_slot}`}
+                  </span>
+                )}
+                {a.professor && <span style={s.actProfesor}>👤 {a.professor}</span>}
+                <span style={s.actPrecio}>${Number(a.price).toLocaleString('es-AR')}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
-
+      
       <footer style={s.footer}>RehabilitAR — Plataforma de gestión para centro de kinesiología</footer>
     </>
   );

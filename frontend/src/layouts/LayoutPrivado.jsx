@@ -12,10 +12,7 @@ const menus = {
     { label: 'Asistencias',  ruta: '/admin/asistencias' },
   ],
   cliente: [
-    { label: 'Actividades',  ruta: '/cliente/actividades' },
     { label: 'Mis Reservas', ruta: '/cliente/reservas' },
-    { label: 'Lista de Espera', ruta: '/cliente/lista-espera' },
-    { label: 'Suscripciones', ruta: '/cliente/suscripciones' },
     { label: 'Mi Cuenta',    ruta: '/cliente/cuenta' },
     { label: 'Mi Perfil',    ruta: '/perfil' },
   ],

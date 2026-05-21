@@ -317,31 +317,45 @@ def search_users(db: Session, search: str = None, role: str = None, status: str 
     return query.all()
 
 
-# Modifica los datos de un empleado (solo campos permitidos).
+# HU: Modificar información de usuario.
+# Escenario 1: modifica nombre, apellido, email de cualquier usuario.
+# Escenario 2: modifica especialización de un profesor.
+# Escenario 3: al cambiar especialización de un profesor con clases activas, debe
+#              desvincularlo. Pendiente de implementación hasta que el módulo de
+#              actividades (Angel) esté disponible.
+# Escenario 4: cancelación — comportamiento del frontend, no requiere lógica de backend.
 def modify_employee(employee_id: int, name: str = None, lastname: str = None, email: str = None, specialization: str = None, db: Session = None):
     employee = db.query(User).filter(User.id == employee_id).first()
-    
+
     if not employee:
         raise user_not_found_exception()
-    
+
     if name is not None:
         employee.name = name
-    
+
     if lastname is not None:
         employee.lastname = lastname
-    
+
     if email is not None and email != employee.email:
         existing = db.query(User).filter(User.email == email, User.id != employee_id).first()
         if existing:
             raise email_already_exists_exception()
         employee.email = email
-    
+
     if specialization is not None:
+        # Solo los profesores pueden tener especialidad asignada
+        if employee.role != "professor":
+            raise HTTPException(
+                status_code=400,
+                detail="Solo los profesores pueden tener una especialización asignada"
+            )
+        # TODO (Escenario 3): cuando el módulo de actividades esté implementado,
+        # desvincular al profesor de todas sus clases activas al cambiar especialización.
         employee.specialization = specialization
-    
+
     db.commit()
     db.refresh(employee)
-    
+
     return employee
 
 

@@ -26,6 +26,7 @@ import GestionCuentaAdmin from './pages/admin/clientes/GestionCuentaAdmin';
 import ListaActividades from './pages/admin/actividades/ListaActividades';
 import CrearActividad from './pages/admin/actividades/CrearActividad';
 import DetalleActividad from './pages/admin/actividades/DetalleActividad';
+import EditarActividad from './pages/admin/actividades/EditarActividad';
 
 // ── Admin: Asistencias (Ezequiel) ────────────────────────
 import RegistrarAsistenciaAdmin from './pages/admin/asistencias/RegistrarAsistencia';
@@ -75,6 +76,7 @@ function App() {
         {/* Admin — Actividades */}
         <Route path="/admin/actividades" element={<ListaActividades />} />
         <Route path="/admin/actividades/crear" element={<CrearActividad />} />
+        <Route path="/admin/actividades/editar/:id" element={<EditarActividad />} />
         <Route path="/admin/actividades/:id" element={<DetalleActividad />} />
 
         {/* Admin — Asistencias */}

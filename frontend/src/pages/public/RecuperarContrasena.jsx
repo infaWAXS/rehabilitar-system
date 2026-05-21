@@ -1,3 +1,4 @@
+// Responsable: Francis
 import React, { useState } from 'react';
 import LayoutPublico from '../../layouts/LayoutPublico';
 import { requestPasswordRecovery } from '../../services/authService';

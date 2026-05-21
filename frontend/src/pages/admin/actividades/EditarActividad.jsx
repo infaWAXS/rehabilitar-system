@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getRooms } from '../../../services/roomsService';
-import { createActivity } from '../../../services/activitiesService';
+import { getActivityById, updateActivity } from '../../../services/activitiesService';
 import { searchUsers } from '../../../services/usersService';
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
@@ -30,18 +30,6 @@ const HORAS = Array.from({ length: 8 }, (_, i) => {
   const h = 9 + i;
   return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 – ${String(h + 1).padStart(2, '0')}:00` };
 });
-
-const FORM_INICIAL = {
-  name: '',
-  specialization: '',
-  room_id: '',
-  activity_type: 'fixed',
-  price: '',
-  capacity: '',
-  description: '',
-  requirements: '',
-  specific_date: '',   // solo para clases individuales
-};
 
 // ── Estilos ────────────────────────────────────────────────────────────────────
 
@@ -73,7 +61,6 @@ const s = {
     fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto)',
     width: '100%', cursor: 'pointer',
   },
-  // Selector de días
   diasRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
   diaBtn: (activo) => ({
     padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
@@ -99,13 +86,35 @@ const s = {
     background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px',
     padding: '10px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '20px',
   },
+  cargando: { padding: '48px', textAlign: 'center', color: 'var(--color-texto-suave)' },
 };
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/** Extrae los días seleccionados de un schedule como "Lunes, Miércoles · 09:00–10:00" */
+function parseDias(schedule) {
+  if (!schedule) return [];
+  const [diasParte] = schedule.split(' · ');
+  return diasParte ? diasParte.split(', ').filter((d) => DIAS.includes(d)) : [];
+}
+
+/** Extrae la hora de inicio de un schedule o time_slot */
+function parseHora(activity) {
+  if (activity.time_slot) return activity.time_slot;
+  if (activity.schedule) {
+    const partes = activity.schedule.split(' · ');
+    if (partes[1]) return partes[1].split('–')[0].trim();
+  }
+  return '';
+}
 
 // ── Componente ─────────────────────────────────────────────────────────────────
 
-function CrearActividad() {
+function EditarActividad() {
+  const { id } = useParams();
   const navigate = useNavigate();
-  const [form, setForm] = useState(FORM_INICIAL);
+
+  const [form, setForm] = useState(null);
   const [diasSeleccionados, setDiasSeleccionados] = useState([]);
   const [horaInicio, setHoraInicio] = useState('');
   const [salas, setSalas] = useState([]);
@@ -113,19 +122,32 @@ function CrearActividad() {
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
 
-  // Carga salas al montar
+  // Carga actividad y salas en paralelo
   useEffect(() => {
-    getRooms()
-      .then(setSalas)
-      .catch(() => setError('No se pudieron cargar las salas.'));
-  }, []);
+    Promise.all([getActivityById(id), getRooms()])
+      .then(([actividad, rooms]) => {
+        setSalas(rooms);
+        setDiasSeleccionados(parseDias(actividad.schedule));
+        setHoraInicio(parseHora(actividad));
+        setForm({
+          name:          actividad.name ?? '',
+          specialization: actividad.specialization ?? '',
+          room_id:       actividad.room_id ?? '',
+          activity_type: actividad.activity_type ?? 'fixed',
+          price:         actividad.price ?? '',
+          capacity:      actividad.capacity ?? '',
+          description:   actividad.description ?? '',
+          requirements:  actividad.requirements ?? '',
+          specific_date: actividad.specific_date ?? '',
+          professor:     actividad.professor ?? '',
+        });
+      })
+      .catch(() => setError('No se pudo cargar la actividad.'));
+  }, [id]);
 
   // Recarga profesores cuando cambia la especialidad
   useEffect(() => {
-    if (!form.specialization) {
-      setProfesores([]);
-      return;
-    }
+    if (!form?.specialization) { setProfesores([]); return; }
     searchUsers('', 'professor', 'active')
       .then((lista) => {
         const filtrados = (Array.isArray(lista) ? lista : []).filter(
@@ -134,11 +156,10 @@ function CrearActividad() {
         setProfesores(filtrados);
       })
       .catch(() => setProfesores([]));
-  }, [form.specialization]);
+  }, [form?.specialization]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // Al cambiar especialidad, limpiar profesor seleccionado
     if (name === 'specialization') {
       setForm((prev) => ({ ...prev, specialization: value, professor: '' }));
     } else {
@@ -152,7 +173,6 @@ function CrearActividad() {
     );
   };
 
-  // Genera el string de schedule a partir de los días y hora elegidos
   const buildSchedule = () => {
     if (diasSeleccionados.length === 0 || !horaInicio) return '';
     const ordenados = DIAS.filter((d) => diasSeleccionados.includes(d));
@@ -175,37 +195,47 @@ function CrearActividad() {
     if (Number(form.price) < 0) return setError('El precio no puede ser negativo.');
 
     const payload = {
-      name: form.name.trim(),
+      name:          form.name.trim(),
       specialization: form.specialization,
-      room_id: Number(form.room_id),
+      room_id:       Number(form.room_id),
       activity_type: form.activity_type,
-      schedule: esIndividual ? null : buildSchedule(),
+      schedule:      esIndividual ? null : buildSchedule(),
       specific_date: esIndividual ? form.specific_date : null,
-      time_slot: horaInicio,
-      professor: form.professor || null,
-      price: parseFloat(form.price),
-      capacity: Number(form.capacity),
-      description: form.description.trim() || null,
-      requirements: form.requirements.trim() || null,
+      time_slot:     horaInicio,
+      professor:     form.professor || null,
+      price:         parseFloat(form.price),
+      capacity:      Number(form.capacity),
+      description:   form.description.trim() || null,
+      requirements:  form.requirements.trim() || null,
     };
 
     setGuardando(true);
     try {
-      await createActivity(payload);
+      await updateActivity(id, payload);
       navigate('/admin/actividades');
     } catch (err) {
-      setError(err.message || 'Error al crear la actividad.');
+      setError(err.message || 'Error al guardar los cambios.');
     } finally {
       setGuardando(false);
     }
   };
 
-  const salaSeleccionada = salas.find((r) => r.id === Number(form.room_id));
+  const salaSeleccionada = salas.find((r) => r.id === Number(form?.room_id));
+
+  if (!form) {
+    return (
+      <LayoutPrivado titulo="Editar Actividad">
+        {error
+          ? <div style={s.error}>{error}</div>
+          : <div style={s.cargando}>Cargando…</div>}
+      </LayoutPrivado>
+    );
+  }
 
   return (
-    <LayoutPrivado titulo="Crear Actividad">
+    <LayoutPrivado titulo="Editar Actividad">
       <div style={s.card}>
-        <h2 style={s.titulo}>Nueva actividad</h2>
+        <h2 style={s.titulo}>Editar actividad</h2>
 
         {error && <div style={s.error}>{error}</div>}
 
@@ -260,37 +290,36 @@ function CrearActividad() {
 
             {/* Selector de días — solo para clase fija */}
             {form.activity_type === 'fixed' && (
-            <div style={{ ...s.grupo, ...s.gridFull }}>
-              <label style={s.label}>Días *</label>
-              <div style={s.diasRow}>
-                {DIAS.map((dia) => (
-                  <button
-                    key={dia}
-                    type="button"
-                    style={s.diaBtn(diasSeleccionados.includes(dia))}
-                    onClick={() => toggleDia(dia)}
-                  >
-                    {dia}
-                  </button>
-                ))}
+              <div style={{ ...s.grupo, ...s.gridFull }}>
+                <label style={s.label}>Días *</label>
+                <div style={s.diasRow}>
+                  {DIAS.map((dia) => (
+                    <button
+                      key={dia}
+                      type="button"
+                      style={s.diaBtn(diasSeleccionados.includes(dia))}
+                      onClick={() => toggleDia(dia)}
+                    >
+                      {dia}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
             )}
 
             {/* Fecha específica — solo para clase individual */}
             {form.activity_type === 'individual' && (
-            <div style={s.grupo}>
-              <label style={s.label}>Fecha del turno *</label>
-              <input
-                style={s.input}
-                type="date"
-                name="specific_date"
-                value={form.specific_date}
-                onChange={handleChange}
-                min={new Date().toISOString().split('T')[0]}
-                required
-              />
-            </div>
+              <div style={s.grupo}>
+                <label style={s.label}>Fecha del turno *</label>
+                <input
+                  style={s.input}
+                  type="date"
+                  name="specific_date"
+                  value={form.specific_date}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
             )}
 
             {/* Selector de horario */}
@@ -327,7 +356,7 @@ function CrearActividad() {
                   {!form.specialization
                     ? '— Seleccioná primero una especialidad —'
                     : form.activity_type === 'individual'
-                    ? '— Sin asignar (el profesor se puede asignar después) —'
+                    ? '— Sin asignar —'
                     : profesores.length === 0
                     ? '— Sin profesores con esa especialidad —'
                     : '— Seleccionar profesor —'}
@@ -337,6 +366,10 @@ function CrearActividad() {
                     {p.name} {p.lastname}
                   </option>
                 ))}
+                {/* Si el profesor actual no está en la lista filtrada, mostrarlo igual */}
+                {form.professor && !profesores.some((p) => `${p.name} ${p.lastname}` === form.professor) && (
+                  <option value={form.professor}>{form.professor}</option>
+                )}
               </select>
             </div>
 
@@ -402,7 +435,7 @@ function CrearActividad() {
 
           <div style={s.acciones}>
             <button type="submit" style={s.botonPrimario} disabled={guardando}>
-              {guardando ? 'Guardando…' : 'Crear actividad'}
+              {guardando ? 'Guardando…' : 'Guardar cambios'}
             </button>
             <button
               type="button"
@@ -419,4 +452,4 @@ function CrearActividad() {
   );
 }
 
-export default CrearActividad;
+export default EditarActividad;

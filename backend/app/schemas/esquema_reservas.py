@@ -11,6 +11,7 @@ class ReservationCreate(BaseModel):
     activity_id: int
     reservation_type: str  # "fixed" o "individual"
     reservation_date: datetime
+    payment_method: Optional[str] = "full_payment"  # subscription | full_payment | partial_payment | credit
 
 
 class ReservationUpdate(BaseModel):
@@ -48,7 +49,24 @@ class WaitlistResponse(BaseModel):
     activity_id: int
     status: str
     position: int
+    waitlist_type: str  # "priority" (abonados) | "general"
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class WaitlistDetailResponse(BaseModel):
+    """Esquema de respuesta detallada de lista de espera con datos de contacto del cliente.
+    HU: Listar lista de espera - dos colas separadas con datos de contacto.
+    """
+    id: int
+    activity_id: int
+    status: str
+    position: int
+    waitlist_type: str  # "priority" (abonados, fija) | "general" (resto)
+    created_at: datetime
+    cliente_id: int
+    nombre: str
+    email: str
+    es_abonado: bool  # True si waitlist_type == "priority"

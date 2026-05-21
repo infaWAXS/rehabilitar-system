@@ -1,6 +1,6 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-export async function apiRequest(path, options = {}) {
+async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('access_token');
 
   // El backend espera el token como query param ?token=xxx
@@ -32,4 +32,12 @@ export async function apiRequest(path, options = {}) {
   return payload;
 }
 
-export { API_BASE_URL };
+const apiClient = {
+  get: (path) => apiRequest(path, { method: 'GET' }).then(data => ({ data })),
+  post: (path, data) => apiRequest(path, { method: 'POST', body: JSON.stringify(data) }).then(res => ({ data: res })),
+  put: (path, data) => apiRequest(path, { method: 'PUT', body: JSON.stringify(data) }).then(res => ({ data: res })),
+  delete: (path) => apiRequest(path, { method: 'DELETE' }).then(res => ({ data: res })),
+};
+
+export default apiClient;
+export { API_BASE_URL, apiRequest };

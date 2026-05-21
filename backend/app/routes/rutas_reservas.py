@@ -1,3 +1,5 @@
+# Responsable: Francis
+# HU: Inscribirse a actividad fija / Inscribirse a actividad individual
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -34,7 +36,7 @@ def create_new_reservation(
     )
 
 
-# Crear reserva para actividad fija
+# Crear reserva para actividad fija (HU: Inscribirse a actividad fija)
 @router.post("/fixed", response_model=ReservationResponse)
 def inscribe_fixed_activity(
     request: ReservationCreate,
@@ -46,11 +48,12 @@ def inscribe_fixed_activity(
         request.activity_id,
         "fixed",
         request.reservation_date,
-        db
+        db,
+        request.payment_method or "full_payment"
     )
 
 
-# Crear reserva para actividad individual
+# Crear reserva para actividad individual (HU: Inscribirse a actividad individual)
 @router.post("/individual", response_model=ReservationResponse)
 def inscribe_individual_activity(
     request: ReservationCreate,
@@ -62,7 +65,8 @@ def inscribe_individual_activity(
         request.activity_id,
         "individual",
         request.reservation_date,
-        db
+        db,
+        request.payment_method or "full_payment"
     )
 
 

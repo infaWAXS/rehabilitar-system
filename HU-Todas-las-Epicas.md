@@ -473,43 +473,50 @@ Entonces el sistema elimina los filtros aplicados y muestra la lista completa de
 
 # 2-Gestión de clientes
 ## ID: Solicitar reintegro de cuenta
-Título
-Como cliente con cuenta suspendida quiero solicitar el reintegro de mi cuenta para volver a acceder al sistema.
+Título: Como cliente con cuenta suspendida quiero solicitar el reintegro de mi cuenta para volver a acceder al sistema.
 
-Reglas de negocio
+Reglas de negocio:
+- El motivo de la solicitud es obligatorio.
 
-Criterios de aceptaciónEscenario 1: Solicitud de reintegro exitosa con motivo
+Criterios de aceptación:
+
+Escenario 1: Solicitud de reintegro exitosa
 Dado que el cliente con email "cliente@gmail.com" tiene la cuenta en estado "suspendida",
-cuando el cliente ingresa al formulario desde el link enviado al mail, completa la solicitud y presiona “Solicitar reintegro”,
-entonces el sistema registra la solicitud de reintegro y la deja pendiente de revisión por un administrador.
+Cuando el cliente ingresa al formulario desde el link enviado al mail, completa el campo de motivo y presiona "Solicitar reintegro",
+Entonces el sistema registra la solicitud con el motivo ingresado y la deja pendiente de revisión por un administrador.
 
-Escenario 2: Solicitud de reintegro exitosa sin motivo
+Escenario 2: Solicitud fallida por falta de motivo
 Dado que el cliente con email "cliente@gmail.com" tiene la cuenta en estado "suspendida",
-cuando el cliente ingresa al formulario desde el link enviado al mail y presiona “Solicitar reintegro”,
-entonces el sistema registra la solicitud de reintegro y la deja pendiente de revisión por un administrador.
+Cuando el cliente ingresa al formulario desde el link enviado al mail, deja el campo de motivo vacío y presiona "Solicitar reintegro",
+Entonces el sistema informa que el motivo es obligatorio y no registra la solicitud.
 
 Escenario 3: Solicitud fallida por cuenta no suspendida
 Dado que el cliente con email "cliente@gmail.com" tiene la cuenta en estado "activa",
-cuando el cliente ingresa al formulario desde el link enviado al mail,
-entonces el sistema informa que la cuenta no está suspendida y redirige a la pantalla de login.
+Cuando el cliente ingresa al formulario desde el link enviado al mail,
+Entonces el sistema informa que la cuenta no está suspendida y redirige a la pantalla de login.
 
 ## ID: Reintegrar de cuenta
-Título
-Como administrador quiero reintegrar la cuenta de un cliente suspendido para permitirle volver a acceder al sistema.
+Título: Como administrador quiero reintegrar la cuenta de un cliente suspendido para permitirle volver a acceder al sistema.
 
 Reglas de negocio:
-El motivo es obligatorio
+- El motivo del reintegro es opcional.
 
-Criterios de aceptaciónEscenario 1: Reintegro exitoso con solicitud del clienteDado el cliente con email "cliente@gmail.com" tiene la cuenta en estado "suspendida" con una solicitud de reintegro pendienteCuando el administrador selecciona la solicitud del cliente "cliente@gmail.com", ingresa el comentario “Reintegro por solicitud del cliente” y presiona "Reintegrar cuenta"Entonces el sistema reactiva la cuenta del cliente, la deja en estado "activa" y notifica al cliente que su cuenta fue reintegrada vía mail.
+Criterios de aceptación:
 
-Escenario 2: Reintegro exitoso sin solicitud del clienteDado el cliente con email "cliente@gmail.com" tiene la cuenta en estado "suspendida" sin solicitud de reintegro registradaCuando el administrador busca al cliente "cliente@gmail.com", ingresa el comentario "Reintegro a criterio del administrador" y presiona "Reintegrar cuenta"Entonces el sistema reactiva la cuenta del cliente, la deja en estado "activa" y notifica al cliente que su cuenta fue reintegrada vía mail.
+Escenario 1: Reintegro exitoso a partir de solicitud del cliente
+Dado que el cliente con email "cliente@gmail.com" tiene la cuenta en estado "suspendida" con una solicitud de reintegro pendiente,
+Cuando el administrador selecciona la solicitud del cliente "cliente@gmail.com" y presiona "Reintegrar cuenta",
+Entonces el sistema reactiva la cuenta del cliente, la deja en estado "activa" y notifica al cliente vía mail.
 
-Escenario 3: Reintegro fallido por rechazoDado el cliente con email "cliente@gmail.com" tiene la cuenta en estado "suspendida" con una solicitud de reintegro pendienteCuando el administrador selecciona la solicitud del cliente "cliente@gmail.com", ingresa el comentario “Reintegro rechazado por incumplimiento de normas” y presiona "Rechazar reintegro"Entonces el sistema mantiene la cuenta en estado "suspendida" y notifica al cliente que su solicitud fue rechazada vía mail.
+Escenario 2: Reintegro exitoso sin solicitud del cliente
+Dado que el cliente con email "cliente@gmail.com" tiene la cuenta en estado "suspendida" sin solicitud de reintegro registrada,
+Cuando el administrador busca al cliente "cliente@gmail.com" y presiona "Reintegrar cuenta",
+Entonces el sistema reactiva la cuenta del cliente, la deja en estado "activa" y notifica al cliente vía mail.
 
-Escenario 4: Reintegro fallido por falta de motivo
-Dado que el cliente con email "cliente@gmail.com" tiene la cuenta en estado "suspendida",
-Cuando el administrador selecciona la solicitud del cliente o busca al cliente "cliente@gmail.com" y presiona "Reintegrar cuenta" sin ingresar el motivo,
-Entonces el sistema informa que el motivo es obligatorio y no reactiva la cuenta.
+Escenario 3: Rechazo de solicitud de reintegro
+Dado que el cliente con email "cliente@gmail.com" tiene la cuenta en estado "suspendida" con una solicitud de reintegro pendiente,
+Cuando el administrador selecciona la solicitud del cliente "cliente@gmail.com" y presiona "Rechazar reintegro",
+Entonces el sistema mantiene la cuenta en estado "suspendida" y notifica al cliente que su solicitud fue rechazada vía mail.
 ## ID: Suspender cuenta
 Título: como administrador quiero suspender una cuenta para que el usuario no pueda acceder a las funcionalidades
 Reglas de negocio:
@@ -793,7 +800,7 @@ Cuando el admin con mail “admin@gmail.com” presiona la opción “Especiliza
 Entonces el sistema notificará que no hay especializaciones disponibles.
 
 # 4-Gestión de reservas de turnos
-ID: Inscribir actividad fija
+ID: Inscribir a actividad fija
 Título: Como cliente quiero inscribirme en una actividad fija para asegurar mi turno en la clase periódica.
 
 Reglas de Negocio:
@@ -845,7 +852,7 @@ Escenario 9: inscripción cancelada
 Dado un usuario autenticado y la actividad “Rehabilitar Codo” tiene cupos
 Cuando el cliente selecciona la actividad “Rehabilitar codo”, presiona “Inscribirse” y selecciona “Cancelar”
 Entonces el sistema cancela la operación y redirige al inicio
-## ID: Inscribir actividad individual
+## ID: Inscribir a actividad individual
 Nota: el cliente puede ser abonado o no abonado
 Título: Como cliente quiero inscribirme a  una actividad individual para reservar un turno.
 Reglas de Negocio:

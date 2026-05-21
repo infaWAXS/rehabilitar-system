@@ -1,10 +1,11 @@
+// Responsable: Francis
 import { apiRequest } from './apiClient';
 
-// TODO (Agustin): conectar con reservationRoutes.py
 export function getMyReservations() {
   return apiRequest('/reservations/me');
 }
 
+// HU: Inscribirse a actividad fija
 export function reserveFixed(data) {
   return apiRequest('/reservations/fixed', {
     method: 'POST',
@@ -12,6 +13,7 @@ export function reserveFixed(data) {
   });
 }
 
+// HU: Inscribirse a actividad individual
 export function reserveIndividual(data) {
   return apiRequest('/reservations/individual', {
     method: 'POST',

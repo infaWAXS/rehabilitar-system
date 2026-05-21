@@ -26,11 +26,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database.connection import SessionLocal, engine, Base
 from app.models.user import User
+from app.models.room import Room
 from app.utils.security import hash_password
 
 # Importar todos los modelos para que Base cree las tablas si no existen
 import app.models.reservation  # noqa
 import app.models.waitlist      # noqa
+import app.models.activity      # noqa
 
 USUARIOS_MOCK = [
     {
@@ -109,6 +111,33 @@ def seed():
         print(f"[seed_mock] Ya existían (omitidos): {', '.join(omitidos)}")
     if not creados and not omitidos:
         print("[seed_mock] Sin cambios.")
+
+    # ── Seed de las 7 salas físicas ────────────────────────────────────────────
+    SALAS = [
+        {"name": "Sala 1", "capacity": 10},
+        {"name": "Sala 2", "capacity": 10},
+        {"name": "Sala 3", "capacity": 10},
+        {"name": "Sala 4", "capacity":  8},
+        {"name": "Sala 5", "capacity":  8},
+        {"name": "Sala 6", "capacity":  5},
+        {"name": "Sala 7", "capacity":  3},
+    ]
+
+    db = SessionLocal()
+    try:
+        salas_creadas = []
+        for datos in SALAS:
+            existe = db.query(Room).filter(Room.name == datos["name"]).first()
+            if not existe:
+                db.add(Room(name=datos["name"], capacity=datos["capacity"]))
+                salas_creadas.append(datos["name"])
+        db.commit()
+        if salas_creadas:
+            print(f"[seed_mock] Salas creadas: {', '.join(salas_creadas)}")
+        else:
+            print("[seed_mock] Salas: ya existían, sin cambios.")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

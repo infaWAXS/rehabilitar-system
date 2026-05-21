@@ -1,9 +1,11 @@
+# Responsable: Agustin (modulo lista de espera)
+# HUs Listar lista de espera / Dar de baja en lista de espera: Nahuel
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from app.models.waitlist import Waitlist
-from app.schemas.esquema_reservas import WaitlistCreate, WaitlistResponse
+from app.schemas.esquema_reservas import WaitlistCreate, WaitlistResponse, WaitlistDetailResponse
 from app.utils.dependencies import get_current_user
 from app.models.user import User
 from app.services.servicio_lista_espera import (
@@ -37,15 +39,17 @@ def get_my_waitlist(
     return get_user_waitlist(current_user.id, db)
 
 
-# Obtener lista de espera de una actividad (solo admin)
-@router.get("/activity/{activity_id}", response_model=list[WaitlistResponse])
+# HU: Listar lista de espera - admin y recepcionista (usuarios autorizados)
+# Escenario 1: retorna lista con prioridad y datos de contacto
+# Escenario 2: retorna lista vacia si no hay inscriptos
+@router.get("/activity/{activity_id}", response_model=list[WaitlistDetailResponse])
 def get_activity_waitlist_endpoint(
     activity_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     from app.utils.dependencies import require_role
-    require_role(["admin"])(current_user)
+    require_role(["admin", "receptionist"])(current_user)
     
     return get_activity_waitlist(activity_id, db)
 
