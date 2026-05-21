@@ -2,6 +2,8 @@
 
 Proyecto de Ingenieria de Software 2 para gestion de un centro de kinesiologia.
 
+# Rama para testear front/back antes de mandar a develop.
+
 ## Objetivo del sprint actual
 
 - Implementar HU del Sprint 1 priorizando funcionalidad, flujo completo y bajo costo de infraestructura.
