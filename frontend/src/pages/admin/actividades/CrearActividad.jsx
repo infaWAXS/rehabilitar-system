@@ -31,6 +31,14 @@ const HORAS = Array.from({ length: 8 }, (_, i) => {
   return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 – ${String(h + 1).padStart(2, '0')}:00` };
 });
 
+function esFinDeSemana(fechaTexto) {
+  if (!fechaTexto) return false;
+  const fecha = new Date(`${fechaTexto}T00:00:00`);
+  if (Number.isNaN(fecha.getTime())) return false;
+  const dia = fecha.getDay();
+  return dia === 0 || dia === 6;
+}
+
 const FORM_INICIAL = {
   name: '',
   specialization: '',
@@ -170,6 +178,9 @@ function CrearActividad() {
     if (!form.specialization) return setError('Seleccioná una especialidad.');
     if (!horaInicio) return setError('Seleccioná un horario.');
     if (esIndividual && !form.specific_date) return setError('Seleccioná la fecha del turno.');
+    if (esIndividual && esFinDeSemana(form.specific_date)) {
+      return setError('Las actividades individuales no pueden programarse sábado ni domingo.');
+    }
     if (!esIndividual && diasSeleccionados.length === 0) return setError('Seleccioná al menos un día.');
     if (Number(form.capacity) <= 0) return setError('Los cupos deben ser mayor a 0.');
     if (Number(form.price) < 0) return setError('El precio no puede ser negativo.');

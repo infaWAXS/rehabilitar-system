@@ -29,9 +29,30 @@ const HORAS = Array.from({ length: 8 }, (_, i) => {
   const h = 9 + i;
   return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 – ${String(h + 1).padStart(2, '0')}:00` };
 });
+
+const DIAS_COMPLETOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+function obtenerDiaDesdeFecha(fecha) {
+  if (!fecha) return null;
+  const normalizada = new Date(`${fecha}T00:00:00`);
+  if (Number.isNaN(normalizada.getTime())) return null;
+  return DIAS_COMPLETOS[normalizada.getDay()] || null;
+}
+
 function extraerDias(schedule) {
   if (!schedule) return [];
   return DIAS.filter(d => schedule.toLowerCase().includes(d.toLowerCase()));
+}
+
+function obtenerDiasActividad(actividad) {
+  if (!actividad) return [];
+
+  if (actividad.activity_type === 'individual') {
+    const diaDesdeFecha = obtenerDiaDesdeFecha(actividad.specific_date);
+    return diaDesdeFecha ? [diaDesdeFecha] : [];
+  }
+
+  return extraerDias(actividad.schedule);
 }
 
 function extraerFranja(schedule, timeSlot) {
@@ -59,7 +80,7 @@ function aplicarFiltros(actividades, filtros) {
   return actividades.filter(a => {
     if (filtros.especialidad && a.specialization !== filtros.especialidad) return false;
     if (filtros.tipo && a.activity_type !== filtros.tipo) return false;
-    if (filtros.dia && !extraerDias(a.schedule).includes(filtros.dia)) return false;
+    if (filtros.dia && !obtenerDiasActividad(a).includes(filtros.dia)) return false;
     if (filtros.horario && extraerFranja(a.schedule, a.time_slot) !== filtros.horario) return false;
     if (filtros.profesor && a.professor !== filtros.profesor) return false;
     if (filtros.precioMin !== '' && Number(a.price) < Number(filtros.precioMin)) return false;
