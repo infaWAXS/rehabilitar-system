@@ -25,6 +25,7 @@ const ESPECIALIZACIONES = [
   'Kinesiologia gerontologica',
   'Electroterapia',
 ];
+<<<<<<< HEAD
 
 const DIAS_COMPLETOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -35,6 +36,12 @@ function obtenerDiaDesdeFecha(fecha) {
   return DIAS_COMPLETOS[normalizada.getDay()] || null;
 }
 
+=======
+const HORAS = Array.from({ length: 8 }, (_, i) => {
+  const h = 9 + i;
+  return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 – ${String(h + 1).padStart(2, '0')}:00` };
+});
+>>>>>>> fe923ce (Conecto las logicas del filtro)
 function extraerDias(schedule) {
   if (!schedule) return [];
   return DIAS.filter(d => schedule.toLowerCase().includes(d.toLowerCase()));
