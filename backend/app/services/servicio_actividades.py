@@ -178,6 +178,101 @@ def _validar_disponibilidad_profesor(
             )
 
 
+DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+
+def _extraer_dias(schedule: Optional[str]) -> set[str]:
+    if not schedule:
+        return set()
+    schedule_lower = schedule.lower()
+    return {dia for dia in DIAS_SEMANA if dia.lower() in schedule_lower}
+
+
+def _dia_desde_fecha(specific_date) -> Optional[str]:
+    if not specific_date:
+        return None
+    return DIAS_SEMANA[specific_date.weekday()]
+
+
+def _parse_hora(texto: Optional[str]) -> Optional[int]:
+    if not texto:
+        return None
+    match = re.search(r"(\d{1,2}):(\d{2})", texto)
+    if not match:
+        return None
+    return int(match.group(1)) * 60 + int(match.group(2))
+
+
+def _rango_horario(activity: Activity) -> tuple[Optional[int], Optional[int]]:
+    if activity.activity_type == "individual":
+        inicio = _parse_hora(activity.time_slot)
+        if inicio is None:
+            return None, None
+        return inicio, inicio + 60
+
+    coincidencias = re.findall(r"(\d{1,2}):(\d{2})", activity.schedule or "")
+    if len(coincidencias) >= 2:
+        inicio_h, inicio_m = coincidencias[0]
+        fin_h, fin_m = coincidencias[1]
+        return int(inicio_h) * 60 + int(inicio_m), int(fin_h) * 60 + int(fin_m)
+
+    inicio = _parse_hora(activity.time_slot or activity.schedule)
+    if inicio is None:
+        return None, None
+    return inicio, inicio + 60
+
+
+def _dias_actividad(activity: Activity) -> set[str]:
+    if activity.activity_type == "individual":
+        dia = _dia_desde_fecha(activity.specific_date)
+        return {dia} if dia else set()
+    return _extraer_dias(activity.schedule)
+
+
+def _solapa_en_sala(propuesta: Activity, existente: Activity) -> bool:
+    if propuesta.room_id != existente.room_id:
+        return False
+
+    dias_propuesta = _dias_actividad(propuesta)
+    dias_existente = _dias_actividad(existente)
+    if not dias_propuesta or not dias_existente or dias_propuesta.isdisjoint(dias_existente):
+        return False
+
+    inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
+    inicio_existente, fin_existente = _rango_horario(existente)
+    if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
+        return False
+
+    return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
+
+
+def _validar_disponibilidad_sala(
+    actividad_propuesta: Activity,
+    db: Session,
+    excluir_activity_id: Optional[int] = None,
+) -> None:
+    if actividad_propuesta.status != "active":
+        return
+
+    actividades_existentes = (
+        db.query(Activity)
+        .filter(
+            Activity.room_id == actividad_propuesta.room_id,
+            Activity.status == "active",
+        )
+        .all()
+    )
+
+    for existente in actividades_existentes:
+        if excluir_activity_id is not None and existente.id == excluir_activity_id:
+            continue
+        if _solapa_en_sala(actividad_propuesta, existente):
+            raise HTTPException(
+                status_code=409,
+                detail="La sala no está disponible para la fecha y hora seleccionadas porque ya existe una actividad programada.",
+            )
+
+
 def listar_actividades(
     room_id: Optional[int] = None,
     activity_type: Optional[str] = None,
