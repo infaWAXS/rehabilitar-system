@@ -1,9 +1,34 @@
 // Responsable: Francis
 import { useState, useEffect, useMemo } from 'react';
+import { getStaff } from '../../services/usersService';
 
 /* ── Helpers ────────────────────────────────────────────── */
-const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-
+const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+const TIPOS = [
+  { value: 'fixed', label: 'Clase fija' },
+  { value: 'individual', label: 'Individual' },
+];
+const FRANJAS = ['Mañana', 'Tarde'];
+const ESPECIALIZACIONES = [
+  'Kinesiologia deportiva',
+  'Fisioterapia',
+  'Kinesiologia neurologica',
+  'Rehabilitacion cardiovascular',
+  'Kinesiologia traumatologica',
+  'Pilates terapeutico',
+  'Kinesiologia pediatrica',
+  'Osteopatia',
+  'Acupuntura',
+  'Masoterapia',
+  'Kinesiologia respiratoria',
+  'Rehabilitacion post-quirurgica',
+  'Kinesiologia gerontologica',
+  'Electroterapia',
+];
+const HORAS = Array.from({ length: 8 }, (_, i) => {
+  const h = 9 + i;
+  return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 – ${String(h + 1).padStart(2, '0')}:00` };
+});
 function extraerDias(schedule) {
   if (!schedule) return [];
   return DIAS.filter(d => schedule.toLowerCase().includes(d.toLowerCase()));
@@ -161,23 +186,38 @@ const s = {
 /* ── Componente ─────────────────────────────────────────── */
 export default function FiltroActividades({ actividades = [], onChange }) {
   const [filtros, setFiltros] = useState(FILTROS_INICIAL);
+  const [profesores, setProfesores] = useState([]);
 
-  // Opciones únicas extraídas de los datos
-  const opciones = useMemo(() => {
-    const unicos = (fn) => [...new Set(actividades.flatMap(fn).filter(Boolean))].sort();
-    return {
-      especialidades: unicos(a => [a.specialization]),
-      tipos: unicos(a => [a.activity_type]),
-      dias: unicos(a => extraerDias(a.schedule)),
-      franjas: unicos(a => [extraerFranja(a.schedule, a.time_slot)]),
-      profesores: unicos(a => [a.professor]),
+  useEffect(() => {
+    let cancelado = false;
+
+    getStaff()
+      .then(data => {
+        if (cancelado) return;
+
+        const lista = Array.isArray(data) ? data : [];
+        const soloProfesores = lista
+          .filter(persona => persona.role === 'professor')
+          .map(persona => `${persona.name} ${persona.lastname}`.trim())
+          .filter(Boolean)
+          .sort();
+
+        setProfesores(soloProfesores);
+      })
+      .catch(() => {
+        if (cancelado) return;
+        setProfesores([]);
+      });
+
+    return () => {
+      cancelado = true;
     };
-  }, [actividades]);
+  }, []);
 
   // Notificar resultado filtrado al padre
   useEffect(() => {
-    onChange(aplicarFiltros(actividades, filtros));
-  }, [filtros, actividades]);
+    onChange?.(aplicarFiltros(actividades, filtros));
+  }, [filtros, actividades, onChange]);
 
   const setFiltro = (campo) => (e) =>
     setFiltros(f => ({ ...f, [campo]: e.target.value }));
@@ -205,7 +245,7 @@ export default function FiltroActividades({ actividades = [], onChange }) {
           <label style={s.label}>Especialidad</label>
           <select style={s.select} value={filtros.especialidad} onChange={setFiltro('especialidad')}>
             <option value="">Todas</option>
-            {opciones.especialidades.map(e => <option key={e} value={e}>{e}</option>)}
+            {ESPECIALIZACIONES.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
         </div>
 
@@ -214,8 +254,8 @@ export default function FiltroActividades({ actividades = [], onChange }) {
           <label style={s.label}>Tipo de clase</label>
           <select style={s.select} value={filtros.tipo} onChange={setFiltro('tipo')}>
             <option value="">Todos</option>
-            {opciones.tipos.map(t => (
-              <option key={t} value={t}>{t === 'individual' ? 'Individual' : 'Clase fija'}</option>
+            {TIPOS.map(t => (
+              <option key={t.value} value={t.value}>{t.label}</option>
             ))}
           </select>
         </div>
@@ -225,7 +265,7 @@ export default function FiltroActividades({ actividades = [], onChange }) {
           <label style={s.label}>Día</label>
           <select style={s.select} value={filtros.dia} onChange={setFiltro('dia')}>
             <option value="">Todos</option>
-            {opciones.dias.map(d => <option key={d} value={d}>{d}</option>)}
+            {DIAS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
 
@@ -234,7 +274,7 @@ export default function FiltroActividades({ actividades = [], onChange }) {
           <label style={s.label}>Horario</label>
           <select style={s.select} value={filtros.horario} onChange={setFiltro('horario')}>
             <option value="">Cualquiera</option>
-            {opciones.franjas.map(h => <option key={h} value={h}>{h}</option>)}
+            {FRANJAS.map(h => <option key={h} value={h}>{h}</option>)}
           </select>
         </div>
 
@@ -243,7 +283,7 @@ export default function FiltroActividades({ actividades = [], onChange }) {
           <label style={s.label}>Profesor</label>
           <select style={s.select} value={filtros.profesor} onChange={setFiltro('profesor')}>
             <option value="">Todos</option>
-            {opciones.profesores.map(p => <option key={p} value={p}>{p}</option>)}
+            {profesores.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
 

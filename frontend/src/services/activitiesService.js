@@ -11,6 +11,14 @@ export function getActivities(params = {}) {
   return apiRequest(`/activities${query}`);
 }
 
+/** Obtiene las opciones disponibles para los filtros de actividades */
+export function getActivityFilterOptions(params = {}) {
+  const query = Object.keys(params).length
+    ? '?' + new URLSearchParams(params).toString()
+    : '';
+  return apiRequest(`/activities/options${query}`);
+}
+
 /** Obtiene el detalle de una actividad por ID */
 export function getActivityById(activityId) {
   return apiRequest(`/activities/${activityId}`);
