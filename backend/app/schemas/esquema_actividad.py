@@ -34,6 +34,7 @@ class ActivityCreate(BaseModel):
 
 
 class ActivityUpdate(BaseModel):
+    room_id: Optional[int] = None
     name: Optional[str] = None
     specialization: Optional[str] = None
     activity_type: Optional[str] = None

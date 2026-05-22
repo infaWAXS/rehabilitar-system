@@ -1,12 +1,108 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from fastapi import HTTPException
+import re
 
 from app.models.activity import Activity
 from app.models.room import Room
 from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
+
+
+DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+
+def _extraer_dias(schedule: Optional[str]) -> set[str]:
+    if not schedule:
+        return set()
+    schedule_lower = schedule.lower()
+    return {dia for dia in DIAS_SEMANA if dia.lower() in schedule_lower}
+
+
+def _dia_desde_fecha(specific_date) -> Optional[str]:
+    if not specific_date:
+        return None
+    return DIAS_SEMANA[specific_date.weekday()]
+
+
+def _parse_hora(texto: Optional[str]) -> Optional[int]:
+    if not texto:
+        return None
+    match = re.search(r"(\d{1,2}):(\d{2})", texto)
+    if not match:
+        return None
+    return int(match.group(1)) * 60 + int(match.group(2))
+
+
+def _rango_horario(activity: Activity) -> tuple[Optional[int], Optional[int]]:
+    if activity.activity_type == "individual":
+        inicio = _parse_hora(activity.time_slot)
+        if inicio is None:
+            return None, None
+        return inicio, inicio + 60
+
+    coincidencias = re.findall(r"(\d{1,2}):(\d{2})", activity.schedule or "")
+    if len(coincidencias) >= 2:
+        inicio_h, inicio_m = coincidencias[0]
+        fin_h, fin_m = coincidencias[1]
+        return int(inicio_h) * 60 + int(inicio_m), int(fin_h) * 60 + int(fin_m)
+
+    inicio = _parse_hora(activity.time_slot or activity.schedule)
+    if inicio is None:
+        return None, None
+    return inicio, inicio + 60
+
+
+def _dias_actividad(activity: Activity) -> set[str]:
+    if activity.activity_type == "individual":
+        dia = _dia_desde_fecha(activity.specific_date)
+        return {dia} if dia else set()
+    return _extraer_dias(activity.schedule)
+
+
+def _solapa_en_sala(propuesta: Activity, existente: Activity) -> bool:
+    if propuesta.room_id != existente.room_id:
+        return False
+
+    dias_propuesta = _dias_actividad(propuesta)
+    dias_existente = _dias_actividad(existente)
+    if not dias_propuesta or not dias_existente or dias_propuesta.isdisjoint(dias_existente):
+        return False
+
+    inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
+    inicio_existente, fin_existente = _rango_horario(existente)
+    if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
+        return False
+
+    return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
+
+
+def _validar_disponibilidad_sala(
+    actividad_propuesta: Activity,
+    db: Session,
+    excluir_activity_id: Optional[int] = None,
+) -> None:
+    if actividad_propuesta.status != "active":
+        return
+
+    actividades_existentes = (
+        db.query(Activity)
+        .filter(
+            Activity.room_id == actividad_propuesta.room_id,
+            Activity.status == "active",
+        )
+        .all()
+    )
+
+    for existente in actividades_existentes:
+        if excluir_activity_id is not None and existente.id == excluir_activity_id:
+            continue
+        if _solapa_en_sala(actividad_propuesta, existente):
+            raise HTTPException(
+                status_code=409,
+                detail="La sala no está disponible para la fecha y hora seleccionadas porque ya existe una actividad programada.",
+            )
 
 
 def listar_actividades(
@@ -35,7 +131,7 @@ def obtener_actividad(activity_id: int, db: Session) -> Activity:
 
 
 def crear_actividad(datos, db: Session) -> Activity:
-    """Crea una actividad validando que los cupos no superen la capacidad de la sala."""
+    """Crea una actividad validando que los cupos no superen la capacidad de la sala y que la sala esté disponible."""
     sala = db.query(Room).filter(Room.id == datos.room_id).first()
     if not sala:
         raise HTTPException(status_code=404, detail="Sala no encontrada")
@@ -47,6 +143,8 @@ def crear_actividad(datos, db: Session) -> Activity:
         )
 
     actividad = Activity(**datos.model_dump())
+    actividad.status = "active"
+    _validar_disponibilidad_sala(actividad, db)
     db.add(actividad)
     db.commit()
     db.refresh(actividad)
@@ -54,20 +152,45 @@ def crear_actividad(datos, db: Session) -> Activity:
 
 
 def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
-    """Actualiza campos de una actividad validando la capacidad si se modifica."""
+    """Actualiza campos de una actividad validando capacidad y disponibilidad de la sala."""
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
     cambios = datos.model_dump(exclude_unset=True)
 
+    valores_propuestos = {
+        **{
+            "room_id": actividad.room_id,
+            "activity_type": actividad.activity_type,
+            "schedule": actividad.schedule,
+            "specific_date": actividad.specific_date,
+            "time_slot": actividad.time_slot,
+            "status": actividad.status,
+            
+        },
+        **cambios,
+    }
+
+    actividad_propuesta = Activity(
+        id=actividad.id,
+        room_id=valores_propuestos["room_id"],
+        activity_type=valores_propuestos["activity_type"],
+        schedule=valores_propuestos["schedule"],
+        specific_date=valores_propuestos["specific_date"],
+        time_slot=valores_propuestos["time_slot"],
+        status=valores_propuestos["status"],
+    )
+
     if "capacity" in cambios:
-        sala = db.query(Room).filter(Room.id == actividad.room_id).first()
+        sala = db.query(Room).filter(Room.id == valores_propuestos["room_id"]).first()
         if cambios["capacity"] > sala.capacity:
             raise HTTPException(
                 status_code=400,
                 detail=f"Los cupos ({cambios['capacity']}) no pueden superar la capacidad de la sala ({sala.capacity})",
             )
+
+    _validar_disponibilidad_sala(actividad_propuesta, db, excluir_activity_id=actividad.id)
 
     for campo, valor in cambios.items():
         setattr(actividad, campo, valor)
