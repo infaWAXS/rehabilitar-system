@@ -1,7 +1,7 @@
 // HU Listar condiciones de cliente (Nahuel)
 // E1: hay inscriptos → tabla con condición de acceso por cliente
 // E2: sin inscriptos → "No hay inscriptos en esta actividad."
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getActivityById, getActivityClients } from '../../../services/activitiesService';
@@ -9,34 +9,28 @@ import { getActivityById, getActivityClients } from '../../../services/activitie
 const TIPO_LABEL = { fixed: 'Fija', individual: 'Individual' };
 
 const PAGO_LABEL = {
-  pending:   'Pago pendiente',
-  partial:   'Seña pagada',
-  completed: 'Pago total',
+  pending:   'Pago Pendiente',
+  partial:   'Seña',
+  completed: 'Pago Total',
 };
 
 const PAGO_CHIP = {
+  completed: { background: '#dcfce7', color: '#15803d' },
+  partial:   { background: '#fef9c3', color: '#854d0e' },
   pending:   { background: '#fef2f2', color: '#dc2626' },
-  partial:   { background: '#fefce8', color: '#92400e' },
-  completed: { background: '#f0fdf4', color: '#166534' },
 };
 
-const CONDICION_CHIP = {
-  abonado:   { background: '#dbeafe', color: '#1d4ed8', label: 'Suscripción vigente' },
-  pagado:    { background: '#f0fdf4', color: '#166534', label: 'Pago total' },
-  senia:     { background: '#fefce8', color: '#92400e', label: 'Seña' },
-  pendiente: { background: '#fef2f2', color: '#dc2626', label: 'Pago pendiente' },
+const CHIP_TIPO = {
+  abonado:    { background: '#e0f2fe', color: '#0369a1' },
+  no_abonado: { background: '#f3e8ff', color: '#6b21a8' },
 };
 
-function condicionAcceso(esAbonado, paymentStatus) {
-  if (esAbonado) return CONDICION_CHIP.abonado;
-  if (paymentStatus === 'completed') return CONDICION_CHIP.pagado;
-  if (paymentStatus === 'partial') return CONDICION_CHIP.senia;
-  return CONDICION_CHIP.pendiente;
-}
+const FILTROS_VACIOS = { busqueda: '', tipo: '' };
 
 const s = {
   volver: { color: 'var(--color-primario)', textDecoration: 'none', fontSize: '14px', fontWeight: '600', display: 'inline-block', marginBottom: '16px' },
   card: { background: 'var(--color-fondo-card)', borderRadius: '12px', padding: '24px', boxShadow: 'var(--sombra)', marginBottom: '24px' },
+  cardTabla: { background: 'var(--color-fondo-card)', borderRadius: '12px', padding: '0', boxShadow: 'var(--sombra)', marginBottom: '24px', overflowX: 'auto' },
   tituloSeccion: { fontSize: '18px', fontWeight: '700', color: 'var(--color-texto)', marginBottom: '16px', marginTop: 0 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' },
   campo: { display: 'flex', flexDirection: 'column', gap: '4px' },
@@ -48,14 +42,22 @@ const s = {
   td: { padding: '12px 14px', borderBottom: '1px solid var(--color-borde)', color: 'var(--color-texto)' },
   vacio: { textAlign: 'center', padding: '40px', color: 'var(--color-texto-suave)', fontSize: '14px' },
   error: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '16px' },
+  filtros: { display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center', padding: '16px 24px 0' },
+  inputBusqueda: { padding: '9px 14px', borderRadius: '8px', border: '1px solid var(--color-borde)', fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto)', minWidth: '220px', boxSizing: 'border-box' },
+  select: { padding: '9px 14px', borderRadius: '8px', border: '1px solid var(--color-borde)', fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto)', cursor: 'pointer' },
+  botonLimpiar: { padding: '9px 16px', borderRadius: '8px', border: '1px solid var(--color-primario)', background: 'transparent', color: 'var(--color-primario)', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
+  link: { color: 'var(--color-primario)', textDecoration: 'none', fontWeight: '600', fontSize: '13px' },
+  tituloInscriptos: { fontSize: '18px', fontWeight: '700', color: 'var(--color-texto)', margin: '0', padding: '24px 24px 0' },
 };
 
 function DetalleActividad() {
   const { id } = useParams();
   const [actividad, setActividad] = useState(null);
+  const [todosClientes, setTodosClientes] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [filtros, setFiltros] = useState(FILTROS_VACIOS);
 
   useEffect(() => {
     setCargando(true);
@@ -63,12 +65,43 @@ function DetalleActividad() {
     Promise.all([getActivityById(id), getActivityClients(id)])
       .then(([act, cli]) => {
         setActividad(act);
-        // E1/E2: lista de inscriptos (puede ser vacía)
-        setClientes(Array.isArray(cli) ? cli : []);
+        const lista = Array.isArray(cli) ? cli : [];
+        setTodosClientes(lista);
+        setClientes(lista);
       })
       .catch(() => setError('No se pudo cargar el detalle de la actividad.'))
       .finally(() => setCargando(false));
   }, [id]);
+
+  const aplicarFiltros = useCallback((f, base) => {
+    let filtrados = base;
+    if (f.busqueda) {
+      const b = f.busqueda.toLowerCase();
+      filtrados = filtrados.filter((c) =>
+        c.name.toLowerCase().includes(b) ||
+        c.lastname.toLowerCase().includes(b) ||
+        (c.email || '').toLowerCase().includes(b)
+      );
+    }
+    if (f.tipo) {
+      const quiereAbonado = f.tipo === 'abonado';
+      filtrados = filtrados.filter((c) => c.es_abonado === quiereAbonado);
+    }
+    setClientes(filtrados);
+  }, []);
+
+  const cambio = (e) => {
+    const nuevosFiltros = { ...filtros, [e.target.name]: e.target.value };
+    setFiltros(nuevosFiltros);
+    aplicarFiltros(nuevosFiltros, todosClientes);
+  };
+
+  const limpiarFiltros = () => {
+    setFiltros(FILTROS_VACIOS);
+    setClientes(todosClientes);
+  };
+
+  const hayFiltros = filtros.busqueda !== '' || filtros.tipo !== '';
 
   if (cargando) {
     return (
@@ -134,46 +167,97 @@ function DetalleActividad() {
         </div>
       )}
 
-      {/* Sección inscriptos con condición de acceso */}
-      <div style={s.card}>
-        <h3 style={s.tituloSeccion}>Inscriptos</h3>
-        {/* E2: sin inscriptos */}
-        {clientes.length === 0 ? (
-          <div style={s.vacio}>No hay inscriptos en esta actividad.</div>
-        ) : (
-          /* E1: tabla con condición de acceso */
-          <div style={{ overflowX: 'auto' }}>
-            <table style={s.tabla}>
-              <thead>
-                <tr>
-                  <th style={s.th}>Nombre</th>
-                  <th style={s.th}>Email</th>
-                  <th style={s.th}>Tipo reserva</th>
-                  <th style={s.th}>Condición de acceso</th>
-                  <th style={s.th}>Estado de pago</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientes.map((c) => {
-                  const condicion = condicionAcceso(c.es_abonado, c.payment_status);
-                  const pagoChip = PAGO_CHIP[c.payment_status] ?? PAGO_CHIP.pending;
-                  return (
-                    <tr key={c.user_id}>
-                      <td style={s.td}>{c.name} {c.lastname}</td>
-                      <td style={s.td}>{c.email}</td>
-                      <td style={s.td}>{TIPO_LABEL[c.reservation_type] ?? c.reservation_type}</td>
-                      <td style={s.td}>
-                        <span style={{ ...s.chip, ...condicion }}>{condicion.label}</span>
-                      </td>
-                      <td style={s.td}>
-                        <span style={{ ...s.chip, ...pagoChip }}>{PAGO_LABEL[c.payment_status] ?? c.payment_status}</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {/* Sección inscriptos */}
+      <div style={s.cardTabla}>
+        <h3 style={s.tituloInscriptos}>Inscriptos</h3>
+
+        {/* Filtros */}
+        <div style={s.filtros}>
+          <input
+            style={s.inputBusqueda}
+            type="text"
+            name="busqueda"
+            placeholder="Buscar por nombre o email..."
+            value={filtros.busqueda}
+            onChange={cambio}
+          />
+          <select style={s.select} name="tipo" value={filtros.tipo} onChange={cambio}>
+            <option value="">Todos los tipos</option>
+            <option value="abonado">Abonado</option>
+            <option value="no_abonado">No abonado</option>
+          </select>
+          {hayFiltros && (
+            <button style={s.botonLimpiar} onClick={limpiarFiltros}>
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+
+        {/* Tabla */}
+        {cargando ? (
+          <div style={s.vacio}>Cargando inscriptos...</div>
+        ) : clientes.length === 0 ? (
+          <div style={s.vacio}>
+            {hayFiltros
+              ? 'No se encontraron inscriptos con los filtros aplicados.'
+              : 'No hay inscriptos en esta actividad.'}
           </div>
+        ) : (
+          <table style={s.tabla}>
+            <thead>
+              <tr>
+                <th style={s.th}>Nombre</th>
+                <th style={s.th}>Email</th>
+                <th style={s.th}>Condición</th>
+                <th style={s.th}>Suscripción / Reserva</th>
+                <th style={s.th}>Estado de Pago</th>
+                <th style={s.th}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientes.map((c) => (
+                <tr key={c.user_id}>
+                  <td style={s.td}>{c.name} {c.lastname}</td>
+                  <td style={s.td}>{c.email || '—'}</td>
+
+                  {/* Abonado / No abonado */}
+                  <td style={s.td}>
+                    <span style={{ ...s.chip, ...(c.es_abonado ? CHIP_TIPO.abonado : CHIP_TIPO.no_abonado) }}>
+                      {c.es_abonado ? 'Abonado' : 'No abonado'}
+                    </span>
+                  </td>
+
+                  {/* Suscripción (abonado) o Reserva (no abonado) */}
+                  <td style={s.td}>
+                    {c.es_abonado ? (
+                      <span style={{ ...s.chip, background: '#dcfce7', color: '#15803d' }}>
+                        Suscripción Activa
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--color-texto)', fontSize: '13px', fontWeight: '500' }}>
+                        Tiene Reserva ✅
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Estado de pago (solo no abonados) */}
+                  <td style={s.td}>
+                    {!c.es_abonado ? (
+                      <span style={{ ...s.chip, ...(PAGO_CHIP[c.payment_status] || PAGO_CHIP.pending) }}>
+                        {PAGO_LABEL[c.payment_status] || c.payment_status}
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--color-texto-suave)', fontSize: '13px' }}>N/A</span>
+                    )}
+                  </td>
+
+                  <td style={s.td}>
+                    <Link to={`/admin/clientes/${c.user_id}`} style={s.link}>Ver ficha</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </LayoutPrivado>

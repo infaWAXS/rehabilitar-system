@@ -129,6 +129,7 @@ def login_user(request: UserLogin, db: Session):
         "name": existing_user.name,
         "lastname": existing_user.lastname,
         "account_status": existing_user.account_status,
+        "id": existing_user.id,
     }
     
 

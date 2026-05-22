@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getClients } from '../../../services/usersService';
+import { getRole } from '../../../services/authService';
 
 const STATUS_LABEL = { active: 'Activo', disabled: 'Deshabilitado', suspended: 'Suspendido', pending_reintegration: 'Reintegro pend.' };
 const CERT_LABEL = { pending: 'Pendiente', approved: 'Aprobado', rejected: 'Rechazado', none: 'Sin apto' };
@@ -57,6 +58,7 @@ const s = {
 const FILTROS_VACIOS = { busqueda: '', estado: '' };
 
 function ListaClientes() {
+  const rol = getRole();
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -167,7 +169,9 @@ function ListaClientes() {
                     </span>
                   </td>
                   <td style={s.td}>
-                    <Link to={`/admin/clientes/${c.id}`} style={s.link}>Ver detalle</Link>
+                    {rol === 'admin' && (
+                      <Link to={`/admin/clientes/${c.id}`} style={s.link}>Ver detalle</Link>
+                    )}
                   </td>
                 </tr>
               ))}

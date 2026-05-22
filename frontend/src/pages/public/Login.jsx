@@ -55,6 +55,15 @@ function Login() {
 
     try {
       const data = await login({ email: form.email, password: form.contrasena });
+
+      // E5-suspendida: cuenta suspendida → no puede ingresar, redirige a solicitar reintegro
+      if (data.account_status === 'suspended') {
+        navigate(`/solicitar-reintegro?email=${encodeURIComponent(form.email)}`, {
+          state: { token: data.access_token, userId: data.id },
+        });
+        return;
+      }
+
       saveUserData(data);
       navigate('/');
     } catch (err) {

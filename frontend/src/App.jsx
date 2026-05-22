@@ -46,6 +46,9 @@ import MisSuscripciones from './pages/client/pagos/MisSuscripciones';
 
 // ── Cliente: Cuenta (Nahuel) ──────────────────────────────
 import GestionCuentaCliente from './pages/client/cuenta/GestionCuentaCliente';
+import SolicitarReintegro from './pages/client/cuenta/SolicitarReintegro';
+
+// ── Recepcionista (Nahuel) ────────────────────────────────
 
 // ── Kinesiólogo (Angel + Ezequiel) ───────────────────────
 import MisActividadesProfesor from './pages/kinesiologist/actividades/MisActividades';
@@ -61,6 +64,7 @@ function App() {
         <Route path="/registro" element={<Registro />} />
         <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
         <Route path="/restablecer-contrasena" element={<RestablecerContrasena />} />
+        <Route path="/solicitar-reintegro" element={<SolicitarReintegro />} />
         <Route path="/staff" element={<Staff />} />
 
         {/* Perfil (todos los roles) */}
@@ -97,6 +101,8 @@ function App() {
         {/* Profesor */}
         <Route path="/profesor/actividades" element={<MisActividadesProfesor />} />
         <Route path="/profesor/asistencias" element={<RegistrarAsistenciaProfesor />} />
+
+        {/* Recepcionista */}
 
         {/* Redirect por defecto */}
         <Route path="*" element={<Navigate to="/" replace />} />
