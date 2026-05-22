@@ -56,7 +56,6 @@ class UserCreate(BaseModel):
         return value
     
     
-    
 #Inicio de sesion de usuario
 class UserLogin(BaseModel):
     email: EmailStr
