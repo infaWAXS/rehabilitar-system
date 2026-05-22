@@ -34,7 +34,7 @@ Base.metadata.create_all(bind=engine)
 
 # Cargar usuarios mock al arrancar (sólo crea los que no existen)
 seed_mock_users()
-app.include_router(auth_router)
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(user_router)
 app.include_router(client_router)
 app.include_router(room_router)

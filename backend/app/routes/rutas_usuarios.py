@@ -61,7 +61,7 @@ def change_user_password(request: ChangePasswordRequest, token: str, db: Session
 
 # HU Editar perfil (Agustin) - E1: actualiza nombre/apellido. E2: required en front. E3: cancel → front no llama
 @router.put("/update-info")
-def handle_update_user_info(request: UpdateUserRequest, token: str, db: Session = Depends(get_db)):
+def update_my_info(request: UpdateUserRequest, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     return update_user_info_service(current_user, request.name, request.lastname, db)
 
@@ -153,18 +153,18 @@ def upload_medical_certificate(
     
     
 # HU Verificar apto físico (admin) - E1: admin aprueba → medical_certificate_status = "approved" - AGUSTIN
-@router.put("/update-medical-clearance/{user_id}")
+@router.put("/acept-medical/{user_id}")
 def update_medical_clearance_status(user_id: int, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return change_medical_clearance_status(user_id, db)
+    return change_medical_clearance_status(user_id, "approved", db)
 
 # HU Verificar apto físico (admin) - E2: admin desaprueba → medical_certificate_status = "rejected" - AGUSTIN
 @router.put("/reject-medical/{user_id}", response_model=UserResponse)
 def reject_medical_certificate(user_id: int, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return change_medical_clearance_status(user_id, db, status="rejected")
+    return change_medical_clearance_status(user_id, "rejected", db)
 
 
 # HU Modificar información de usuario (Nahuel)

@@ -92,14 +92,14 @@ class TestCerrarSesion:
         user = crear_usuario(db, email="cierre@test.com")
         token = token_para(user)
 
-        resp = client.post("/logout", params={"token": token})
+        resp = client.post("/auth/logout", params={"token": token})
 
         assert resp.status_code == 200
         assert "cerrada" in resp.json()["message"].lower()
 
     def test_escenario2_cierre_sin_token(self):
         """Escenario 2: cierre fallido - sin token de sesión (no autenticado)."""
-        resp = client.post("/logout", params={"token": "token_invalido"})
+        resp = client.post("/auth/logout", params={"token": "token_invalido"})
 
         assert resp.status_code == 401
 
@@ -181,7 +181,7 @@ class TestBuscarEmpleado:
         emp.name = "Carlos"
         db.commit()
 
-        resp = client.get("/staff", params={"search": "Carlos"})
+        resp = client.get("/auth/staff", params={"search": "Carlos"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -189,7 +189,7 @@ class TestBuscarEmpleado:
 
     def test_escenario2_busqueda_sin_resultados(self):
         """Escenario 2: no existe empleado con el nombre buscado."""
-        resp = client.get("/staff", params={"search": "XYZ_noexiste"})
+        resp = client.get("/auth/staff", params={"search": "XYZ_noexiste"})
 
         assert resp.status_code == 200
         assert resp.json() == []
@@ -206,7 +206,7 @@ class TestFiltrarEmpleado:
         emp.specialization = "Tren superior"
         db.commit()
 
-        resp = client.get("/staff", params={"specialization": "Tren superior"})
+        resp = client.get("/auth/staff", params={"specialization": "Tren superior"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -215,7 +215,7 @@ class TestFiltrarEmpleado:
 
     def test_escenario2_filtrado_sin_resultados(self):
         """Escenario 2: no hay empleados con la especialización filtrada."""
-        resp = client.get("/staff", params={"specialization": "EspecializacionQueNoExiste_999"})
+        resp = client.get("/auth/staff", params={"specialization": "EspecializacionQueNoExiste_999"})
 
         assert resp.status_code == 200
         assert resp.json() == []
@@ -224,7 +224,7 @@ class TestFiltrarEmpleado:
         """Escenario 3: sin filtros devuelve la lista completa."""
         crear_usuario(db, email="staff_limpiar@test.com", role="professor")
 
-        resp = client.get("/staff")
+        resp = client.get("/auth/staff")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -337,7 +337,7 @@ class TestCrearCuenta:
 
     def test_escenario1_crear_recepcionista_exitoso(self):
         """Escenario 1: registro exitoso con rol recepcionista."""
-        resp = client.post("/users", json={
+        resp = client.post("/auth/register", json={
             "name": "Laura",
             "lastname": "Gomez",
             "email": "recep_new@test.com",
@@ -350,7 +350,7 @@ class TestCrearCuenta:
         """Escenario 5: registro fallido por email ya existente."""
         crear_usuario(db, email="dup@test.com")
 
-        resp = client.post("/users", json={
+        resp = client.post("/auth/register", json={
             "name": "Otro",
             "lastname": "Usuario",
             "email": "dup@test.com",
@@ -361,7 +361,7 @@ class TestCrearCuenta:
 
     def test_escenario7_contrasena_menor_6_digitos(self):
         """Escenario 7: contraseña menor a 6 dígitos."""
-        resp = client.post("/users", json={
+        resp = client.post("/auth/register", json={
             "name": "Test",
             "lastname": "User",
             "email": "short_pass@test.com",
@@ -372,7 +372,7 @@ class TestCrearCuenta:
 
     def test_escenario2_crear_profesor_con_especialidad(self):
         """Escenario 2: crear profesor con especialidad definida → 200."""
-        resp = client.post("/users", json={
+        resp = client.post("/auth/register", json={
             "name": "Marcos",
             "lastname": "Lopez",
             "email": "prof_esp@test.com",
@@ -385,7 +385,7 @@ class TestCrearCuenta:
 
     def test_escenario3_crear_usuario_con_rol_explicito(self):
         """Escenario 3: crear usuario pasando rol explícito → 200."""
-        resp = client.post("/users", json={
+        resp = client.post("/auth/register", json={
             "name": "Ana",
             "lastname": "Torres",
             "email": "rol_explicito@test.com",
@@ -397,7 +397,7 @@ class TestCrearCuenta:
 
     def test_escenario4_crear_administrador(self):
         """Escenario 4: crear usuario con rol admin → 200."""
-        resp = client.post("/users", json={
+        resp = client.post("/auth/register", json={
             "name": "Super",
             "lastname": "Admin",
             "email": "new_admin@test.com",
@@ -409,7 +409,7 @@ class TestCrearCuenta:
 
     def test_escenario6_crear_profesor_sin_especialidad(self):
         """Escenario 6: crear profesor sin especialidad → 400."""
-        resp = client.post("/users", json={
+        resp = client.post("/auth/register", json={
             "name": "Sin",
             "lastname": "Especialidad",
             "email": "prof_noesp@test.com",

@@ -161,7 +161,7 @@ def change_password(current_user: User, new_password: str, confirm_password: str
     
     
     
-# HU Editar perfil (Agustin) - E1: actualiza nombre y/o apellido; E2: validado por required en front
+# Actualiza el nombre y apellido del usuario actual - Agustin
 def update_user_info(current_user: User, name: str, lastname: str, db: Session):
     if name is not None:
         current_user.name = name
@@ -226,7 +226,7 @@ def change_user_status(user_id: int, status: str, db: Session):
 # HU Verificar apto físico (admin)
 # E1: admin aprueba → medical_certificate_status = "approved"
 # E2: admin desaprueba → medical_certificate_status = "rejected"
-def change_medical_clearance_status(user_id: int, db: Session, status: str = "approved"):
+def change_medical_clearance_status(user_id: int, status: str, db: Session):
 
     user = db.query(User).filter(
         User.id == user_id
@@ -235,7 +235,7 @@ def change_medical_clearance_status(user_id: int, db: Session, status: str = "ap
     if not user:
         raise user_not_found_exception()
 
-    user.medical_certificate_status = status  # Fix: era physical_clearance_status (campo inexistente)
+    user.medical_certificate_status = status 
 
     db.commit()
 

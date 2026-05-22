@@ -24,7 +24,7 @@ router = APIRouter(tags=["Autenticación"])
 # E1/E2/E3: crea cuenta → HTTP 201 + UserResponse. Foto DNI se sube por separado en POST /users/upload-dni
 # E4: email duplicado → HTTP 409
 # E5: password < 6 chars → HTTP 422 (validado por UserCreate schema)
-@router.post("/users", response_model=UserResponse)
+@router.post("/register", response_model=UserResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):   
     return register_user(user, db)
     
@@ -59,13 +59,13 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 
 
 # Endpoint para solicitar recuperación de contraseña
-@router.post("/auth/recovery/request")
+@router.post("/recovery/request")
 def request_password_reset(request: PasswordRecoveryRequest, db: Session = Depends(get_db)):
     return request_password_recovery(request.email, db)
 
 
 # Endpoint para restablecer contraseña con token
-@router.post("/auth/recovery/reset")
+@router.post("/recovery/reset")
 def reset_user_password(request: PasswordResetRequest, db: Session = Depends(get_db)):
     return reset_password(request.token, request.new_password, request.confirm_password, db)
 

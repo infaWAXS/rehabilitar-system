@@ -3,21 +3,21 @@ import { apiRequest } from './apiClient';
 // ── Llamadas API ──────────────────────────────────────────
 
 export function login(data) {
-  return apiRequest('/login', {
+  return apiRequest('/auth/login', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
 export function register(data) {
-  return apiRequest('/users', {
+  return apiRequest('/auth/register', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
 export function logout() {
-  return apiRequest('/logout', { method: 'POST' });
+  return apiRequest('/auth/logout', { method: 'POST' });
 }
 
 export function requestPasswordRecovery(email) {

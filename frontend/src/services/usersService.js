@@ -114,7 +114,7 @@ export function getPendingMedical() {
 
 // HU Verificar apto físico (admin) - E1: aprueba el apto físico del cliente (status → "approved").
 export function approveMedical(userId) {
-  return apiRequest(`/users/update-medical-clearance/${userId}`, { method: 'PUT' });
+  return apiRequest(`/users/acept-medical/${userId}`, { method: 'PUT' });
 }
 
 // HU Verificar apto físico (admin) - E2: desaprueba el apto físico del cliente (status → "rejected").

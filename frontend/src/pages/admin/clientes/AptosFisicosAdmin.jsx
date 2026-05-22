@@ -1,5 +1,5 @@
 // HU Verificar apto físico (admin) - Responsable: Agustin
-// E1: admin aprueba apto → PUT /users/update-medical-clearance/{id} → status = "approved"
+// E1: admin aprueba apto → PUT /users/acept-medical/{id} → status = "approved"
 // E2: admin rechaza apto  → PUT /users/reject-medical/{id}           → status = "rejected"
 // E3: no hay aptos pendientes → se muestra mensaje informativo
 import React, { useState, useEffect } from 'react';
