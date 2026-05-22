@@ -1,16 +1,22 @@
 from sqlalchemy.orm import Session
+<<<<<<< HEAD
 from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
 from datetime import datetime
 from threading import Thread
 import re
+=======
+from typing import List, Optional
+from fastapi import HTTPException
+>>>>>>> fe923ce (Conecto las logicas del filtro)
 
 from app.models.activity import Activity
 from app.models.room import Room
 from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
+<<<<<<< HEAD
 from app.utils.subscriptions import is_abonado
 from app.utils.notifications import notify_activity_cancellation
 from database.connection import SessionLocal
@@ -176,6 +182,8 @@ def _validar_disponibilidad_profesor(
                 status_code=409,
                 detail=f"El profesor {actividad_propuesta.professor} ya tiene una actividad asignada en ese horario.",
             )
+=======
+>>>>>>> fe923ce (Conecto las logicas del filtro)
 
 
 def listar_actividades(
@@ -203,6 +211,7 @@ def obtener_actividad(activity_id: int, db: Session) -> Activity:
     return actividad
 
 
+<<<<<<< HEAD
 def obtener_disponibilidad_actividad(activity_id: int, db: Session, date: str = None) -> dict:
     """Devuelve capacidad total, reservas activas y cupos disponibles de una actividad.
     Para actividades fijas, filtra por la fecha específica del turno (ISO 8601 YYYY-MM-DD o datetime).
@@ -243,6 +252,10 @@ def crear_actividad(datos, db: Session) -> list:
     """Crea una o varias actividades (batch para fijas con repeticiones o lista de fechas).
     Devuelve siempre una lista de Activity."""
     from datetime import timedelta
+=======
+def crear_actividad(datos, db: Session) -> Activity:
+    """Crea una actividad validando que los cupos no superen la capacidad de la sala."""
+>>>>>>> fe923ce (Conecto las logicas del filtro)
     sala = db.query(Room).filter(Room.id == datos.room_id).first()
     if not sala:
         raise HTTPException(status_code=404, detail="Sala no encontrada")
@@ -253,6 +266,7 @@ def crear_actividad(datos, db: Session) -> list:
             detail=f"Los cupos ({datos.capacity}) no pueden superar la capacidad de la sala ({sala.capacity})",
         )
 
+<<<<<<< HEAD
     # Determinar lista de fechas a crear
     if datos.activity_type == "fixed":
         if datos.dates:
@@ -296,12 +310,24 @@ def crear_actividad(datos, db: Session) -> list:
 
 def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
     """Actualiza campos de una actividad validando capacidad y disponibilidad."""
+=======
+    actividad = Activity(**datos.model_dump())
+    db.add(actividad)
+    db.commit()
+    db.refresh(actividad)
+    return actividad
+
+
+def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
+    """Actualiza campos de una actividad validando la capacidad si se modifica."""
+>>>>>>> fe923ce (Conecto las logicas del filtro)
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
     cambios = datos.model_dump(exclude_unset=True)
 
+<<<<<<< HEAD
     valores_propuestos = {
         **{
             "room_id": actividad.room_id,
@@ -326,12 +352,17 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
 
     if "capacity" in cambios:
         sala = db.query(Room).filter(Room.id == valores_propuestos["room_id"]).first()
+=======
+    if "capacity" in cambios:
+        sala = db.query(Room).filter(Room.id == actividad.room_id).first()
+>>>>>>> fe923ce (Conecto las logicas del filtro)
         if cambios["capacity"] > sala.capacity:
             raise HTTPException(
                 status_code=400,
                 detail=f"Los cupos ({cambios['capacity']}) no pueden superar la capacidad de la sala ({sala.capacity})",
             )
 
+<<<<<<< HEAD
     _validar_disponibilidad_sala(actividad_propuesta, db, excluir_activity_id=actividad.id)
     _validar_disponibilidad_profesor(actividad_propuesta, db, excluir_activity_id=actividad.id)
 
@@ -358,17 +389,27 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
             except (ValueError, AttributeError):
                 pass  # Si el formato es inválido no bloqueamos la edición
 
+=======
+    for campo, valor in cambios.items():
+        setattr(actividad, campo, valor)
+
+>>>>>>> fe923ce (Conecto las logicas del filtro)
     db.commit()
     db.refresh(actividad)
     return actividad
 
 
 def cancelar_actividad(activity_id: int, db: Session) -> None:
+<<<<<<< HEAD
     """Marca una actividad como cancelada (no la elimina físicamente)."""
+=======
+    """Marca una actividad como cancelada."""
+>>>>>>> fe923ce (Conecto las logicas del filtro)
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
+<<<<<<< HEAD
     ahora = datetime.now()
 
     if actividad.activity_type == "individual":
@@ -476,6 +517,11 @@ def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity
     db.refresh(actividad)
     return actividad
 
+=======
+    actividad.status = "cancelled"
+    db.commit()
+
+>>>>>>> fe923ce (Conecto las logicas del filtro)
 
 def listar_clientes_actividad(activity_id: int, db: Session) -> List[ClientConditionResponse]:
     """Lista los clientes inscriptos en una actividad con su condición de acceso."""
@@ -503,7 +549,14 @@ def listar_clientes_actividad(activity_id: int, db: Session) -> List[ClientCondi
                 email=user.email,
                 reservation_type=res.reservation_type,
                 payment_status=res.payment_status,
+<<<<<<< HEAD
                 es_abonado=is_abonado(user.id, db),
             )
         )
     return resultado
+=======
+                es_abonado=(res.reservation_type == "fixed"),
+            )
+        )
+    return resultado
+>>>>>>> fe923ce (Conecto las logicas del filtro)
