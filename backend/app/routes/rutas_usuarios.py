@@ -182,7 +182,7 @@ def modify_employee_endpoint(user_id: int, request: UpdateUserRequest, token: st
     
     require_role(["admin"])(current_user)
     
-    return modify_employee(user_id, request.name, request.lastname, request.email, request.specialization, db)
+    return modify_employee(user_id, request.name, request.lastname, None, request.specialization, db)
 
 
 # Endpoint para que el admin suba el apto físico de un cliente específico - Francis

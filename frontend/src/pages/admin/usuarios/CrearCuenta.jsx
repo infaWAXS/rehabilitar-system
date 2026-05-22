@@ -244,7 +244,6 @@ function CrearCuenta() {
                     onChange={cambio}
                     placeholder="Ej: Kinesiologia deportiva"
                     list="especializaciones-list"
-                    required
                   />
                   <datalist id="especializaciones-list">
                     {ESPECIALIZACIONES.map((e) => (

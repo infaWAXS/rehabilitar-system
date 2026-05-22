@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.user import User
+from app.models.activity import Activity
 
 from app.utils.security import hash_password, verify_password, create_access_token, verify_token
 from app.exceptions.http_exceptions import email_already_exists_exception, unauthorized_exception, forbidden_exception, user_not_found_exception
@@ -310,6 +311,14 @@ def delete_user(user_id: int, db: Session):
         raise user_not_found_exception()
 
     name = f"{user.name} {user.lastname}"
+
+    # E3: si es profesor, desvincular de todas sus actividades activas
+    if user.role == "professor":
+        db.query(Activity).filter(
+            Activity.professor == name,
+            Activity.status == "active",
+        ).update({Activity.professor: None}, synchronize_session=False)
+
     db.delete(user)
     db.commit()
 
