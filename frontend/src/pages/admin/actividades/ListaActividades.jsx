@@ -45,6 +45,23 @@ const s = {
   accionesCell: { display: 'flex', gap: '6px', alignItems: 'center' },
 };
 
+function formatearHorario(actividad) {
+  if (actividad.activity_type === 'individual') {
+    if (actividad.specific_date && actividad.time_slot) {
+      return `${actividad.specific_date} · ${actividad.time_slot}`;
+    }
+    if (actividad.specific_date) return actividad.specific_date;
+    if (actividad.time_slot) return actividad.time_slot;
+    return '—';
+  }
+
+  return actividad.schedule || '—';
+}
+
+function formatearProfesor(actividad) {
+  return actividad.professor || <span style={{ color: 'var(--color-texto-suave)' }}>Sin profesor asignado</span>;
+}
+
 function ListaActividades() {
   const [actividades, setActividades] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -114,8 +131,8 @@ function ListaActividades() {
                       {TIPO_LABEL[a.activity_type] ?? a.activity_type}
                     </span>
                   </td>
-                  <td style={s.td}>{a.schedule}</td>
-                  <td style={s.td}>{a.professor}</td>
+                  <td style={s.td}>{formatearHorario(a)}</td>
+                  <td style={s.td}>{formatearProfesor(a)}</td>
                   <td style={s.td}>${Number(a.price).toLocaleString('es-AR')}</td>
                   <td style={s.td}>{a.capacity}</td>
                   <td style={s.td}>
