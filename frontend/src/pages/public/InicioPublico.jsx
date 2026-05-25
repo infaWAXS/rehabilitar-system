@@ -3,11 +3,15 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getToken, getRole, getUserName, clearUserData, logout } from '../../services/authService';
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { getActivities, getActivityById, getActivityAvailability } from '../../services/activitiesService';
 import { getMyReservations } from '../../services/reservationsService';
 =======
 import { getActivities } from '../../services/activitiesService';
 >>>>>>> 5836c8c (Agrego el filtro de actividades)
+=======
+import { getActivities, getActivityById, getActivityAvailability } from '../../services/activitiesService';
+>>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
 import FiltroActividades from './FiltroActividades';
 
 /* ── Constantes ─────────────────────────────────────────── */
@@ -561,6 +565,18 @@ function InicioPublico() {
     navigate('/cliente/reservas/inscribir', { state: { actividadId: act.id } });
   };
 
+  const handleVerActividad = async (actividad) => {
+    try {
+      const [detalle, disponibilidad] = await Promise.all([
+        getActivityById(actividad.id),
+        getActivityAvailability(actividad.id),
+      ]);
+      setActividadDetalle({ ...detalle, ...disponibilidad });
+    } catch {
+      setActividadDetalle(actividad);
+    }
+  };
+
   /* ── Subcomponentes ───────────────────────────────────── */
   const CardActividad = ({ a }) => (
     <div style={s.actCard}>
@@ -578,7 +594,7 @@ function InicioPublico() {
       {a.professor   && <span style={s.actProfesor}>👤 {a.professor}</span>}
       <span style={s.actPrecio}>${Number(a.price).toLocaleString('es-AR')}</span>
       <div style={s.actBotones}>
-        <button style={s.actBtnVer}       onClick={() => setActividadDetalle(a)}>Ver</button>
+        <button style={s.actBtnVer}       onClick={() => handleVerActividad(a)}>Ver</button>
         <button style={s.actBtnInscribir} onClick={() => handleInscribirse(a)}>Inscribirse</button>
       </div>
     </div>
@@ -796,6 +812,7 @@ function InicioPublico() {
 
             <div style={s.actModalDivider} />
 
+<<<<<<< HEAD
             <div style={s.actModalRow}>
               <span style={s.actModalLabel}>Sala</span>
               <span>Sala {actividadDetalle.room_id}</span>
@@ -818,6 +835,24 @@ function InicioPublico() {
                     return `${dia} · ${dia_num}/${mes}/${anio}`;
                   })()}
                 </span>
+=======
+            {[
+              ['Sala',        `Sala ${actividadDetalle.room_id}`],
+              ['Especialidad', actividadDetalle.specialization],
+              actividadDetalle.schedule     && ['Horario',     actividadDetalle.schedule],
+              actividadDetalle.specific_date && ['Fecha',
+                `${formatFechaLarga(actividadDetalle.specific_date)}${actividadDetalle.time_slot ? ` · ${actividadDetalle.time_slot}` : ''}`],
+              actividadDetalle.professor    && ['Profesor',    actividadDetalle.professor],
+              ['Precio',      `$${Number(actividadDetalle.price).toLocaleString('es-AR')}`],
+              ['Cupos disponibles', actividadDetalle.available_spots ?? actividadDetalle.capacity],
+              ['Cupos totales', actividadDetalle.capacity],
+              actividadDetalle.description  && ['Descripción', actividadDetalle.description],
+              actividadDetalle.requirements && ['Requisitos',  actividadDetalle.requirements],
+            ].filter(Boolean).map(([label, valor]) => (
+              <div key={label} style={s.actModalRow}>
+                <span style={s.actModalLabel}>{label}</span>
+                <span>{valor}</span>
+>>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
               </div>
             )}
             {actividadDetalle.time_slot && (

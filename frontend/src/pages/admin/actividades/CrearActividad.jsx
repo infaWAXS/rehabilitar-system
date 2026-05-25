@@ -497,6 +497,7 @@ function CrearActividad() {
             {/* Preview clases del mes — solo fija */}
             {!esIndividual && fechasGeneradas.length > 0 && (
               <div style={{ ...s.grupo, ...s.gridFull }}>
+<<<<<<< HEAD
                 <label style={s.label}>
                   Clases a crear&nbsp;
                   <span style={{ fontWeight: 400, color: 'var(--color-texto)' }}>
@@ -522,6 +523,23 @@ function CrearActividad() {
                       {f.esFeriado && ' — feriado'}
                     </span>
                   ))}
+=======
+                <label style={s.label}>Días *</label>
+                <div style={s.diasRow}>
+                  {diasDisponibles.length === 0 ? (
+                    <span style={s.hint}>— No hay días disponibles —</span>
+                  ) : (
+                    diasDisponibles.map((dia) => (
+                      <button
+                        key={dia} type="button"
+                        style={s.diaBtn(diasSeleccionados.includes(dia))}
+                        onClick={() => toggleDia(dia)}
+                      >
+                        {dia}
+                      </button>
+                    ))
+                  )}
+>>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 </div>
                 {fechasValidas.length === 0 && (
                   <span style={{ fontSize: '12px', color: '#dc2626', marginTop: '4px' }}>

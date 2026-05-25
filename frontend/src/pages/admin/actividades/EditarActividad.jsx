@@ -788,6 +788,7 @@ function EditarActividad() {
               <label style={s.label}>Sala *</label>
 
               <select style={s.select} name="room_id" value={form.room_id} onChange={handleChange} required>
+<<<<<<< HEAD
 
                 <option value="">
 
@@ -799,6 +800,13 @@ function EditarActividad() {
 
                 </option>
 
+=======
+                <option value="">
+                  {salas.length > 0 && salasDisponibles.length === 0
+                    ? '— No hay salas disponibles —'
+                    : '— Seleccionar sala —'}
+                </option>
+>>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 {salasDisponibles.map((sala) => (
 
                   <option key={sala.id} value={sala.id}>
@@ -860,6 +868,29 @@ function EditarActividad() {
             </div>
 
 
+<<<<<<< HEAD
+=======
+            {/* Fecha específica — solo para clase individual */}
+            {form.activity_type === 'individual' && (
+              <div style={s.grupo}>
+                <label style={s.label}>Fecha del turno *</label>
+                <input
+                  style={s.input}
+                  type="date"
+                  name="specific_date"
+                  value={form.specific_date}
+                  onChange={handleChange}
+                  min={new Date().toISOString().split('T')[0]}
+                  required
+                />
+                <span style={s.hint}>
+                  {feriadoSeleccionado.esFeriado
+                    ? `No hay fecha disponible: feriado (${feriadoSeleccionado.nombre}).`
+                    : 'Elegí una fecha disponible para el turno.'}
+                </span>
+              </div>
+            )}
+>>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
 
             {/* Selector de horario */}
 
@@ -876,6 +907,7 @@ function EditarActividad() {
                 onChange={(e) => setHoraInicio(e.target.value)}
 
               >
+<<<<<<< HEAD
 
                 <option value="">
 
@@ -887,6 +919,13 @@ function EditarActividad() {
 
                 </option>
 
+=======
+                <option value="">
+                  {horasDisponibles.length === 0
+                    ? '— No hay horarios disponibles —'
+                    : '— Seleccionar turno —'}
+                </option>
+>>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 {horasDisponibles.map((h) => (
 
                   <option key={h.valor} value={h.valor}>{h.label}</option>
@@ -936,6 +975,7 @@ function EditarActividad() {
                 <option value="">
 
                   {!form.specialization
+<<<<<<< HEAD
 
                     ? ' Seleccioná primero una especialidad '
 
@@ -943,6 +983,11 @@ function EditarActividad() {
 
                     ? ' No hay profesores disponibles '
 
+=======
+                    ? '— Seleccioná primero una especialidad —'
+                    : profesoresDisponibles.length === 0
+                    ? '— No hay profesores disponibles —'
+>>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
                     : form.activity_type === 'individual'
 
                     ? ' Sin asignar '
