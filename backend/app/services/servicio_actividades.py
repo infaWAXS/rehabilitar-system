@@ -297,7 +297,6 @@ def crear_actividad(datos, db: Session) -> list:
             detail=f"Los cupos ({datos.capacity}) no pueden superar la capacidad de la sala ({sala.capacity})",
         )
 
-<<<<<<< HEAD
     # Determinar lista de fechas a crear
     if datos.activity_type == "fixed":
         if datos.dates:
@@ -333,13 +332,6 @@ def crear_actividad(datos, db: Session) -> list:
         db.flush()
         creadas.append(act)
 
-=======
-    actividad = Activity(**datos.model_dump())
-    actividad.status = "active"
-    _validar_disponibilidad_sala(actividad, db)
-    _validar_disponibilidad_profesor(actividad, db)
-    db.add(actividad)
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
     db.commit()
     for act in creadas:
         db.refresh(act)
@@ -386,10 +378,6 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
 
     _validar_disponibilidad_sala(actividad_propuesta, db, excluir_activity_id=actividad.id)
     _validar_disponibilidad_profesor(actividad_propuesta, db, excluir_activity_id=actividad.id)
-<<<<<<< HEAD
-
-=======
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
     for campo, valor in cambios.items():
         setattr(actividad, campo, valor)
 

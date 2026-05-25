@@ -28,12 +28,29 @@ def obtener_actividad(activity_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{activity_id}/availability", response_model=ActivityAvailabilityResponse)
+<<<<<<< HEAD
+def obtener_disponibilidad_actividad(activity_id: int, db: Session = Depends(get_db)):
+    return servicio_actividades.obtener_disponibilidad_actividad(activity_id, db)
+
+=======
+<<<<<<< HEAD
+def obtener_disponibilidad_actividad(
+    activity_id: int,
+    date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    return servicio_actividades.obtener_disponibilidad_actividad(activity_id, db, date)
+>>>>>>> b6a59da (Agrego la cantidad de cupos disponibles en Ver Actividades)
+
+
+@router.post("/", response_model=List[ActivityResponse], status_code=201)
+=======
 def obtener_disponibilidad_actividad(activity_id: int, db: Session = Depends(get_db)):
     return servicio_actividades.obtener_disponibilidad_actividad(activity_id, db)
 
 
-
-@router.post("/", response_model=List[ActivityResponse], status_code=201)
+@router.post("/", response_model=ActivityResponse, status_code=201)
+>>>>>>> 517a7dc (Agrego la cantidad de cupos disponibles en Ver Actividades)
 def crear_actividad(
     datos: ActivityCreate,
     db: Session = Depends(get_db),
