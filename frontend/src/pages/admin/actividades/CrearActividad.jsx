@@ -432,7 +432,11 @@ function CrearActividad() {
             <div style={s.grupo}>
               <label style={s.label}>Sala *</label>
               <select style={s.select} name="room_id" value={form.room_id} onChange={handleChange} required>
-                <option value="">— Seleccionar sala —</option>
+                <option value="">
+                  {salas.length > 0 && salasDisponibles.length === 0
+                    ? '— No hay salas disponibles —'
+                    : '— Seleccionar sala —'}
+                </option>
                 {salasDisponibles.map((sala) => (
                   <option key={sala.id} value={sala.id}>
                     {sala.name} (cap. {sala.capacity})
@@ -459,15 +463,19 @@ function CrearActividad() {
               <div style={{ ...s.grupo, ...s.gridFull }}>
                 <label style={s.label}>Días *</label>
                 <div style={s.diasRow}>
-                  {diasDisponibles.map((dia) => (
-                    <button
-                      key={dia} type="button"
-                      style={s.diaBtn(diasSeleccionados.includes(dia))}
-                      onClick={() => toggleDia(dia)}
-                    >
-                      {dia}
-                    </button>
-                  ))}
+                  {diasDisponibles.length === 0 ? (
+                    <span style={s.hint}>— No hay días disponibles —</span>
+                  ) : (
+                    diasDisponibles.map((dia) => (
+                      <button
+                        key={dia} type="button"
+                        style={s.diaBtn(diasSeleccionados.includes(dia))}
+                        onClick={() => toggleDia(dia)}
+                      >
+                        {dia}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -476,7 +484,11 @@ function CrearActividad() {
             <div style={s.grupo}>
               <label style={s.label}>Horario *</label>
               <select style={s.select} value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)}>
-                <option value="">— Seleccionar turno —</option>
+                <option value="">
+                  {horasDisponibles.length === 0
+                    ? '— No hay horarios disponibles —'
+                    : '— Seleccionar turno —'}
+                </option>
                 {horasDisponibles.map((h) => (
                   <option key={h.valor} value={h.valor}>{h.label}</option>
                 ))}
@@ -498,6 +510,8 @@ function CrearActividad() {
                 <option value="">
                   {!form.specialization
                     ? '— Seleccioná primero una especialidad —'
+                    : profesoresDisponibles.length === 0
+                    ? '— No hay profesores disponibles —'
                     : esIndividual
                     ? '— Sin asignar —'
                     : '— Seleccionar profesor —'}

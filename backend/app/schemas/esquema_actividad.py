@@ -81,3 +81,13 @@ class ActivityResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ActivityAvailabilityResponse(BaseModel):
+    activity_id: int
+    capacity: int
+    reserved_count: int
+    available_spots: int
+
+    class Config:
+        from_attributes = True

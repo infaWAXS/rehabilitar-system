@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from database.connection import get_db
-from app.schemas.esquema_actividad import ActivityCreate, ActivityUpdate, ActivityResponse
+from app.schemas.esquema_actividad import ActivityCreate, ActivityUpdate, ActivityResponse, ActivityAvailabilityResponse
 from app.schemas.esquema_reservas import ClientConditionResponse
 from app.utils.dependencies import require_role, get_current_user
 from app.services import servicio_actividades
@@ -26,6 +26,11 @@ def listar_actividades(
 @router.get("/{activity_id}", response_model=ActivityResponse)
 def obtener_actividad(activity_id: int, db: Session = Depends(get_db)):
     return servicio_actividades.obtener_actividad(activity_id, db)
+
+
+@router.get("/{activity_id}/availability", response_model=ActivityAvailabilityResponse)
+def obtener_disponibilidad_actividad(activity_id: int, db: Session = Depends(get_db)):
+    return servicio_actividades.obtener_disponibilidad_actividad(activity_id, db)
 
 
 @router.post("/", response_model=ActivityResponse, status_code=201)

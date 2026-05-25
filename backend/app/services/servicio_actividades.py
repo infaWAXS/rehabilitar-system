@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
+from datetime import datetime
 import re
 
 from app.models.activity import Activity
@@ -8,7 +10,6 @@ from app.models.room import Room
 from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
-
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
@@ -174,6 +175,28 @@ def obtener_actividad(activity_id: int, db: Session) -> Activity:
     return actividad
 
 
+def obtener_disponibilidad_actividad(activity_id: int, db: Session) -> dict:
+    """Devuelve capacidad total, reservas activas y cupos disponibles de una actividad."""
+    actividad = obtener_actividad(activity_id, db)
+
+    reserved_count = (
+        db.query(func.count(Reservation.id))
+        .filter(
+            Reservation.activity_id == activity_id,
+            Reservation.status != "cancelled",
+        )
+        .scalar()
+    ) or 0
+
+    available_spots = max(int(actividad.capacity) - int(reserved_count), 0)
+    return {
+        "activity_id": actividad.id,
+        "capacity": int(actividad.capacity),
+        "reserved_count": int(reserved_count),
+        "available_spots": int(available_spots),
+    }
+
+
 def crear_actividad(datos, db: Session) -> Activity:
     """Crea una actividad validando que los cupos no superen la capacidad de la sala y que la sala esté disponible."""
     sala = db.query(Room).filter(Room.id == datos.room_id).first()
@@ -251,6 +274,31 @@ def cancelar_actividad(activity_id: int, db: Session) -> None:
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
+    # No permitir cancelar si la actividad ya comenzó.
+    ahora = datetime.now()
+
+    if actividad.activity_type == "individual":
+        if actividad.specific_date and actividad.time_slot:
+            try:
+                hh, mm = actividad.time_slot.split(":")
+                inicio_dt = datetime(actividad.specific_date.year, actividad.specific_date.month, actividad.specific_date.day, int(hh), int(mm))
+                if inicio_dt <= ahora:
+                    raise HTTPException(status_code=400, detail="No se puede cancelar: la actividad ya comenzó.")
+            except Exception:
+                # Si no se puede parsear la hora, seguimos con la cancelación por compatibilidad
+                pass
+    else:
+        # Clase fija: si hoy es uno de los días de la actividad y el horario ya empezó, bloquear cancelación
+        dias = _dias_actividad(actividad)
+        if dias:
+            dia_hoy = DIAS_SEMANA[ahora.weekday()]
+            if dia_hoy in dias:
+                inicio, fin = _rango_horario(actividad)
+                if inicio is not None:
+                    ahora_min = ahora.hour * 60 + ahora.minute
+                    if inicio <= ahora_min < fin:
+                        raise HTTPException(status_code=400, detail="No se puede cancelar: la actividad ya comenzó.")
+
     actividad.status = "cancelled"
     db.commit()
 
@@ -285,3 +333,4 @@ def listar_clientes_actividad(activity_id: int, db: Session) -> List[ClientCondi
             )
         )
     return resultado
+    
