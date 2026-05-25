@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getRooms } from '../../../services/roomsService';
-import { getActivityById, updateActivity } from '../../../services/activitiesService';
+import { getActivityById, updateActivity, getActivities } from '../../../services/activitiesService';
 import { searchUsers } from '../../../services/usersService';
+import { obtenerFeriadoArgentino } from '../../../utils/feriados';
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
 
@@ -25,11 +26,79 @@ const ESPECIALIZACIONES = [
 ];
 
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 const HORAS = Array.from({ length: 8 }, (_, i) => {
   const h = 9 + i;
   return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 – ${String(h + 1).padStart(2, '0')}:00` };
 });
+
+function esFinDeSemana(fechaTexto) {
+  if (!fechaTexto) return false;
+  const fecha = new Date(`${fechaTexto}T00:00:00`);
+  if (Number.isNaN(fecha.getTime())) return false;
+  const dia = fecha.getDay();
+  return dia === 0 || dia === 6;
+}
+
+function parseMinutes(texto) {
+  if (!texto) return null;
+  const m = texto.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+function rangoDeActividad(act) {
+  if (act.activity_type === 'individual') {
+    const inicio = parseMinutes(act.time_slot);
+    return inicio !== null ? [inicio, inicio + 60] : [null, null];
+  }
+
+  const matches = [...(act.schedule || '').matchAll(/(\d{1,2}):(\d{2})/g)];
+  if (matches.length >= 2) {
+    return [
+      parseInt(matches[0][1], 10) * 60 + parseInt(matches[0][2], 10),
+      parseInt(matches[1][1], 10) * 60 + parseInt(matches[1][2], 10),
+    ];
+  }
+
+  const inicio = parseMinutes(act.time_slot || act.schedule);
+  return inicio !== null ? [inicio, inicio + 60] : [null, null];
+}
+
+function diasDeActividad(act) {
+  if (act.activity_type === 'individual') {
+    if (!act.specific_date) return new Set();
+    const d = new Date(`${act.specific_date}T00:00:00`);
+    return new Set([DIAS_SEMANA[d.getDay()]]);
+  }
+
+  const s = (act.schedule || '').toLowerCase();
+  return new Set(DIAS.filter((dia) => s.includes(dia.toLowerCase())));
+}
+
+function solapaHorario(inicioA, inicioB, finB) {
+  return inicioA < finB && inicioB < inicioA + 60;
+}
+
+function useOcupaciones(actividadesActivas) {
+  return useMemo(() => {
+    return function ocupada(roomId, dia, horaInicio) {
+      if (!roomId || !dia || !horaInicio) return false;
+      const inicio = parseMinutes(horaInicio);
+      if (inicio === null) return false;
+
+      return actividadesActivas.some((act) => {
+        if (act.room_id !== Number(roomId)) return false;
+        const dias = diasDeActividad(act);
+        if (!dias.has(dia)) return false;
+        const [inicioExist, finExist] = rangoDeActividad(act);
+        if (inicioExist === null) return false;
+        return solapaHorario(inicio, inicioExist, finExist);
+      });
+    };
+  }, [actividadesActivas]);
+}
 
 // ── Estilos ────────────────────────────────────────────────────────────────────
 
@@ -108,6 +177,10 @@ function parseHora(activity) {
   return '';
 }
 
+function esMismoProfesor(profesorA, profesorB) {
+  return profesorA.trim().toLowerCase() === profesorB.trim().toLowerCase();
+}
+
 // ── Componente ─────────────────────────────────────────────────────────────────
 
 function EditarActividad() {
@@ -119,14 +192,29 @@ function EditarActividad() {
   const [horaInicio, setHoraInicio] = useState('');
   const [salas, setSalas] = useState([]);
   const [profesores, setProfesores] = useState([]);
+  const [actividadesActivas, setActividadesActivas] = useState([]);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const feriadoSeleccionado = useMemo(
+    () => obtenerFeriadoArgentino(form?.specific_date),
+    [form?.specific_date]
+  );
 
-  // Carga actividad y salas en paralelo
+  const esIndividual = form?.activity_type === 'individual';
+  const ocupada = useOcupaciones(
+    actividadesActivas.filter((actividad) => actividad.id !== Number(id))
+  );
+
+  // Carga actividad, salas y actividades activas
   useEffect(() => {
-    Promise.all([getActivityById(id), getRooms()])
-      .then(([actividad, rooms]) => {
+    Promise.all([
+      getActivityById(id),
+      getRooms(),
+      getActivities({ status: 'active' }),
+    ])
+      .then(([actividad, rooms, acts]) => {
         setSalas(rooms);
+        setActividadesActivas(Array.isArray(acts) ? acts : []);
         setDiasSeleccionados(parseDias(actividad.schedule));
         setHoraInicio(parseHora(actividad));
         setForm({
@@ -157,17 +245,111 @@ function EditarActividad() {
       })
       .catch(() => setProfesores([]));
   }, [form?.specialization]);
+  
+  const profesoresDisponibles = useMemo(() => {
+    if (!form?.specialization) return [];
+    if (esIndividual && !form.specific_date) return profesores;
+    if (!horaInicio) return profesores;
+
+    return profesores.filter((profesor) => {
+      const nombreCompleto = `${profesor.name} ${profesor.lastname}`;
+      return !actividadesActivas.some((actividad) => {
+        if (actividad.id === Number(id)) return false;
+        if (!actividad.professor) return false;
+        if (!esMismoProfesor(actividad.professor, nombreCompleto)) return false;
+
+        let diasActividad;
+        if (actividad.activity_type === 'individual') {
+          if (!actividad.specific_date) return false;
+          diasActividad = new Set([DIAS_SEMANA[new Date(`${actividad.specific_date}T00:00:00`).getDay()]]);
+        } else {
+          const s = (actividad.schedule || '').toLowerCase();
+          diasActividad = new Set(DIAS.filter((dia) => s.includes(dia.toLowerCase())));
+        }
+
+        let diasPropuesta;
+        if (esIndividual) {
+          if (!form.specific_date) return false;
+          diasPropuesta = new Set([DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()]]);
+        } else {
+          diasPropuesta = new Set(diasSeleccionados);
+        }
+
+        const hayDiaComun = [...diasPropuesta].some((dia) => diasActividad.has(dia));
+        if (!hayDiaComun) return false;
+
+        const [inicioExist, finExist] = rangoDeActividad(actividad);
+        if (inicioExist === null) return false;
+        const inicioProp = parseMinutes(horaInicio);
+        return inicioProp < finExist && inicioExist < inicioProp + 60;
+      });
+    });
+  }, [profesores, actividadesActivas, horaInicio, esIndividual, form?.specific_date, diasSeleccionados, id]);
+
+  const salasDisponibles = useMemo(() => {
+    if (esIndividual) {
+      if (!form?.specific_date || !horaInicio) return salas;
+      const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
+      return salas.filter((sala) => !ocupada(sala.id, dia, horaInicio));
+    }
+
+    if (diasSeleccionados.length === 0 || !horaInicio) return salas;
+    return salas.filter((sala) => diasSeleccionados.every((dia) => !ocupada(sala.id, dia, horaInicio)));
+  }, [salas, esIndividual, form?.specific_date, horaInicio, diasSeleccionados, ocupada]);
+
+  const diasDisponibles = useMemo(() => {
+    if (esIndividual || !form?.room_id || !horaInicio) return DIAS;
+    return DIAS.filter((dia) => !ocupada(form.room_id, dia, horaInicio));
+  }, [esIndividual, form?.room_id, horaInicio, ocupada]);
+
+  const horasDisponibles = useMemo(() => {
+    if (!form?.room_id) return HORAS;
+
+    if (esIndividual) {
+      if (!form.specific_date) return HORAS;
+      const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
+      return HORAS.filter((hora) => !ocupada(form.room_id, dia, hora.valor));
+    }
+
+    if (diasSeleccionados.length === 0) return HORAS;
+    return HORAS.filter((hora) => diasSeleccionados.every((dia) => !ocupada(form.room_id, dia, hora.valor)));
+  }, [form?.room_id, esIndividual, form?.specific_date, diasSeleccionados, ocupada]);
+
+  useEffect(() => {
+    if (form?.room_id && !salasDisponibles.find((sala) => sala.id === Number(form.room_id))) {
+      setForm((prev) => ({ ...prev, room_id: '' }));
+    }
+  }, [salasDisponibles, form?.room_id]);
+
+  useEffect(() => {
+    if (horaInicio && !horasDisponibles.find((hora) => hora.valor === horaInicio)) {
+      setHoraInicio('');
+    }
+  }, [horasDisponibles, horaInicio]);
+
+  useEffect(() => {
+    setDiasSeleccionados((prev) => prev.filter((dia) => diasDisponibles.includes(dia)));
+  }, [diasDisponibles]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'specialization') {
       setForm((prev) => ({ ...prev, specialization: value, professor: '' }));
+    } else if (name === 'activity_type') {
+      setForm((prev) => ({
+        ...prev,
+        activity_type: value,
+        specific_date: '',
+      }));
+      setDiasSeleccionados([]);
+      setHoraInicio('');
     } else {
       setForm((prev) => ({ ...prev, [name]: value }));
     }
   };
 
   const toggleDia = (dia) => {
+    if (!diasDisponibles.includes(dia)) return;
     setDiasSeleccionados((prev) =>
       prev.includes(dia) ? prev.filter((d) => d !== dia) : [...prev, dia]
     );
@@ -184,12 +366,16 @@ function EditarActividad() {
     e.preventDefault();
     setError('');
 
-    const esIndividual = form.activity_type === 'individual';
-
     if (!form.room_id) return setError('Seleccioná una sala.');
     if (!form.specialization) return setError('Seleccioná una especialidad.');
     if (!horaInicio) return setError('Seleccioná un horario.');
     if (esIndividual && !form.specific_date) return setError('Seleccioná la fecha del turno.');
+    if (esIndividual && feriadoSeleccionado.esFeriado) {
+      return setError(`La fecha seleccionada es feriado (${feriadoSeleccionado.nombre}). Elegí otra fecha.`);
+    }
+    if (esIndividual && esFinDeSemana(form.specific_date)) {
+      return setError('Las actividades individuales no se pueden programar en fin de semana.');
+    }
     if (!esIndividual && diasSeleccionados.length === 0) return setError('Seleccioná al menos un día.');
     if (Number(form.capacity) <= 0) return setError('Los cupos deben ser mayor a 0.');
     if (Number(form.price) < 0) return setError('El precio no puede ser negativo.');
@@ -220,7 +406,7 @@ function EditarActividad() {
     }
   };
 
-  const salaSeleccionada = salas.find((r) => r.id === Number(form?.room_id));
+  const salaSeleccionada = salasDisponibles.find((r) => r.id === Number(form?.room_id));
 
   if (!form) {
     return (
@@ -271,7 +457,7 @@ function EditarActividad() {
               <label style={s.label}>Sala *</label>
               <select style={s.select} name="room_id" value={form.room_id} onChange={handleChange} required>
                 <option value="">— Seleccionar sala —</option>
-                {salas.map((sala) => (
+                {salasDisponibles.map((sala) => (
                   <option key={sala.id} value={sala.id}>
                     {sala.name} (cap. {sala.capacity})
                   </option>
@@ -293,7 +479,7 @@ function EditarActividad() {
               <div style={{ ...s.grupo, ...s.gridFull }}>
                 <label style={s.label}>Días *</label>
                 <div style={s.diasRow}>
-                  {DIAS.map((dia) => (
+                  {diasDisponibles.map((dia) => (
                     <button
                       key={dia}
                       type="button"
@@ -317,6 +503,7 @@ function EditarActividad() {
                   name="specific_date"
                   value={form.specific_date}
                   onChange={handleChange}
+                  min={new Date().toISOString().split('T')[0]}
                   required
                 />
               </div>
@@ -331,7 +518,7 @@ function EditarActividad() {
                 onChange={(e) => setHoraInicio(e.target.value)}
               >
                 <option value="">— Seleccionar turno —</option>
-                {HORAS.map((h) => (
+                {horasDisponibles.map((h) => (
                   <option key={h.valor} value={h.valor}>{h.label}</option>
                 ))}
               </select>
@@ -357,19 +544,13 @@ function EditarActividad() {
                     ? '— Seleccioná primero una especialidad —'
                     : form.activity_type === 'individual'
                     ? '— Sin asignar —'
-                    : profesores.length === 0
-                    ? '— Sin profesores con esa especialidad —'
                     : '— Seleccionar profesor —'}
                 </option>
-                {profesores.map((p) => (
+                {profesoresDisponibles.map((p) => (
                   <option key={p.id} value={`${p.name} ${p.lastname}`}>
                     {p.name} {p.lastname}
                   </option>
                 ))}
-                {/* Si el profesor actual no está en la lista filtrada, mostrarlo igual */}
-                {form.professor && !profesores.some((p) => `${p.name} ${p.lastname}` === form.professor) && (
-                  <option value={form.professor}>{form.professor}</option>
-                )}
               </select>
             </div>
 
