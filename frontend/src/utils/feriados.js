@@ -22,7 +22,11 @@ export function obtenerFeriadoArgentino(fechaTexto) {
     nombre: feriados[0].name || '',
   };
 <<<<<<< HEAD
+<<<<<<< HEAD
 }
 =======
 }
 >>>>>>> 8478b67 (Corrijo la creación y modificación de actividades)
+=======
+}
+>>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
