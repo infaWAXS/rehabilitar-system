@@ -389,6 +389,15 @@ function EditarActividad() {
   const [error, setError] = useState('');
 
   const [guardando, setGuardando] = useState(false);
+  const feriadoSeleccionado = useMemo(
+    () => obtenerFeriadoArgentino(form?.specific_date),
+    [form?.specific_date]
+  );
+
+  const esIndividual = form?.activity_type === 'individual';
+  const ocupada = useOcupaciones(
+    actividadesActivas.filter((actividad) => actividad.id !== Number(id))
+  );
 
   const feriadoSeleccionado = useMemo(
 

@@ -149,11 +149,8 @@ function useOcupaciones(actividadesActivas) {
 
 const s = {
   card: {
-    background: 'var(--color-fondo-card)',
-    borderRadius: '12px',
-    padding: '32px',
-    boxShadow: 'var(--sombra)',
-    maxWidth: '720px',
+    background: 'var(--color-fondo-card)', borderRadius: '12px',
+    padding: '32px', boxShadow: 'var(--sombra)', maxWidth: '720px',
   },
   titulo: { fontSize: '20px', fontWeight: '700', color: 'var(--color-texto)', marginBottom: '24px' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' },
@@ -175,7 +172,6 @@ const s = {
     fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto)',
     width: '100%', cursor: 'pointer',
   },
-  // Selector de días
   diasRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
   diaBtn: (activo) => ({
     padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
@@ -216,6 +212,13 @@ function CrearActividad() {
 
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const feriadoSeleccionado = useMemo(
+    () => obtenerFeriadoArgentino(form.specific_date),
+    [form.specific_date]
+  );
+
+  const ocupada = useOcupaciones(actividadesActivas);
+  const esIndividual = form.activity_type === 'individual';
 
   const fechasGeneradas = useMemo(
     () => generarFechasDelMes(form.mes, form.diaSemana),
@@ -409,12 +412,8 @@ function CrearActividad() {
             <div style={{ ...s.grupo, ...s.gridFull }}>
               <label style={s.label}>Nombre de la actividad *</label>
               <input
-                style={s.input}
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="Ej: Yoga Terapéutico, Pilates Grupal"
-                required
+                style={s.input} name="name" value={form.name}
+                onChange={handleChange} placeholder="Ej: Yoga Terapéutico, Pilates Grupal" required
               />
             </div>
 
@@ -556,11 +555,8 @@ function CrearActividad() {
                 Profesor {esIndividual ? '(opcional)' : '*'}
               </label>
               <select
-                style={s.select}
-                name="professor"
-                value={form.professor}
-                onChange={handleChange}
-                disabled={!form.specialization}
+                style={s.select} name="professor" value={form.professor}
+                onChange={handleChange} disabled={!form.specialization}
               >
                 <option value="">
                   {!form.specialization
@@ -614,11 +610,8 @@ function CrearActividad() {
             <div style={{ ...s.grupo, ...s.gridFull }}>
               <label style={s.label}>Descripción</label>
               <textarea
-                style={s.textarea}
-                name="description"
-                value={form.description}
-                onChange={handleChange}
-                placeholder="Descripción de la actividad, beneficios, etc."
+                style={s.textarea} name="description" value={form.description}
+                onChange={handleChange} placeholder="Descripción de la actividad, beneficios, etc."
               />
             </div>
 
@@ -626,11 +619,8 @@ function CrearActividad() {
             <div style={{ ...s.grupo, ...s.gridFull }}>
               <label style={s.label}>Requisitos</label>
               <input
-                style={s.input}
-                name="requirements"
-                value={form.requirements}
-                onChange={handleChange}
-                placeholder="Ej: Ropa cómoda, certificado médico"
+                style={s.input} name="requirements" value={form.requirements}
+                onChange={handleChange} placeholder="Ej: Ropa cómoda, certificado médico"
               />
             </div>
 
@@ -641,10 +631,8 @@ function CrearActividad() {
               {guardando ? 'Guardando…' : 'Crear actividad'}
             </button>
             <button
-              type="button"
-              style={s.botonSecundario}
-              onClick={() => navigate('/admin/actividades')}
-              disabled={guardando}
+              type="button" style={s.botonSecundario}
+              onClick={() => navigate('/admin/actividades')} disabled={guardando}
             >
               Cancelar
             </button>
