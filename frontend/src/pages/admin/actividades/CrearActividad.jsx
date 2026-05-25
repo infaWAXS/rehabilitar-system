@@ -742,15 +742,19 @@ function CrearActividad() {
               <div style={{ ...s.grupo, ...s.gridFull }}>
                 <label style={s.label}>Días *</label>
                 <div style={s.diasRow}>
-                  {diasDisponibles.map((dia) => (
-                    <button
-                      key={dia} type="button"
-                      style={s.diaBtn(diasSeleccionados.includes(dia))}
-                      onClick={() => toggleDia(dia)}
-                    >
-                      {dia}
-                    </button>
-                  ))}
+                  {diasDisponibles.length === 0 ? (
+                    <span style={s.hint}>— No hay días disponibles —</span>
+                  ) : (
+                    diasDisponibles.map((dia) => (
+                      <button
+                        key={dia} type="button"
+                        style={s.diaBtn(diasSeleccionados.includes(dia))}
+                        onClick={() => toggleDia(dia)}
+                      >
+                        {dia}
+                      </button>
+                    ))
+                  )}
                 </div>
 >>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
               </div>

@@ -1032,6 +1032,7 @@ function EditarActividad() {
               <select style={s.select} name="room_id" value={form.room_id} onChange={handleChange} required>
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 
                 <option value="">
 
@@ -1044,16 +1045,21 @@ function EditarActividad() {
                 </option>
 
 =======
+=======
+>>>>>>> 517a7dc (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 <option value="">
                   {salas.length > 0 && salasDisponibles.length === 0
                     ? '— No hay salas disponibles —'
                     : '— Seleccionar sala —'}
                 </option>
+<<<<<<< HEAD
 >>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 {salasDisponibles.map((sala) => (
 
 =======
                 <option value="">— Seleccionar sala —</option>
+=======
+>>>>>>> 517a7dc (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 {salasDisponibles.map((sala) => (
 >>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
                   <option key={sala.id} value={sala.id}>
@@ -1177,6 +1183,7 @@ function EditarActividad() {
               >
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 
                 <option value="">
 
@@ -1189,16 +1196,21 @@ function EditarActividad() {
                 </option>
 
 =======
+=======
+>>>>>>> 517a7dc (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 <option value="">
                   {horasDisponibles.length === 0
                     ? '— No hay horarios disponibles —'
                     : '— Seleccionar turno —'}
                 </option>
+<<<<<<< HEAD
 >>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 {horasDisponibles.map((h) => (
 
 =======
                 <option value="">— Seleccionar turno —</option>
+=======
+>>>>>>> 517a7dc (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 {horasDisponibles.map((h) => (
 >>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
                   <option key={h.valor} value={h.valor}>{h.label}</option>
@@ -1260,7 +1272,10 @@ function EditarActividad() {
                     ? '— Seleccioná primero una especialidad —'
                     : profesoresDisponibles.length === 0
                     ? '— No hay profesores disponibles —'
+<<<<<<< HEAD
 >>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
+=======
+>>>>>>> 517a7dc (Agrego la cantidad de cupos disponibles en Ver Actividades)
                     : form.activity_type === 'individual'
 <<<<<<< HEAD
 
