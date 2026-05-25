@@ -66,6 +66,7 @@ function extraerFranja(schedule, timeSlot) {
 }
 
 const FILTROS_INICIAL = {
+  busqueda: '',
   especialidad: '',
   tipo: '',
   dia: '',
@@ -77,7 +78,18 @@ const FILTROS_INICIAL = {
 };
 
 function aplicarFiltros(actividades, filtros) {
+  const textoBusqueda = filtros.busqueda.trim().toLowerCase();
+
   return actividades.filter(a => {
+    if (textoBusqueda) {
+      const texto = [a.name, a.specialization, a.description, a.requirements]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      if (!texto.includes(textoBusqueda)) return false;
+    }
+
     if (filtros.especialidad && a.specialization !== filtros.especialidad) return false;
     if (filtros.tipo && a.activity_type !== filtros.tipo) return false;
     if (filtros.dia && !obtenerDiasActividad(a).includes(filtros.dia)) return false;
@@ -139,6 +151,9 @@ const s = {
     gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))',
     gap: '12px',
     alignItems: 'end',
+  },
+  buscadorRow: {
+    marginBottom: '12px',
   },
   grupo: {
     display: 'flex',
@@ -258,6 +273,19 @@ export default function FiltroActividades({ actividades = [], onChange }) {
             ✕ Limpiar filtros
           </button>
         )}
+      </div>
+
+      <div style={s.buscadorRow}>
+        <div style={s.grupo}>
+          <label style={s.label}>Buscar actividades</label>
+          <input
+            style={s.select}
+            type="text"
+            placeholder="Nombre, especialidad, descripción o requisitos"
+            value={filtros.busqueda}
+            onChange={setFiltro('busqueda')}
+          />
+        </div>
       </div>
 
       <div style={s.grid}>
