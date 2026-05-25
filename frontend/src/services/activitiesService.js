@@ -16,11 +16,17 @@ export function getActivityById(activityId) {
   return apiRequest(`/activities/${activityId}`);
 }
 
+<<<<<<< HEAD
 /** Obtiene disponibilidad (cupos) de una actividad.
  *  Para actividades fijas pasar `date` (ISO string) para obtener cupos del turno específico. */
 export function getActivityAvailability(activityId, date = null) {
   const qs = date ? `?date=${encodeURIComponent(date)}` : '';
   return apiRequest(`/activities/${activityId}/availability${qs}`);
+=======
+/** Obtiene la disponibilidad de cupos de una actividad */
+export function getActivityAvailability(activityId) {
+  return apiRequest(`/activities/${activityId}/availability`);
+>>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
 }
 
 /** Crea una actividad (solo admin) */
