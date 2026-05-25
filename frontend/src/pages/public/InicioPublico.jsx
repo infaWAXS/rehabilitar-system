@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getToken, getRole, getUserName, clearUserData, logout } from '../../services/authService';
-import { getActivities } from '../../services/activitiesService';
+import { getActivities, getActivityById, getActivityAvailability } from '../../services/activitiesService';
 import FiltroActividades from './FiltroActividades';
 
 /* ── Constantes ─────────────────────────────────────────── */
@@ -473,6 +473,18 @@ export default function InicioPublico() {
     navigate('/cliente/reservas/inscribir', { state: { actividadId: act.id } });
   };
 
+  const handleVerActividad = async (actividad) => {
+    try {
+      const [detalle, disponibilidad] = await Promise.all([
+        getActivityById(actividad.id),
+        getActivityAvailability(actividad.id),
+      ]);
+      setActividadDetalle({ ...detalle, ...disponibilidad });
+    } catch {
+      setActividadDetalle(actividad);
+    }
+  };
+
   /* ── Subcomponentes ───────────────────────────────────── */
   const CardActividad = ({ a }) => (
     <div style={s.actCard}>
@@ -490,7 +502,7 @@ export default function InicioPublico() {
       {a.professor   && <span style={s.actProfesor}>👤 {a.professor}</span>}
       <span style={s.actPrecio}>${Number(a.price).toLocaleString('es-AR')}</span>
       <div style={s.actBotones}>
-        <button style={s.actBtnVer}       onClick={() => setActividadDetalle(a)}>Ver</button>
+        <button style={s.actBtnVer}       onClick={() => handleVerActividad(a)}>Ver</button>
         <button style={s.actBtnInscribir} onClick={() => handleInscribirse(a)}>Inscribirse</button>
       </div>
     </div>
@@ -682,7 +694,8 @@ export default function InicioPublico() {
                 `${formatFechaLarga(actividadDetalle.specific_date)}${actividadDetalle.time_slot ? ` · ${actividadDetalle.time_slot}` : ''}`],
               actividadDetalle.professor    && ['Profesor',    actividadDetalle.professor],
               ['Precio',      `$${Number(actividadDetalle.price).toLocaleString('es-AR')}`],
-              ['Cupos',       actividadDetalle.capacity],
+              ['Cupos disponibles', actividadDetalle.available_spots ?? actividadDetalle.capacity],
+              ['Cupos totales', actividadDetalle.capacity],
               actividadDetalle.description  && ['Descripción', actividadDetalle.description],
               actividadDetalle.requirements && ['Requisitos',  actividadDetalle.requirements],
             ].filter(Boolean).map(([label, valor]) => (

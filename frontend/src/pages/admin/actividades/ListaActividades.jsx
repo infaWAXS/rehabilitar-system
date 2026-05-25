@@ -43,6 +43,18 @@ const s = {
     textDecoration: 'none', display: 'inline-block',
   },
   accionesCell: { display: 'flex', gap: '6px', alignItems: 'center' },
+  overlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  modal: {
+    background: '#fff', borderRadius: '12px', padding: '20px', maxWidth: '420px', width: '100%', boxShadow: '0 12px 36px rgba(0,0,0,0.18)'
+  },
+  modalTitulo: { fontSize: '16px', fontWeight: '700', marginBottom: '8px' },
+  modalTexto: { fontSize: '14px', color: 'var(--color-texto-suave)', marginBottom: '12px' },
+  modalBotones: { display: 'flex', gap: '8px', justifyContent: 'flex-end' },
+  modalCancelar: { padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', cursor: 'pointer' },
+  modalConfirmar: { padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'var(--color-primario)', color: '#fff', cursor: 'pointer' },
 };
 
 function formatearHorario(actividad) {
@@ -66,6 +78,8 @@ function ListaActividades() {
   const [actividades, setActividades] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null); // { id, name }
   const rol = getRole();
 
   const cargar = () => {
@@ -79,14 +93,29 @@ function ListaActividades() {
 
   useEffect(() => { cargar(); }, []);
 
-  const handleCancelar = async (id, nombre) => {
-    if (!window.confirm(`¿Cancelar la actividad "${nombre}"?`)) return;
+  const requestCancelar = (id, nombre) => {
+    setConfirmTarget({ id, name: nombre });
+    setConfirmVisible(true);
+  };
+
+  const confirmarCancelacion = async () => {
+    if (!confirmTarget) return;
+    setError('');
     try {
-      await cancelActivity(id);
+      await cancelActivity(confirmTarget.id);
+      setConfirmVisible(false);
+      setConfirmTarget(null);
       cargar();
-    } catch {
+    } catch (err) {
       setError('No se pudo cancelar la actividad.');
+      setConfirmVisible(false);
+      setConfirmTarget(null);
     }
+  };
+
+  const cancelarModal = () => {
+    setConfirmVisible(false);
+    setConfirmTarget(null);
   };
 
   return (
@@ -145,7 +174,7 @@ function ListaActividades() {
                           <Link to={`/admin/actividades/editar/${a.id}`} style={s.botonEditar}>
                             Editar
                           </Link>
-                          <button style={s.botonCancelar} onClick={() => handleCancelar(a.id, a.name)}>
+                          <button style={s.botonCancelar} onClick={() => requestCancelar(a.id, a.name)}>
                             Cancelar
                           </button>
                         </>
@@ -158,6 +187,19 @@ function ListaActividades() {
           </table>
         )}
       </div>
+      {/* Modal de confirmacion */}
+      {confirmVisible && (
+        <div style={s.overlay} onClick={cancelarModal}>
+          <div style={s.modal} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitulo}>Confirmar cancelación</div>
+            <div style={s.modalTexto}>{`¿Cancelar la actividad "${confirmTarget?.name}"?`}</div>
+            <div style={s.modalBotones}>
+              <button style={s.modalCancelar} onClick={cancelarModal}>Cancelar</button>
+              <button style={s.modalConfirmar} onClick={confirmarCancelacion}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutPrivado>
   );
 }

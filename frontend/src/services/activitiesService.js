@@ -24,6 +24,11 @@ export function getActivityById(activityId) {
   return apiRequest(`/activities/${activityId}`);
 }
 
+/** Obtiene la disponibilidad de cupos de una actividad */
+export function getActivityAvailability(activityId) {
+  return apiRequest(`/activities/${activityId}/availability`);
+}
+
 /** Crea una actividad (solo admin) */
 export function createActivity(data) {
   return apiRequest('/activities', {

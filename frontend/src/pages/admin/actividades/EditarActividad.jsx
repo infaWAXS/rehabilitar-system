@@ -456,7 +456,11 @@ function EditarActividad() {
             <div style={s.grupo}>
               <label style={s.label}>Sala *</label>
               <select style={s.select} name="room_id" value={form.room_id} onChange={handleChange} required>
-                <option value="">— Seleccionar sala —</option>
+                <option value="">
+                  {salas.length > 0 && salasDisponibles.length === 0
+                    ? '— No hay salas disponibles —'
+                    : '— Seleccionar sala —'}
+                </option>
                 {salasDisponibles.map((sala) => (
                   <option key={sala.id} value={sala.id}>
                     {sala.name} (cap. {sala.capacity})
@@ -506,6 +510,11 @@ function EditarActividad() {
                   min={new Date().toISOString().split('T')[0]}
                   required
                 />
+                <span style={s.hint}>
+                  {feriadoSeleccionado.esFeriado
+                    ? `No hay fecha disponible: feriado (${feriadoSeleccionado.nombre}).`
+                    : 'Elegí una fecha disponible para el turno.'}
+                </span>
               </div>
             )}
 
@@ -517,7 +526,11 @@ function EditarActividad() {
                 value={horaInicio}
                 onChange={(e) => setHoraInicio(e.target.value)}
               >
-                <option value="">— Seleccionar turno —</option>
+                <option value="">
+                  {horasDisponibles.length === 0
+                    ? '— No hay horarios disponibles —'
+                    : '— Seleccionar turno —'}
+                </option>
                 {horasDisponibles.map((h) => (
                   <option key={h.valor} value={h.valor}>{h.label}</option>
                 ))}
@@ -542,6 +555,8 @@ function EditarActividad() {
                 <option value="">
                   {!form.specialization
                     ? '— Seleccioná primero una especialidad —'
+                    : profesoresDisponibles.length === 0
+                    ? '— No hay profesores disponibles —'
                     : form.activity_type === 'individual'
                     ? '— Sin asignar —'
                     : '— Seleccionar profesor —'}
