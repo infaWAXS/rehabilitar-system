@@ -27,14 +27,6 @@ const HORAS = Array.from({ length: 8 }, (_, i) => {
   };
 });
 
-function esFinDeSemana(fechaTexto) {
-  if (!fechaTexto) return false;
-  const fecha = new Date(`${fechaTexto}T00:00:00`);
-  if (Number.isNaN(fecha.getTime())) return false;
-  const dia = fecha.getDay();
-  return dia === 0 || dia === 6;
-}
-
 const FORM_INICIAL = {
   name: '',
   specialization: '',
