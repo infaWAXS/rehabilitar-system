@@ -9,8 +9,19 @@ from fastapi import HTTPException
 from datetime import datetime, timedelta
 
 
-def obtener_todos_los_clientes(db: Session):
-    clientes = db.query(User).filter(User.role == "client").all()
+def obtener_todos_los_clientes(db: Session, search: str = None, status: str = None):
+    query = db.query(User).filter(User.role == "client")
+    if status:
+        query = query.filter(User.account_status == status)
+    if search:
+        term = f"%{search}%"
+        query = query.filter(
+            (User.name.ilike(term)) |
+            (User.lastname.ilike(term)) |
+            (User.email.ilike(term)) |
+            (User.dni.ilike(term))
+        )
+    clientes = query.all()
     resultado = []
     for c in clientes:
         # Un cliente es "abonado" cuando tiene un UserPlan activo y vigente.

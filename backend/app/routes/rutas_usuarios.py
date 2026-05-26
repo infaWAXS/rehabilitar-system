@@ -273,12 +273,9 @@ def delete_user_endpoint(user_id: int, token: str, db: Session = Depends(get_db)
 
 
 # Endpoint para listar clientes (usuarios con rol "client") - Francis
-@router.get("/clients/list", response_model=list[UserResponse])
+@router.get("/clients/list")
 def list_clients(token: str, db: Session = Depends(get_db), search: str = None, status: str = None):
     current_user = get_current_user(token, db)
-    
     require_role(["admin", "receptionist"])(current_user)
-    
-    if search:
-        return search_users(db, search=search, role="client", status=status)
-    return get_all_users(db, role="client", status=status)
+    from app.services.servicio_clientes import obtener_todos_los_clientes
+    return obtener_todos_los_clientes(db, search=search, status=status)
