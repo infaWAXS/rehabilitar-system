@@ -48,3 +48,4 @@ app.include_router(payment_router)
 @app.get("/")
 def home():
     return {"message": "Backend funcionando"}
+
