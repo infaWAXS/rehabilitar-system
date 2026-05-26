@@ -70,6 +70,9 @@ class WaitlistResponse(BaseModel):
     position: int
     waitlist_type: str  # "priority" (abonados) | "general"
     created_at: datetime
+    # Datos de actividad (incluidos solo en GET /waitlist/me)
+    activity_name: Optional[str] = None
+    activity_schedule: Optional[str] = None
 
     class Config:
         from_attributes = True

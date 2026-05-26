@@ -22,9 +22,10 @@ const menus = {
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
   cliente: [
-    { label: 'Mis Reservas', ruta: '/cliente/reservas' },
-    { label: 'Mi Cuenta',    ruta: '/cliente/cuenta' },
-    { label: 'Mi Perfil',    ruta: '/perfil' },
+    { label: 'Mis Reservas',  ruta: '/cliente/reservas' },
+    { label: 'Planes',        ruta: '/cliente/suscripciones' },
+    { label: 'Mi Cuenta',     ruta: '/cliente/cuenta' },
+    { label: 'Mi Perfil',     ruta: '/perfil' },
   ],
 };
 

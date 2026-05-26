@@ -1,6 +1,7 @@
 // Responsable: Nahuel - HU Dar de baja en lista de espera
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
+import { getMyWaitlist, removeWaitlistItem } from '../../../services/waitlistService';
 
 const s = {
   wrapper: { maxWidth: '640px', margin: '0 auto' },
@@ -47,24 +48,50 @@ const s = {
 };
 
 function ListaEspera() {
-  const [listaEspera, setListaEspera] = useState([
-    { id: 101, nombre: 'Rehabilitar Codo', turno: 'Lunes 18:00 hs', posicion: 2, tipo: 'priority' },
-    { id: 102, nombre: 'Kinesiología Funcional', turno: 'Miércoles 10:30 hs', posicion: 5, tipo: 'general' }
-  ]);
-
+  const [listaEspera, setListaEspera] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [confirmandoId, setConfirmandoId] = useState(null);
   const [mensajeExito, setMensajeExito] = useState('');
 
-  const handleConfirmarBaja = (id, nombreActividad) => {
-    setListaEspera(prev => prev.filter(item => item.id !== id));
-    setConfirmandoId(null);
-    setMensajeExito(`Baja registrada con éxito. Se envió un mail confirmando la baja de "${nombreActividad}" a tu casilla.`);
-    setTimeout(() => setMensajeExito(''), 7000);
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await getMyWaitlist();
+        setListaEspera(data);
+      } catch (err) {
+        setError(err.message || 'No se pudo cargar la lista de espera.');
+      } finally {
+        setCargando(false);
+      }
+    })();
+  }, []);
+
+  const handleConfirmarBaja = async (id, nombreActividad) => {
+    try {
+      await removeWaitlistItem(id);
+      setListaEspera(prev => prev.filter(item => item.id !== id));
+      setConfirmandoId(null);
+      setMensajeExito(`Baja registrada con éxito de "${nombreActividad}". Se envió un correo de confirmación a tu casilla. (simulado — Sprint 2)`);
+      setTimeout(() => setMensajeExito(''), 8000);
+    } catch (err) {
+      setError(err.message || 'No se pudo procesar la baja. Intentá de nuevo.');
+    }
   };
 
   const handleCancelarBaja = () => {
     setConfirmandoId(null);
   };
+
+  if (cargando) {
+    return (
+      <LayoutPrivado titulo="Lista de Espera">
+        <div style={s.wrapper}>
+          <p style={{ color: 'var(--color-texto-suave)', fontSize: '14px' }}>Cargando lista de espera...</p>
+        </div>
+      </LayoutPrivado>
+    );
+  }
 
   return (
     <LayoutPrivado titulo="Lista de Espera">
@@ -75,10 +102,11 @@ function ListaEspera() {
         </p>
 
         {mensajeExito && <div style={s.exito}>{mensajeExito}</div>}
+        {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
 
         {listaEspera.length === 0 ? (
           <div style={s.card}>
-            <p style={s.listaVacia}>No te encuentras en la lista de espera de ninguna actividad en este momento.</p>
+            <p style={s.listaVacia}>No te encontrás en la lista de espera de ninguna actividad en este momento.</p>
           </div>
         ) : (
           listaEspera.map((actividad) => {
@@ -86,13 +114,15 @@ function ListaEspera() {
 
             return (
               <div key={actividad.id} style={s.card}>
-                <span style={s.badge(actividad.tipo)}>
-                  {actividad.tipo === 'priority' ? 'Cola Prioritaria (Abonado)' : 'Cola General'}
+                <span style={s.badge(actividad.waitlist_type)}>
+                  {actividad.waitlist_type === 'priority' ? 'Cola Prioritaria (Abonado)' : 'Cola General'}
                 </span>
 
-                <h3 style={s.tituloActividad}>{actividad.nombre}</h3>
-                <div style={s.metaText}><strong>Turno elegido:</strong> {actividad.turno}</div>
-                <div style={s.metaText}><strong>Tu posición actual:</strong> N° {actividad.posicion}</div>
+                <h3 style={s.tituloActividad}>{actividad.activity_name ?? `Actividad #${actividad.activity_id}`}</h3>
+                {actividad.activity_schedule && (
+                  <div style={s.metaText}><strong>Horario:</strong> {actividad.activity_schedule}</div>
+                )}
+                <div style={s.metaText}><strong>Tu posición actual:</strong> N° {actividad.position}</div>
 
                 {!estaConfirmando ? (
                   <div style={s.botones}>
@@ -106,13 +136,13 @@ function ListaEspera() {
                 ) : (
                   <div style={{ marginTop: '16px', borderTop: '1px solid var(--color-borde)', paddingTop: '16px' }}>
                     <div style={s.infoBox('yellow')}>
-                      ¿Estás seguro de que deseas darte de baja de <strong>{actividad.nombre}</strong>?
-                      Perderás tu lugar número {actividad.posicion} en la fila de espera.
+                      ¿Estás seguro de que deseás darte de baja de <strong>{actividad.activity_name}</strong>?
+                      Perderás tu lugar número {actividad.position} en la fila de espera.
                     </div>
                     <div style={s.botones}>
                       <button
                         style={s.btnPeligro}
-                        onClick={() => handleConfirmarBaja(actividad.id, actividad.nombre)}
+                        onClick={() => handleConfirmarBaja(actividad.id, actividad.activity_name)}
                       >
                         Confirmar Baja
                       </button>

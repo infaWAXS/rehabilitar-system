@@ -1,13 +1,16 @@
 import { apiRequest } from './apiClient';
 
-// TODO (Ezequiel): conectar con paymentRoutes.py
-export function getMySubscriptions() {
-  return apiRequest('/subscriptions/me');
+// HU: Ver suscripciones — lista de planes activos (sin auth)
+export function getPlans() {
+  return apiRequest('/payments/plans');
 }
 
-export function createMercadoPagoCheckout(data) {
+// HU: Pagar Mercado Pago — simulación de checkout
+// test_scenario: "success" | "insufficient_funds" | "connection_error"
+export function mercadoPagoCheckout(plan_id, test_scenario) {
   return apiRequest('/payments/mercadopago/checkout', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({ plan_id, test_scenario }),
   });
 }
+

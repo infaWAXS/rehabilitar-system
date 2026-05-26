@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.connection import SessionLocal, engine, Base
 from app.models.user import User
 from app.models.room import Room
+from app.models.plan import Plan
 from app.utils.security import hash_password
 
 # Importar todos los modelos para que Base cree las tablas si no existen
@@ -136,6 +137,61 @@ def seed():
             print(f"[seed_mock] Salas creadas: {', '.join(salas_creadas)}")
         else:
             print("[seed_mock] Salas: ya existían, sin cambios.")
+    finally:
+        db.close()
+
+    # ── Seed de planes ────────────────────────────────────────────────────────
+    PLANES = [
+        {
+            "name": "Plan Mensual Básico",
+            "description": "Acceso a 2 clases fijas por semana.",
+            "price": 15000,
+            "duration_days": 30,
+            "coverage_type": "2 clases/semana",
+        },
+        {
+            "name": "Plan Mensual Completo",
+            "description": "Acceso ilimitado a todas las actividades del mes.",
+            "price": 25000,
+            "duration_days": 30,
+            "coverage_type": "Acceso ilimitado",
+        },
+        {
+            "name": "Plan Trimestral",
+            "description": "Acceso ilimitado por 3 meses con descuento.",
+            "price": 65000,
+            "duration_days": 90,
+            "coverage_type": "Acceso ilimitado",
+        },
+        {
+            "name": "Plan Semestral",
+            "description": "Acceso ilimitado por 6 meses, el plan de mayor ahorro.",
+            "price": 110000,
+            "duration_days": 180,
+            "coverage_type": "Acceso ilimitado",
+        },
+    ]
+
+    db = SessionLocal()
+    try:
+        planes_creados = []
+        for datos in PLANES:
+            existe = db.query(Plan).filter(Plan.name == datos["name"]).first()
+            if not existe:
+                db.add(Plan(
+                    name=datos["name"],
+                    description=datos["description"],
+                    price=datos["price"],
+                    duration_days=datos["duration_days"],
+                    coverage_type=datos["coverage_type"],
+                    status="active",
+                ))
+                planes_creados.append(datos["name"])
+        db.commit()
+        if planes_creados:
+            print(f"[seed_mock] Planes creados: {', '.join(planes_creados)}")
+        else:
+            print("[seed_mock] Planes: ya existían, sin cambios.")
     finally:
         db.close()
 

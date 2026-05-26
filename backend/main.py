@@ -8,6 +8,7 @@ from app.models.waitlist import Waitlist
 from app.models.room import Room
 from app.models.activity import Activity
 from app.models.attendance import Attendance
+from app.models.plan import Plan
 
 from app.routes.rutas_autenticacion import router as auth_router
 from app.routes.rutas_usuarios import router as user_router

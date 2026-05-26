@@ -79,7 +79,7 @@ Columnas:
 ## 6) Gestion de asistencias
 
 | HU | Responsable | Escenario resumido | Front | Back | Estado |
-|---|---|---|---||---|
+|---|---|---|---|---|---|
 | Registrar asistencia por DNI | Ezequiel | E1: DNI válido + inscripto, sin comentario → asistencia registrada. E2: DNI válido + inscripto, con comentario → asistencia + comentario. E3: DNI de cliente no inscripto en la clase → error 403 "El cliente no se anotó para dicha clase". E4: asistencia ya registrada → error 409. | `/profesor/actividades/:id/asistencias` → `kinesiologist/asistencias/RegistrarAsistencia.jsx` (sección superior) | `POST /attendances/by-dni` → `rutas_asistencias.py` → `marcar_asistencia_por_dni()` | Front ✓ / Back ✓ |
 | Dejar comentario en asistencia | Ezequiel | E1: asistencia sin comentario → botón "Agregar", input inline, guardar → comentario guardado. | `/profesor/actividades/:id/asistencias` → `RegistrarAsistencia.jsx` (tabla inferior, botón Agregar) | `PATCH /attendances/{id}/comment` → `rutas_asistencias.py` → `actualizar_comentario()` | Front ✓ / Back ✓ |
 | Modificar comentario en asistencia | Ezequiel | E1: asistencia con comentario → botón "Editar", input inline con valor actual, guardar → comentario actualizado. | `/profesor/actividades/:id/asistencias` → `RegistrarAsistencia.jsx` (tabla inferior, botón Editar) | `PATCH /attendances/{id}/comment` → `rutas_asistencias.py` → `actualizar_comentario()` | Front ✓ / Back ✓ |
@@ -89,10 +89,8 @@ Columnas:
 
 | HU | Responsable | Escenario resumido | Front | Back | Estado |
 |---|---|---|---|---|---|
-| Inscribirse a plan | Ezequiel |  |  |  |  |
-| Inscribir actividad individual | Ezequiel |  |  |  |  |
-| Ver suscripciones | Ezequiel |  |  |  |  |
-| Pagar Mercado Pago | Ezequiel |  |  |  |  |
+| Ver suscripciones | Ezequiel | E1: existen planes activos → lista con nombre, descripción, precio, duración y cobertura. E2: no hay planes activos → lista vacía con mensaje informativo. | `/cliente/suscripciones` → `MisSuscripciones.jsx` (grilla de tarjetas) | `GET /payments/plans` → `rutas_pagos.py` → `get_active_plans()` | Front ✓ / Back ✓ |
+| Pagar Mercado Pago | Ezequiel | E1: conexión OK + saldo suficiente → pago aprobado, se muestra transaction_id. E2: conexión OK + saldo insuficiente → rechazo con mensaje "fondos insuficientes". E3: falla de conexión con el banco → error 503. | `/cliente/suscripciones` → modal de pago en `MisSuscripciones.jsx` | `POST /payments/mercadopago/checkout` → `rutas_pagos.py` → `simulate_mercadopago_payment()` | Front ✓ / Back ✓ |
 
 ## 8) Gestion de cancelaciones y politicas
 

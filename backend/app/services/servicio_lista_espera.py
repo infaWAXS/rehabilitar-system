@@ -76,18 +76,37 @@ def add_to_waitlist(user_id: int, activity_id: int, db: Session):
 
 # Obtiene la lista de espera de un usuario
 def get_user_waitlist(user_id: int, db: Session):
-    """Obtiene todas las actividades en las que el usuario está en lista de espera"""
+    """Obtiene todas las actividades en las que el usuario está en lista de espera.
+    Enriquece cada entrada con nombre y horario de la actividad.
+    """
+    from app.models.activity import Activity
+
     user = db.query(User).filter(User.id == user_id).first()
-    
+
     if not user:
         raise user_not_found_exception()
-    
+
     waitlist = db.query(Waitlist).filter(
         Waitlist.user_id == user_id,
         Waitlist.status == "waiting"
     ).order_by(Waitlist.position).all()
-    
-    return waitlist
+
+    resultado = []
+    for entry in waitlist:
+        actividad = db.query(Activity).filter(Activity.id == entry.activity_id).first()
+        resultado.append({
+            "id": entry.id,
+            "user_id": entry.user_id,
+            "activity_id": entry.activity_id,
+            "status": entry.status,
+            "position": entry.position,
+            "waitlist_type": entry.waitlist_type,
+            "created_at": entry.created_at,
+            "activity_name": actividad.name if actividad else None,
+            "activity_schedule": actividad.schedule if actividad else None,
+        })
+
+    return resultado
 
 
 # Obtiene una entrada de lista de espera
@@ -126,7 +145,8 @@ def remove_from_waitlist(waitlist_id: int, db: Session):
     entry.status = "cancelled"
     db.commit()
 
-    # TODO: notificar al cliente via mail confirmando la baja (Escenario 1 HU Dar de baja)
+    # SIMULADO (Sprint 2): se enviará mail real al cliente confirmando la baja.
+    # Por ahora la confirmación se muestra únicamente en la UI del frontend.
 
     # Re-ordenar posiciones solo dentro de la misma cola
     remaining_entries = db.query(Waitlist).filter(
