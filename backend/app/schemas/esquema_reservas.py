@@ -35,6 +35,25 @@ class ReservationResponse(BaseModel):
         from_attributes = True
 
 
+class ReservationConActividad(BaseModel):
+    """Respuesta enriquecida de reserva con datos de la actividad"""
+    id: int
+    activity_id: int
+    activity_name: str
+    activity_type: str
+    schedule: Optional[str] = None
+    specific_date: Optional[str] = None
+    time_slot: Optional[str] = None
+    reservation_type: str
+    status: str
+    payment_status: str
+    reservation_date: datetime
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ===== SCHEMAS DE LISTA DE ESPERA =====
 
 class WaitlistCreate(BaseModel):

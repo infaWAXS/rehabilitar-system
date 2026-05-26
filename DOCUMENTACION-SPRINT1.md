@@ -67,7 +67,7 @@ Columnas:
 |---|---|---|---|---|---|
 | Inscribirse a actividad fija | Francis | E1: suscripcion → confirmada. E2: pago total → confirmada. E3: sena → pendiente. E4: 65+ → descuento 20%. E5/E6: sin cupos → lista espera (prioridad abonado). E7: credito → confirmada. E8: error pago → cancelada. E9: cancelar → inicio. | `/cliente/reservas/inscribir` → InscribirActividad.jsx | `POST /reservations/fixed` → rutas_reservas.py | Front ✓ / Back ✓ |
 | Inscribirse a actividad individual | Francis | E1: pago total → confirmada. E2: sena → pendiente. E3: sin cupos → lista espera. E4: credito → confirmada. E5: error pago → cancelada. E6: cancelar → inicio. | `/cliente/reservas/inscribir` → InscribirActividad.jsx | `POST /reservations/individual` → rutas_reservas.py | Front ✓ / Back ✓ |
-| Ver mis reservas | Ezequiel |  |  |  |  |
+| Ver mis reservas | Ezequiel | E1: cliente tiene reservas → listado con nombre actividad, tipo, horario, estado y pago. E2: sin reservas → "No tenés reservas para ver". | `/cliente/reservas` → `MisReservas.jsx` | `GET /reservations/me` → `rutas_reservas.py` → `get_user_reservations_enriched()` | Front ✓ / Back ✓ |
 
 ## 5) Gestion de lista de espera
 
@@ -79,11 +79,11 @@ Columnas:
 ## 6) Gestion de asistencias
 
 | HU | Responsable | Escenario resumido | Front | Back | Estado |
-|---|---|---|---|---|---|
-| Registrar asistencia por DNI | Ezequiel |  |  |  |  |
-| Dejar comentario en asistencia | Ezequiel |  |  |  |  |
-| Eliminar comentario en asistencia | Ezequiel |  |  |  |  |
-| Modificar comentario en asistencia | Ezequiel |  |  |  |  |
+|---|---|---|---||---|
+| Registrar asistencia por DNI | Ezequiel | E1: DNI válido + inscripto, sin comentario → asistencia registrada. E2: DNI válido + inscripto, con comentario → asistencia + comentario. E3: DNI de cliente no inscripto en la clase → error 403 "El cliente no se anotó para dicha clase". E4: asistencia ya registrada → error 409. | `/profesor/actividades/:id/asistencias` → `kinesiologist/asistencias/RegistrarAsistencia.jsx` (sección superior) | `POST /attendances/by-dni` → `rutas_asistencias.py` → `marcar_asistencia_por_dni()` | Front ✓ / Back ✓ |
+| Dejar comentario en asistencia | Ezequiel | E1: asistencia sin comentario → botón "Agregar", input inline, guardar → comentario guardado. | `/profesor/actividades/:id/asistencias` → `RegistrarAsistencia.jsx` (tabla inferior, botón Agregar) | `PATCH /attendances/{id}/comment` → `rutas_asistencias.py` → `actualizar_comentario()` | Front ✓ / Back ✓ |
+| Modificar comentario en asistencia | Ezequiel | E1: asistencia con comentario → botón "Editar", input inline con valor actual, guardar → comentario actualizado. | `/profesor/actividades/:id/asistencias` → `RegistrarAsistencia.jsx` (tabla inferior, botón Editar) | `PATCH /attendances/{id}/comment` → `rutas_asistencias.py` → `actualizar_comentario()` | Front ✓ / Back ✓ |
+| Eliminar comentario en asistencia | Ezequiel | E1: asistencia con comentario → botón "Eliminar" → comentario queda en null. | `/profesor/actividades/:id/asistencias` → `RegistrarAsistencia.jsx` (tabla inferior, botón Eliminar) | `DELETE /attendances/{id}/comment` → `rutas_asistencias.py` → `eliminar_comentario()` | Front ✓ / Back ✓ |
 
 ## 7) Gestion de pago
 

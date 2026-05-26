@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.models.reservation import Reservation
 from app.models.user import User
+from app.models.activity import Activity
 from app.exceptions.http_exceptions import user_not_found_exception
 
 
@@ -71,7 +72,39 @@ def get_user_reservations(user_id: int, db: Session):
     return reservations
 
 
-# Obtiene una reserva específica
+# HU: Ver mis reservas - devuelve reservas activas con datos de la actividad
+def get_user_reservations_enriched(user_id: int, db: Session):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise user_not_found_exception()
+
+    rows = (
+        db.query(Reservation, Activity)
+        .join(Activity, Reservation.activity_id == Activity.id)
+        .filter(
+            Reservation.user_id == user_id,
+            Reservation.status != "cancelled",
+        )
+        .all()
+    )
+
+    result = []
+    for reservation, activity in rows:
+        result.append({
+            "id": reservation.id,
+            "activity_id": activity.id,
+            "activity_name": activity.name,
+            "activity_type": activity.activity_type,
+            "schedule": activity.schedule,
+            "specific_date": str(activity.specific_date) if activity.specific_date else None,
+            "time_slot": activity.time_slot,
+            "reservation_type": reservation.reservation_type,
+            "status": reservation.status,
+            "payment_status": reservation.payment_status,
+            "reservation_date": reservation.reservation_date,
+            "created_at": reservation.created_at,
+        })
+    return result
 def get_reservation_by_id(reservation_id: int, db: Session):
     """Obtiene una reserva por ID"""
     reservation = db.query(Reservation).filter(Reservation.id == reservation_id).first()

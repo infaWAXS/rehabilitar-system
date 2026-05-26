@@ -5,12 +5,13 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from app.models.reservation import Reservation
-from app.schemas.esquema_reservas import ReservationCreate, ReservationResponse, ReservationUpdate
+from app.schemas.esquema_reservas import ReservationCreate, ReservationResponse, ReservationUpdate, ReservationConActividad
 from app.utils.dependencies import get_current_user
 from app.models.user import User
 from app.services.servicio_reservas import (
     create_reservation, 
     get_user_reservations, 
+    get_user_reservations_enriched,
     get_reservation_by_id,
     cancel_reservation,
     update_reservation_payment_status,
@@ -70,13 +71,13 @@ def inscribe_individual_activity(
     )
 
 
-# Obtener mis reservas
-@router.get("/me", response_model=list[ReservationResponse])
+# HU: Ver mis reservas (Ezequiel)
+@router.get("/me", response_model=list[ReservationConActividad])
 def get_my_reservations(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    return get_user_reservations(current_user.id, db)
+    return get_user_reservations_enriched(current_user.id, db)
 
 
 # Obtener reserva específica
