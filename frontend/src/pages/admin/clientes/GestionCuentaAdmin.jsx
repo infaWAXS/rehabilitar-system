@@ -142,7 +142,7 @@ function GestionCuentaAdmin() {
 
   return (
     <LayoutPrivado titulo="Gestión de Cuenta">
-      <button style={s.botonVolver} onClick={() => navigate('/admin/clientes')}>← Volver</button>
+      <button style={s.botonVolver} onClick={() => navigate('/gestion/clientes')}>← Volver</button>
 
       {error && <div style={s.error}>{error}</div>}
       {exito && <div style={s.exito}>{exito}</div>}

@@ -77,7 +77,7 @@ function ListaActividades() {
       <div style={s.cabecera}>
         <h2 style={s.titulo}>Actividades</h2>
         {rol === 'admin' && (
-          <Link to="/admin/actividades/crear" style={s.botonCrear}>+ Nueva actividad</Link>
+          <Link to="/gestion/actividades/crear" style={s.botonCrear}>+ Nueva actividad</Link>
         )}
       </div>
 
@@ -87,7 +87,7 @@ function ListaActividades() {
         {cargando ? (
           <div style={s.vacio}>Cargando…</div>
         ) : actividades.length === 0 ? (
-          <div style={s.vacio}>No hay actividades activas. <Link to="/admin/actividades/crear" style={s.link}>Creá una</Link>.</div>
+          <div style={s.vacio}>No hay actividades activas. <Link to="/gestion/actividades/crear" style={s.link}>Creá una</Link>.</div>
         ) : (
           <table style={s.tabla}>
             <thead>
@@ -106,7 +106,7 @@ function ListaActividades() {
               {actividades.map((a) => (
                 <tr key={a.id}>
                   <td style={s.td}>
-                    <Link to={`/admin/actividades/${a.id}`} style={s.link}>{a.name}</Link>
+                    <Link to={`/gestion/actividades/${a.id}`} style={s.link}>{a.name}</Link>
                   </td>
                   <td style={s.td}>Sala {a.room_id}</td>
                   <td style={s.td}>
@@ -120,12 +120,12 @@ function ListaActividades() {
                   <td style={s.td}>{a.capacity}</td>
                   <td style={s.td}>
                     <div style={s.accionesCell}>
-                      <Link to={`/admin/actividades/${a.id}`} style={s.botonVer}>
+                      <Link to={`/gestion/actividades/${a.id}`} style={s.botonVer}>
                         Ver listado
                       </Link>
                       {rol === 'admin' && (
                         <>
-                          <Link to={`/admin/actividades/editar/${a.id}`} style={s.botonEditar}>
+                          <Link to={`/gestion/actividades/editar/${a.id}`} style={s.botonEditar}>
                             Editar
                           </Link>
                           <button style={s.botonCancelar} onClick={() => handleCancelar(a.id, a.name)}>

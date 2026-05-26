@@ -212,7 +212,7 @@ function EditarActividad() {
     setGuardando(true);
     try {
       await updateActivity(id, payload);
-      navigate('/admin/actividades');
+      navigate('/gestion/actividades');
     } catch (err) {
       setError(err.message || 'Error al guardar los cambios.');
     } finally {
@@ -440,7 +440,7 @@ function EditarActividad() {
             <button
               type="button"
               style={s.botonSecundario}
-              onClick={() => navigate('/admin/actividades')}
+              onClick={() => navigate('/gestion/actividades')}
               disabled={guardando}
             >
               Cancelar

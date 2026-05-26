@@ -15,7 +15,9 @@ class UserCreate(BaseModel):
     lastname: str
     email: EmailStr
     password: str
-    dni: Optional[str] = None
+    dni: str
+    direccion: Optional[str] = None
+    telefono: Optional[str] = None
     role: Optional[str] = "client"           # client | admin | receptionist | professor
     specialization: Optional[str] = None     # obligatorio si role == "professor"
 
@@ -61,6 +63,10 @@ class UserResponse(BaseModel):
 
     dni: Optional[str] = None
 
+    direccion: Optional[str] = None
+
+    telefono: Optional[str] = None
+
     medical_certificate_status: Optional[str] = None
 
     class Config:
@@ -93,6 +99,10 @@ class UpdateUserRequest(BaseModel):
     name: Optional[str] = None
 
     lastname: Optional[str] = None
+
+    direccion: Optional[str] = None
+
+    telefono: Optional[str] = None
 
     specialization: Optional[str] = None
 

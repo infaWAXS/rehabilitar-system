@@ -50,9 +50,7 @@ import SolicitarReintegro from './pages/client/cuenta/SolicitarReintegro';
 
 // ── Recepcionista (Nahuel) ────────────────────────────────
 
-// ── Kinesiólogo (Angel + Ezequiel) ───────────────────────
-import MisActividadesProfesor from './pages/kinesiologist/actividades/MisActividades';
-import RegistrarAsistenciaProfesor from './pages/kinesiologist/asistencias/RegistrarAsistencia';
+// ── Kinesiólogo (Angel + Ezequiel) ─── (usa /gestion/ compartido)
 
 function App() {
   return (
@@ -71,24 +69,24 @@ function App() {
         <Route path="/perfil/editar" element={<EditarPerfil />} />
         <Route path="/perfil" element={<VerPerfil />} />
 
-        {/* Admin — Usuarios */}
-        <Route path="/admin/usuarios" element={<ListaUsuarios />} />
-        <Route path="/admin/usuarios/crear" element={<CrearCuenta />} />
-        <Route path="/admin/usuarios/:id" element={<DetalleUsuario />} />
+        {/* Gestión — Usuarios (admin) */}
+        <Route path="/gestion/usuarios" element={<ListaUsuarios />} />
+        <Route path="/gestion/usuarios/crear" element={<CrearCuenta />} />
+        <Route path="/gestion/usuarios/:id" element={<DetalleUsuario />} />
 
-        {/* Admin — Clientes */}
-        <Route path="/admin/clientes" element={<ListaClientes />} />
-        <Route path="/admin/clientes/aptos-fisicos" element={<AptosFisicosAdmin />} />
-        <Route path="/admin/clientes/:id" element={<GestionCuentaAdmin />} />
+        {/* Gestión — Clientes (admin + recepcionista) */}
+        <Route path="/gestion/clientes" element={<ListaClientes />} />
+        <Route path="/gestion/clientes/aptos-fisicos" element={<AptosFisicosAdmin />} />
+        <Route path="/gestion/clientes/:id" element={<GestionCuentaAdmin />} />
 
-        {/* Admin — Actividades */}
-        <Route path="/admin/actividades" element={<ListaActividades />} />
-        <Route path="/admin/actividades/crear" element={<CrearActividad />} />
-        <Route path="/admin/actividades/editar/:id" element={<EditarActividad />} />
-        <Route path="/admin/actividades/:id" element={<DetalleActividad />} />
+        {/* Gestión — Actividades (admin + recepcionista + profesor) */}
+        <Route path="/gestion/actividades" element={<ListaActividades />} />
+        <Route path="/gestion/actividades/crear" element={<CrearActividad />} />
+        <Route path="/gestion/actividades/editar/:id" element={<EditarActividad />} />
+        <Route path="/gestion/actividades/:id" element={<DetalleActividad />} />
 
-        {/* Admin — Asistencias */}
-        <Route path="/admin/asistencias" element={<RegistrarAsistenciaAdmin />} />
+        {/* Gestión — Asistencias (admin + profesor) */}
+        <Route path="/gestion/asistencias" element={<RegistrarAsistenciaAdmin />} />
 
         {/* Cliente */}
         <Route path="/cliente/actividades" element={<ActividadesCliente />} />
@@ -97,10 +95,6 @@ function App() {
         <Route path="/cliente/lista-espera" element={<ListaEspera />} />
         <Route path="/cliente/suscripciones" element={<MisSuscripciones />} />
         <Route path="/cliente/cuenta" element={<GestionCuentaCliente />} />
-
-        {/* Profesor */}
-        <Route path="/profesor/actividades" element={<MisActividadesProfesor />} />
-        <Route path="/profesor/asistencias" element={<RegistrarAsistenciaProfesor />} />
 
         {/* Recepcionista */}
 

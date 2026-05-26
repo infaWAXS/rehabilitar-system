@@ -12,23 +12,24 @@ const MENUS_ROL = {
     { label: 'Mi Perfil',           ruta: '/perfil' },
   ],
   professor: [
-    { label: 'Mis Actividades', ruta: '/profesor/actividades' },
-    { label: 'Asistencias',     ruta: '/profesor/asistencias' },
-    { label: 'Mi Perfil',       ruta: '/perfil' },
+    { label: 'Actividades', ruta: '/gestion/actividades' },
+    { label: 'Asistencias', ruta: '/gestion/asistencias' },
+    { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
   receptionist: [
-    { label: 'Actividades', ruta: '/admin/actividades' },
-    { label: 'Clientes',    ruta: '/admin/clientes' },
+    { label: 'Actividades', ruta: '/gestion/actividades' },
+    { label: 'Clientes',    ruta: '/gestion/clientes' },
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
 };
 
 /* ── Menú del sidebar de admin ─────────────────────────── */
 const MENU_ADMIN = [
-  { label: 'Usuarios',      ruta: '/admin/usuarios' },
-  { label: 'Clientes',      ruta: '/admin/clientes' },
-  { label: 'Aptos Físicos', ruta: '/admin/clientes/aptos-fisicos' },
-  { label: 'Actividades',   ruta: '/admin/actividades' },
+  { label: 'Usuarios',      ruta: '/gestion/usuarios' },
+  { label: 'Clientes',      ruta: '/gestion/clientes' },
+  { label: 'Aptos Físicos', ruta: '/gestion/clientes/aptos-fisicos' },
+  { label: 'Actividades',   ruta: '/gestion/actividades' },
+  { label: 'Asistencias',   ruta: '/gestion/asistencias' },
 ];
 
 const s = {
@@ -538,9 +539,9 @@ function InicioPublico() {
               <div style={s.cardTitle}>Hola, {nombre}</div>
               <p style={s.cardText}>Usá el menú arriba a la derecha para navegar.</p>
               {role === 'client'       && <Link to="/cliente/actividades"    style={s.cardLink}>Ver actividades →</Link>}
-              {role === 'professor'   && <Link to="/profesor/actividades"      style={s.cardLink}>Mis actividades →</Link>}
-              {role === 'receptionist' && <Link to="/admin/actividades"             style={s.cardLink}>Ver actividades →</Link>}
-              {role === 'admin'        && <Link to="/admin/usuarios"          style={s.cardLink}>Gestión de usuarios →</Link>}
+              {role === 'professor'    && <Link to="/gestion/actividades" style={s.cardLink}>Mis actividades →</Link>}
+              {role === 'receptionist' && <Link to="/gestion/actividades" style={s.cardLink}>Ver actividades →</Link>}
+              {role === 'admin'        && <Link to="/gestion/usuarios"    style={s.cardLink}>Gestión de usuarios →</Link>}
             </>
           )}
         </div>

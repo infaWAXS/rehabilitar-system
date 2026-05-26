@@ -94,13 +94,15 @@ function formDesdeDatos(datos) {
     nombre: datos.name || '',
     apellido: datos.lastname || '',
     especializacion: datos.specialization || ESPECIALIZACIONES[0],
+    direccion: datos.direccion || '',
+    telefono: datos.telefono || '',
   };
 }
 
 function DetalleUsuario() {
   const { id } = useParams();
   const [usuario, setUsuario] = useState(null);
-  const [form, setForm] = useState({ nombre: '', apellido: '', especializacion: '' });
+  const [form, setForm] = useState({ nombre: '', apellido: '', especializacion: '', direccion: '', telefono: '' });
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -147,6 +149,8 @@ function DetalleUsuario() {
       const payload = {
         name: form.nombre,
         lastname: form.apellido,
+        direccion: form.direccion.trim() || null,
+        telefono: form.telefono.trim() || null,
       };
       if (usuario.role === 'professor') {
         payload.specialization = form.especializacion;
@@ -164,7 +168,7 @@ function DetalleUsuario() {
   return (
     <LayoutPrivado titulo="Detalle de Usuario">
       <div style={s.cabecera}>
-        <Link to="/admin/usuarios" style={s.volver}>&#8592; Volver</Link>
+        <Link to="/gestion/usuarios" style={s.volver}>&#8592; Volver</Link>
         <p style={s.titulo}>Editar usuario</p>
       </div>
 
@@ -208,6 +212,17 @@ function DetalleUsuario() {
                 <div style={s.campo}>
                   <label style={s.label}>Apellido</label>
                   <input style={s.input} name="apellido" value={form.apellido} onChange={cambio} required />
+                </div>
+              </div>
+
+              <div style={s.grid2}>
+                <div style={s.campo}>
+                  <label style={s.label}>Dirección <span style={s.labelSub}>(opcional)</span></label>
+                  <input style={s.input} name="direccion" value={form.direccion} onChange={cambio} placeholder="Ej: Calle 123, La Plata" />
+                </div>
+                <div style={s.campo}>
+                  <label style={s.label}>Teléfono <span style={s.labelSub}>(opcional)</span></label>
+                  <input style={s.input} name="telefono" value={form.telefono} onChange={cambio} placeholder="Ej: 221 123-4567" />
                 </div>
               </div>
 

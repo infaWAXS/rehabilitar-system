@@ -113,7 +113,7 @@ function DetalleActividad() {
 
   return (
     <LayoutPrivado titulo="Detalle de Actividad">
-      <Link to="/admin/actividades" style={s.volver}>← Volver a actividades</Link>
+      <Link to="/gestion/actividades" style={s.volver}>← Volver a actividades</Link>
 
       {error && <div style={s.error}>{error}</div>}
 
@@ -252,7 +252,7 @@ function DetalleActividad() {
                   </td>
 
                   <td style={s.td}>
-                    <Link to={`/admin/clientes/${c.user_id}`} style={s.link}>Ver ficha</Link>
+                    <Link to={`/gestion/clientes/${c.user_id}`} style={s.link}>Ver ficha</Link>
                   </td>
                 </tr>
               ))}

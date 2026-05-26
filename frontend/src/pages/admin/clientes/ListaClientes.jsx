@@ -170,7 +170,7 @@ function ListaClientes() {
                   </td>
                   <td style={s.td}>
                     {rol === 'admin' && (
-                      <Link to={`/admin/clientes/${c.id}`} style={s.link}>Ver detalle</Link>
+                      <Link to={`/gestion/clientes/${c.id}`} style={s.link}>Ver detalle</Link>
                     )}
                   </td>
                 </tr>

@@ -192,7 +192,7 @@ function CrearActividad() {
     setGuardando(true);
     try {
       await createActivity(payload);
-      navigate('/admin/actividades');
+      navigate('/gestion/actividades');
     } catch (err) {
       setError(err.message || 'Error al crear la actividad.');
     } finally {
@@ -407,7 +407,7 @@ function CrearActividad() {
             <button
               type="button"
               style={s.botonSecundario}
-              onClick={() => navigate('/admin/actividades')}
+              onClick={() => navigate('/gestion/actividades')}
               disabled={guardando}
             >
               Cancelar

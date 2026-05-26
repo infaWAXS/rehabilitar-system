@@ -138,7 +138,7 @@ function ListaUsuarios() {
     <LayoutPrivado titulo="Usuarios">
       <div style={s.cabecera}>
         <p style={s.titulo}>Gestión de usuarios</p>
-        <Link to="/admin/usuarios/crear" style={s.botonCrear}>+ Crear cuenta</Link>
+        <Link to="/gestion/usuarios/crear" style={s.botonCrear}>+ Crear cuenta</Link>
       </div>
 
       {errorBanner && <div style={s.errorBanner}>{errorBanner}</div>}
@@ -186,7 +186,7 @@ function ListaUsuarios() {
                   <td style={s.td}><span style={s.chipEstado(u.account_status)}>{u.account_status === 'active' ? 'Activo' : 'Deshabilitado'}</span></td>
                   <td style={s.td}>
                     <div style={s.acciones}>
-                      <Link to={`/admin/usuarios/${u.id}`} style={s.botonVer}>Editar</Link>
+                      <Link to={`/gestion/usuarios/${u.id}`} style={s.botonVer}>Editar</Link>
                       <button style={s.botonEliminar} onClick={() => abrirModal(u)}>Eliminar</button>
                     </div>
                   </td>

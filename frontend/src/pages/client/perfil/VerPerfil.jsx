@@ -136,6 +136,22 @@ function VerPerfil() {
                 </div>
               </div>
             </div>
+            {(usuario.direccion || usuario.telefono) && (
+              <div style={s.fila}>
+                {usuario.direccion && (
+                  <div style={s.campo}>
+                    <label style={s.label}>Dirección</label>
+                    <p style={s.valor}>{usuario.direccion}</p>
+                  </div>
+                )}
+                {usuario.telefono && (
+                  <div style={s.campo}>
+                    <label style={s.label}>Teléfono</label>
+                    <p style={s.valor}>{usuario.telefono}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── Estado de la Cuenta ───────────────────────── */}

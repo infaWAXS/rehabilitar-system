@@ -59,11 +59,11 @@ def change_user_password(request: ChangePasswordRequest, token: str, db: Session
     return change_password(current_user, request.new_password, request.confirm_password,db)
 
 
-# HU Editar perfil (Agustin) - E1: actualiza nombre/apellido. E2: required en front. E3: cancel → front no llama
+# HU Editar perfil (Agustin) - E1: actualiza nombre/apellido/dirección/teléfono. E2: required en front. E3: cancel → front no llama
 @router.put("/update-info")
 def update_my_info(request: UpdateUserRequest, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
-    return update_user_info_service(current_user, request.name, request.lastname, db)
+    return update_user_info_service(current_user, request.name, request.lastname, request.direccion, request.telefono, db)
 
 
 @router.get("/",response_model=list[UserResponse])
@@ -182,7 +182,7 @@ def modify_employee_endpoint(user_id: int, request: UpdateUserRequest, token: st
     
     require_role(["admin"])(current_user)
     
-    return modify_employee(user_id, request.name, request.lastname, None, request.specialization, db)
+    return modify_employee(user_id, request.name, request.lastname, None, request.specialization, request.direccion, request.telefono, db)
 
 
 # Endpoint para que el admin suba el apto físico de un cliente específico - Francis

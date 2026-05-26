@@ -54,6 +54,8 @@ def register_user(user_data, db: Session):
         password=hashed_password,
         role=role,
         dni=getattr(user_data, "dni", None),
+        direccion=getattr(user_data, "direccion", None),
+        telefono=getattr(user_data, "telefono", None),
         specialization=specialization,
     )
 
@@ -161,14 +163,20 @@ def change_password(current_user: User, new_password: str, confirm_password: str
     
     
     
-# Actualiza el nombre y apellido del usuario actual - Agustin
-def update_user_info(current_user: User, name: str, lastname: str, db: Session):
+# Actualiza datos personales del usuario actual - Agustin
+def update_user_info(current_user: User, name: str, lastname: str, direccion: str, telefono: str, db: Session):
     if name is not None:
         current_user.name = name
 
     if lastname is not None:
         current_user.lastname = lastname
-    
+
+    if direccion is not None:
+        current_user.direccion = direccion
+
+    if telefono is not None:
+        current_user.telefono = telefono
+
     db.commit()
 
     db.refresh(current_user)
@@ -358,7 +366,7 @@ def search_users(db: Session, search: str = None, role: str = None, status: str 
 #              desvincularlo. Pendiente de implementación hasta que el módulo de
 #              actividades (Angel) esté disponible.
 # Escenario 4: cancelación — comportamiento del frontend, no requiere lógica de backend.
-def modify_employee(employee_id: int, name: str = None, lastname: str = None, email: str = None, specialization: str = None, db: Session = None):
+def modify_employee(employee_id: int, name: str = None, lastname: str = None, email: str = None, specialization: str = None, direccion: str = None, telefono: str = None, db: Session = None):
     employee = db.query(User).filter(User.id == employee_id).first()
 
     if not employee:
@@ -386,6 +394,12 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
         # TODO (Escenario 3): cuando el módulo de actividades esté implementado,
         # desvincular al profesor de todas sus clases activas al cambiar especialización.
         employee.specialization = specialization
+
+    if direccion is not None:
+        employee.direccion = direccion
+
+    if telefono is not None:
+        employee.telefono = telefono
 
     db.commit()
     db.refresh(employee)

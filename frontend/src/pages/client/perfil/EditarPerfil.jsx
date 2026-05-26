@@ -1,6 +1,6 @@
 // HU Editar perfil - Responsable: Agustin
-// E1: datos válidos → actualiza nombre/apellido y muestra confirmación, redirige a /perfil
-// E2: campo obligatorio vacío → validación HTML nativa (required) impide submit
+// E1: datos válidos → actualiza nombre/apellido/dirección/teléfono y muestra confirmación, redirige a /perfil
+// E2: campo obligatorio vacío → validación inline muestra error encima del input
 // E3: cancelar → descarta cambios, navega de vuelta a /perfil sin llamar al backend
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -45,11 +45,13 @@ const s = {
     padding: '10px 14px', color: '#16a34a', fontSize: '13px', marginBottom: '14px',
   },
   cargando: { fontSize: '14px', color: 'var(--color-texto-suave)', fontStyle: 'italic', padding: '40px 20px', textAlign: 'center' },
+  errInline: { fontSize: '12px', color: '#dc2626', display: 'block', marginBottom: '4px' },
 };
 
 function EditarPerfil() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ nombre: '', apellido: '' });
+  const [form, setForm] = useState({ nombre: '', apellido: '', direccion: '', telefono: '' });
+  const [fieldErrors, setFieldErrors] = useState({ nombre: '', apellido: '' });
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -57,7 +59,7 @@ function EditarPerfil() {
 
   useEffect(() => {
     getCurrentUser()
-      .then((u) => setForm({ nombre: u.name || '', apellido: u.lastname || '' }))
+      .then((u) => setForm({ nombre: u.name || '', apellido: u.lastname || '', direccion: u.direccion || '', telefono: u.telefono || '' }))
       .catch(() => setError('No se pudieron cargar los datos del perfil.'))
       .finally(() => setCargando(false));
   }, []);
@@ -68,10 +70,25 @@ function EditarPerfil() {
     e.preventDefault();
     setError('');
     setExito('');
+
+    const errs = {};
+    if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido.';
+    if (!form.apellido.trim()) errs.apellido = 'El apellido es requerido.';
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      return;
+    }
+    setFieldErrors({ nombre: '', apellido: '' });
+
     setGuardando(true);
     try {
-      // E1: llama PUT /users/update-info con nombre y apellido actualizados
-      await updateUserInfo({ name: form.nombre, lastname: form.apellido });
+      // E1: llama PUT /users/update-info con datos actualizados
+      await updateUserInfo({
+        name: form.nombre,
+        lastname: form.apellido,
+        direccion: form.direccion || null,
+        telefono: form.telefono || null,
+      });
       setExito('Perfil actualizado correctamente.');
       setTimeout(() => navigate('/perfil'), 1500);
     } catch (err) {
@@ -99,15 +116,27 @@ function EditarPerfil() {
         <form onSubmit={enviar}>
           {error && <div style={s.error}>{error}</div>}
           {exito && <div style={s.exito}>{exito}</div>}
-          {/* E2: atributo required → el navegador bloquea el submit si los campos están vacíos */}
+          {/* E2: validación inline → mensaje de error encima del input cuando es requerido y está vacío */}
           <div style={s.grid}>
             <div style={s.campo}>
               <label style={s.label}>Nombre</label>
-              <input style={s.input} name="nombre" value={form.nombre} onChange={cambio} required />
+              {fieldErrors.nombre && <span style={s.errInline}>{fieldErrors.nombre}</span>}
+              <input style={s.input} name="nombre" value={form.nombre} onChange={cambio} />
             </div>
             <div style={s.campo}>
               <label style={s.label}>Apellido</label>
-              <input style={s.input} name="apellido" value={form.apellido} onChange={cambio} required />
+              {fieldErrors.apellido && <span style={s.errInline}>{fieldErrors.apellido}</span>}
+              <input style={s.input} name="apellido" value={form.apellido} onChange={cambio} />
+            </div>
+          </div>
+          <div style={s.grid}>
+            <div style={s.campo}>
+              <label style={s.label}>Dirección <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(opcional)</span></label>
+              <input style={s.input} name="direccion" value={form.direccion} onChange={cambio} placeholder="Ej: Calle 123, La Plata" />
+            </div>
+            <div style={s.campo}>
+              <label style={s.label}>Teléfono <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(opcional)</span></label>
+              <input style={s.input} name="telefono" value={form.telefono} onChange={cambio} placeholder="Ej: 221 123-4567" />
             </div>
           </div>
           <div style={s.fila}>

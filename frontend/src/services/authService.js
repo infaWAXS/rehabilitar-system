@@ -88,10 +88,10 @@ export function getUserName() {
 
 export function getRoleRedirect(role) {
   const map = {
-    admin: '/admin/usuarios',
+    admin: '/gestion/usuarios',
     client: '/cliente/actividades',
-    professor: '/profesor/actividades',
-    receptionist: '/admin/clientes',
+    professor: '/gestion/actividades',
+    receptionist: '/gestion/clientes',
   };
   return map[role] || '/';
 }

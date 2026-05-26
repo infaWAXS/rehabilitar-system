@@ -1,14 +1,14 @@
 // HU Registrar usuario - Responsable: Agustin
 // E1/E2/E3: registro exitoso (con/sin apto, con/sin prof) → cuenta creada + redirige a /login
 // E4: email ya registrado → error "El correo ya se encuentra registrado"
-// E5: password < 6 chars → error validación frontend (esquema_usuario.py también lo valida)
-// E6: error validación DNI (foto) → pendiente (sistema externo de validación de identidad)
+// E5: password < 6 chars → error validación inline (esquema_usuario.py también lo valida)
+// E6: DNI numérico opcional → sin foto ni sistema externo (deshabilitado)
 // E7: error doble autenticación (2FA via mail) → pendiente (no implementado)
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LayoutPublico from '../../layouts/LayoutPublico';
 import { register, login } from '../../services/authService';
-import { uploadMedicalCertificateWithToken, uploadDniWithToken } from '../../services/usersService';
+import { uploadMedicalCertificateWithToken } from '../../services/usersService';
 
 const s = {
   campo: { marginBottom: '16px' },
@@ -37,13 +37,14 @@ const s = {
     background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px',
     padding: '10px 14px', color: '#16a34a', fontSize: '13px', marginBottom: '16px',
   },
+  errInline: { fontSize: '12px', color: '#dc2626', display: 'block', marginBottom: '4px' },
 };
 
 function Registro() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ nombre: '', apellido: '', email: '', contrasena: '', confirmar: '' });
-  const [dniFile, setDniFile] = useState(null);   // E6: foto DNI para sistema externo de validación
+  const [form, setForm] = useState({ nombre: '', apellido: '', email: '', contrasena: '', confirmar: '', dni: '', direccion: '', telefono: '' });
   const [aptoFile, setAptoFile] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [exito, setExito] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -55,39 +56,42 @@ function Registro() {
     setError('');
     setExito('');
 
-    if (form.contrasena.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.');
+    // Validación inline por campo
+    const errs = {};
+    if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido.';
+    if (!form.apellido.trim()) errs.apellido = 'El apellido es requerido.';
+    if (!form.email.trim()) errs.email = 'El correo es requerido.';
+    if (!form.dni.trim()) errs.dni = 'El DNI es requerido.';
+    if (!form.contrasena) errs.contrasena = 'La contraseña es requerida.';
+    else if (form.contrasena.length < 6) errs.contrasena = 'La contraseña debe tener al menos 6 caracteres.';
+    if (!form.confirmar) errs.confirmar = 'Confirmá la contraseña.';
+    else if (form.contrasena !== form.confirmar) errs.confirmar = 'Las contraseñas no coinciden.';
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
       return;
     }
-    if (form.contrasena !== form.confirmar) {
-      setError('Las contraseñas no coinciden.');
-      return;
-    }
+    setFieldErrors({});
 
     setCargando(true);
     try {
-      // E1/E2/E3: se registra el usuario sin número de DNI manual
-      // El DNI se valida mediante foto + sistema externo (E6 pendiente)
+      // E1/E2/E3: registra el usuario con datos opcionales
       await register({
         name: form.nombre,
         lastname: form.apellido,
         email: form.email,
         password: form.contrasena,
+        dni: form.dni.trim(),
+        direccion: form.direccion.trim() || null,
+        telefono: form.telefono.trim() || null,
       });
 
-      // Subir foto de DNI y/o apto físico con token temporal post-registro
-      if (dniFile || aptoFile) {
+      // Subir apto físico con token temporal post-registro
+      if (aptoFile) {
         try {
           const loginData = await login({ email: form.email, password: form.contrasena });
           if (loginData?.access_token) {
-            if (dniFile) {
-              // E6: envía foto al backend; sistema externo la validará (pendiente)
-              await uploadDniWithToken(loginData.access_token, dniFile);
-            }
-            if (aptoFile) {
-              // E3: sube apto físico → medical_certificate_status = "pending"
-              await uploadMedicalCertificateWithToken(loginData.access_token, aptoFile);
-            }
+            // E3: sube apto físico → medical_certificate_status = "pending"
+            await uploadMedicalCertificateWithToken(loginData.access_token, aptoFile);
           }
         } catch {
           // Si falla la subida, el usuario puede subirlo desde su perfil
@@ -117,49 +121,58 @@ function Registro() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <div style={s.campo}>
             <label style={s.label}>Nombre</label>
-            <input style={s.input} name="nombre" value={form.nombre} onChange={cambio} required />
+            {fieldErrors.nombre && <span style={s.errInline}>{fieldErrors.nombre}</span>}
+            <input style={s.input} name="nombre" value={form.nombre} onChange={cambio} />
           </div>
           <div style={s.campo}>
             <label style={s.label}>Apellido</label>
-            <input style={s.input} name="apellido" value={form.apellido} onChange={cambio} required />
+            {fieldErrors.apellido && <span style={s.errInline}>{fieldErrors.apellido}</span>}
+            <input style={s.input} name="apellido" value={form.apellido} onChange={cambio} />
           </div>
         </div>
         <div style={s.campo}>
           <label style={s.label}>Correo electrónico</label>
-          <input style={s.input} type="email" name="email" value={form.email} onChange={cambio} required />
+          {fieldErrors.email && <span style={s.errInline}>{fieldErrors.email}</span>}
+          <input style={s.input} type="email" name="email" value={form.email} onChange={cambio} />
         </div>
         <div style={s.campo}>
           <label style={s.label}>Contraseña <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(mín. 6 caracteres)</span></label>
-          <input style={s.input} type="password" name="contrasena" value={form.contrasena} onChange={cambio} required />
+          {fieldErrors.contrasena && <span style={s.errInline}>{fieldErrors.contrasena}</span>}
+          <input style={s.input} type="password" name="contrasena" value={form.contrasena} onChange={cambio} />
         </div>
         <div style={s.campo}>
           <label style={s.label}>Confirmar contraseña</label>
-          <input style={s.input} type="password" name="confirmar" value={form.confirmar} onChange={cambio} required />
+          {fieldErrors.confirmar && <span style={s.errInline}>{fieldErrors.confirmar}</span>}
+          <input style={s.input} type="password" name="confirmar" value={form.confirmar} onChange={cambio} />
         </div>
-        <div style={s.campo}>
-          {/* E6: foto del DNI → se enviará al sistema externo de validación de identidad */}
-          <label style={s.label}>
-            Foto del DNI <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(frente, obligatorio)</span>
-          </label>
-          <input
-            style={{ ...s.input, padding: '7px 14px' }}
-            type="file"
-            accept="image/*"
-            required
-            onChange={(e) => setDniFile(e.target.files[0] || null)}
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={s.campo}>
+            <label style={s.label}>DNI</label>
+            {fieldErrors.dni && <span style={s.errInline}>{fieldErrors.dni}</span>}
+            <input style={s.input} type="text" inputMode="numeric" pattern="[0-9]*" name="dni" value={form.dni} onChange={cambio} placeholder="Ej: 40123456" />
+          </div>
+          <div style={s.campo}>
+            {/* E2: sin apto → cuenta activa sin permisos hasta adjuntar. E3: con apto → estado "pendiente" */}
+            <label style={s.label}>
+              Apto físico <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(opcional, PDF o imagen)</span>
+            </label>
+            <input
+              style={{ ...s.input, padding: '7px 14px' }}
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => setAptoFile(e.target.files[0] || null)}
+            />
+          </div>
         </div>
-        <div style={s.campo}>
-          {/* E2: sin apto → cuenta activa sin permisos hasta adjuntar. E3: con apto → estado "pendiente" */}
-          <label style={s.label}>
-            Apto físico <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(opcional, PDF o imagen)</span>
-          </label>
-          <input
-            style={{ ...s.input, padding: '7px 14px' }}
-            type="file"
-            accept="image/*,application/pdf"
-            onChange={(e) => setAptoFile(e.target.files[0] || null)}
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={s.campo}>
+            <label style={s.label}>Dirección <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(opcional)</span></label>
+            <input style={s.input} name="direccion" value={form.direccion} onChange={cambio} placeholder="Ej: Calle 123, La Plata" />
+          </div>
+          <div style={s.campo}>
+            <label style={s.label}>Teléfono <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(opcional)</span></label>
+            <input style={s.input} name="telefono" value={form.telefono} onChange={cambio} placeholder="Ej: 221 123-4567" />
+          </div>
         </div>
         <button type="submit" style={cargando ? s.botonDisabled : s.boton} disabled={cargando}>
           {cargando ? 'Registrando...' : 'Registrarse'}

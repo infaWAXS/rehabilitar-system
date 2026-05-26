@@ -36,6 +36,7 @@ const s = {
     background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px',
     padding: '10px 14px', color: '#16a34a', fontSize: '13px', marginBottom: '16px',
   },
+  errInline: { fontSize: '12px', color: '#dc2626', display: 'block', marginBottom: '4px' },
 };
 
 function Login() {
@@ -43,6 +44,7 @@ function Login() {
   const location = useLocation();
   const mensajeExito = location.state?.mensaje || '';
   const [form, setForm] = useState({ email: '', contrasena: '' });
+  const [fieldErrors, setFieldErrors] = useState({ email: '', contrasena: '' });
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
 
@@ -51,6 +53,17 @@ function Login() {
   const enviar = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Validación inline por campo
+    const errs = {};
+    if (!form.email.trim()) errs.email = 'El correo es requerido.';
+    if (!form.contrasena) errs.contrasena = 'La contraseña es requerida.';
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      return;
+    }
+    setFieldErrors({ email: '', contrasena: '' });
+
     setCargando(true);
 
     try {
@@ -87,11 +100,13 @@ function Login() {
         {error && <div style={s.error}>{error}</div>}
         <div style={s.campo}>
           <label style={s.label}>Correo electrónico</label>
-          <input style={s.input} type="email" name="email" value={form.email} onChange={cambio} required placeholder="ejemplo@mail.com" />
+          {fieldErrors.email && <span style={s.errInline}>{fieldErrors.email}</span>}
+          <input style={s.input} type="email" name="email" value={form.email} onChange={cambio} placeholder="ejemplo@mail.com" />
         </div>
         <div style={s.campo}>
           <label style={s.label}>Contraseña</label>
-          <input style={s.input} type="password" name="contrasena" value={form.contrasena} onChange={cambio} required placeholder="••••••••" />
+          {fieldErrors.contrasena && <span style={s.errInline}>{fieldErrors.contrasena}</span>}
+          <input style={s.input} type="password" name="contrasena" value={form.contrasena} onChange={cambio} placeholder="••••••••" />
         </div>
         <button type="submit" style={cargando ? s.botonDisabled : s.boton} disabled={cargando}>
           {cargando ? 'Ingresando...' : 'Iniciar sesión'}
