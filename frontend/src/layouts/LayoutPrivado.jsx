@@ -14,7 +14,6 @@ const menus = {
   ],
   profesor: [
     { label: 'Actividades', ruta: '/profesor/actividades' },
-    { label: 'Asistencias', ruta: '/profesor/asistencias' },
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
   recepcionista: [

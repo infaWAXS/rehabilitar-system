@@ -110,7 +110,6 @@ function App() {
         {/* Profesor (Kinesiólogo) */}
         <Route path="/profesor/actividades" element={<MisActividadesProfesor />} />
         <Route path="/profesor/actividades/:id/asistencias" element={<RegistrarAsistenciaProfesor />} />
-        <Route path="/profesor/asistencias" element={<MisActividadesProfesor />} />
 
         {/* Redirect por defecto */}
         <Route path="*" element={<Navigate to="/" replace />} />

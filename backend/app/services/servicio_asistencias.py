@@ -69,3 +69,30 @@ def eliminar_comentario(attendance_id: int, db: Session):
     db.commit()
     db.refresh(attendance)
     return attendance
+
+
+def listar_asistencias_por_actividad(activity_id: int, db: Session):
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise activity_not_found_exception()
+
+    rows = (
+        db.query(Attendance, User)
+        .join(User, Attendance.user_id == User.id)
+        .filter(Attendance.activity_id == activity_id)
+        .all()
+    )
+
+    result = []
+    for attendance, user in rows:
+        result.append({
+            "id": attendance.id,
+            "user_id": user.id,
+            "nombre": user.name,
+            "apellido": user.lastname,
+            "dni": user.dni or "",
+            "status": attendance.status,
+            "comment": attendance.comment,
+            "timestamp": attendance.timestamp,
+        })
+    return result

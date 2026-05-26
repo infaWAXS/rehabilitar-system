@@ -16,6 +16,20 @@ class AsistenciaRespuesta(BaseModel):
         from_attributes = True
 
 
+class AsistenciaConUsuario(BaseModel):
+    id: int
+    user_id: int
+    nombre: str
+    apellido: str
+    dni: str
+    status: str
+    comment: Optional[str] = None
+    timestamp: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class MarcarAsistenciaPorDNI(BaseModel):
     dni: str
     activity_id: int

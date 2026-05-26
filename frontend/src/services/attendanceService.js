@@ -7,6 +7,10 @@ export function registerAttendanceByDni(data) {
   });
 }
 
+export function getAttendancesByActivity(activityId) {
+  return apiRequest(`/attendances/by-activity/${activityId}`);
+}
+
 export function updateAttendanceComment(attendanceId, comment) {
   return apiRequest(`/attendances/${attendanceId}/comment`, {
     method: 'PATCH',
