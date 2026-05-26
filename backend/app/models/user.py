@@ -1,6 +1,7 @@
 # Responsable legacy: Francis + Agustin - modulo de usuarios y autenticacion.
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from database.connection import Base
 
 
@@ -24,3 +25,5 @@ class User(Base):
     medical_certificate_status = Column(String, default="none")
     failed_login_attempts = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
+
+    attendances = relationship("Attendance", back_populates="user")

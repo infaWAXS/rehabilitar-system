@@ -1,6 +1,6 @@
 # # Responsable legacy: Francis y Agustin - gestion de usuarios.
 from app.exceptions.http_exceptions import forbidden_exception
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile, Body
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import shutil
@@ -88,6 +88,21 @@ def search_users_endpoint(token: str, db: Session = Depends(get_db), search: str
 
     return search_users(db, search=search, role=role, status=status)
 
+# HU Modificar información de usuario (Nahuel) - Cambio de especialidad de profesor
+# E1: cambio exitoso → specialization actualizada en la BD
+# E2: cancelar → manejado en frontend
+@router.put("/{user_id}/specialty", response_model=UserResponse)
+def change_professor_specialty_endpoint(
+    user_id: int,
+    token: str,
+    specialty: str = Body(..., embed=True),
+    db: Session = Depends(get_db)
+):
+    current_user = get_current_user(token, db)
+    require_role(["admin"])(current_user)
+    return modify_employee(user_id, None, None, None, specialty, None, None, db)
+
+
 # HU Verificar apto físico (admin) - E3: lista clientes con apto físico pendiente - Francis
 @router.get("/pending-medical", response_model=list[UserResponse])
 def list_pending_medical(token: str, db: Session = Depends(get_db)):
@@ -104,7 +119,21 @@ def get_user(user_id: int, token: str, db: Session = Depends(get_db)):
     if (current_user.role != "admin" and current_user.id != user_id):
         raise forbidden_exception()
     
-    return get_user_by_id(user_id, db)
+    user = get_user_by_id(user_id, db)
+
+    # E3 HU Modificar Profesor: calcular si tiene clases activas asignadas
+    tiene_clases_activas = False
+    if user.role == "professor":
+        from app.models.activity import Activity
+        nombre_profesor = f"{user.name} {user.lastname}"
+        tiene_clases_activas = db.query(Activity).filter(
+            Activity.professor == nombre_profesor,
+            Activity.status == "active",
+        ).first() is not None
+
+    user_dict = UserResponse.model_validate(user).model_dump()
+    user_dict["tiene_clases_activas"] = tiene_clases_activas
+    return user_dict
 
 #Agustin - Endpoint para que el admin habilite o deshabilite una cuenta de usuario (soft delete)
 @router.put("/disable/{user_id}", response_model=UserResponse)

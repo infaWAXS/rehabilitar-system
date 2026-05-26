@@ -6,20 +6,20 @@ import { logout, clearUserData, getRole, getUserName, getAccountStatus } from '.
 /* ── Menús por rol ─────────────────────────────────────── */
 const menus = {
   admin: [
-    { label: 'Usuarios',      ruta: '/gestion/usuarios' },
-    { label: 'Clientes',      ruta: '/gestion/clientes' },
-    { label: 'Aptos Físicos', ruta: '/gestion/clientes/aptos-fisicos' },
-    { label: 'Actividades',   ruta: '/gestion/actividades' },
-    { label: 'Asistencias',   ruta: '/gestion/asistencias' },
+    { label: 'Usuarios',      ruta: '/admin/usuarios' },
+    { label: 'Clientes',      ruta: '/admin/clientes' },
+    { label: 'Aptos Físicos', ruta: '/admin/clientes/aptos-fisicos' },
+    { label: 'Actividades',   ruta: '/admin/actividades' },
+    { label: 'Asistencias',   ruta: '/admin/asistencias' },
   ],
   profesor: [
-    { label: 'Actividades', ruta: '/gestion/actividades' },
-    { label: 'Asistencias', ruta: '/gestion/asistencias' },
+    { label: 'Actividades', ruta: '/profesor/actividades' },
+    { label: 'Asistencias', ruta: '/profesor/asistencias' },
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
   recepcionista: [
-    { label: 'Actividades', ruta: '/gestion/actividades' },
-    { label: 'Clientes',    ruta: '/gestion/clientes' },
+    { label: 'Actividades', ruta: '/recepcionista/actividades' },
+    { label: 'Clientes',    ruta: '/recepcionista/clientes' },
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
   cliente: [

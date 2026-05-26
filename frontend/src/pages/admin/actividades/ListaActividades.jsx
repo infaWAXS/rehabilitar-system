@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
-import { getActivities, cancelActivity } from '../../../services/activitiesService';
+import { getActivities, cancelActivity, getActivityAvailability } from '../../../services/activitiesService';
 import { getRole } from '../../../services/authService';
 
 const TIPO_LABEL = { fixed: 'Fija', individual: 'Individual' };
@@ -43,33 +43,90 @@ const s = {
     textDecoration: 'none', display: 'inline-block',
   },
   accionesCell: { display: 'flex', gap: '6px', alignItems: 'center' },
+  overlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  modal: {
+    background: '#fff', borderRadius: '12px', padding: '20px', maxWidth: '420px', width: '100%',
+    boxShadow: '0 12px 36px rgba(0,0,0,0.18)',
+  },
+  modalTitulo: { fontSize: '16px', fontWeight: '700', marginBottom: '8px' },
+  modalTexto: { fontSize: '14px', color: 'var(--color-texto-suave)', marginBottom: '12px' },
+  modalBotones: { display: 'flex', gap: '8px', justifyContent: 'flex-end' },
+  modalCancelar: { padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', cursor: 'pointer' },
+  modalConfirmar: { padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'var(--color-primario)', color: '#fff', cursor: 'pointer' },
 };
+
+function formatearHorario(actividad) {
+  if (actividad.activity_type === 'individual') {
+    if (actividad.specific_date && actividad.time_slot) {
+      return `${actividad.specific_date} · ${actividad.time_slot}`;
+    }
+    if (actividad.specific_date) return actividad.specific_date;
+    if (actividad.time_slot) return actividad.time_slot;
+    return '—';
+  }
+  return actividad.schedule || '—';
+}
+
+function formatearProfesor(actividad) {
+  return actividad.professor || <span style={{ color: 'var(--color-texto-suave)' }}>Sin profesor asignado</span>;
+}
 
 function ListaActividades() {
   const [actividades, setActividades] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [cuposDisponibles, setCuposDisponibles] = useState({});
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null); // { id, name }
   const rol = getRole();
+  const basePath = rol === 'admin' ? '/admin/actividades' : '/recepcionista/actividades';
 
   const cargar = () => {
     setCargando(true);
     setError('');
     getActivities({ status: 'active' })
-      .then((data) => setActividades(Array.isArray(data) ? data : []))
+      .then(async (data) => {
+        const lista = Array.isArray(data) ? data : [];
+        setActividades(lista);
+        const results = await Promise.allSettled(lista.map((a) => getActivityAvailability(a.id)));
+        const mapa = {};
+        results.forEach((res, i) => {
+          if (res.status === 'fulfilled') mapa[lista[i].id] = res.value.available_spots;
+        });
+        setCuposDisponibles(mapa);
+      })
       .catch(() => setError('No se pudieron cargar las actividades.'))
       .finally(() => setCargando(false));
   };
 
   useEffect(() => { cargar(); }, []);
 
-  const handleCancelar = async (id, nombre) => {
-    if (!window.confirm(`¿Cancelar la actividad "${nombre}"?`)) return;
+  const requestCancelar = (id, nombre) => {
+    setConfirmTarget({ id, name: nombre });
+    setConfirmVisible(true);
+  };
+
+  const confirmarCancelacion = async () => {
+    if (!confirmTarget) return;
+    setError('');
     try {
-      await cancelActivity(id);
+      await cancelActivity(confirmTarget.id);
+      setConfirmVisible(false);
+      setConfirmTarget(null);
       cargar();
     } catch {
       setError('No se pudo cancelar la actividad.');
+      setConfirmVisible(false);
+      setConfirmTarget(null);
     }
+  };
+
+  const cancelarModal = () => {
+    setConfirmVisible(false);
+    setConfirmTarget(null);
   };
 
   return (
@@ -77,7 +134,7 @@ function ListaActividades() {
       <div style={s.cabecera}>
         <h2 style={s.titulo}>Actividades</h2>
         {rol === 'admin' && (
-          <Link to="/gestion/actividades/crear" style={s.botonCrear}>+ Nueva actividad</Link>
+          <Link to={`${basePath}/crear`} style={s.botonCrear}>+ Nueva actividad</Link>
         )}
       </div>
 
@@ -87,7 +144,7 @@ function ListaActividades() {
         {cargando ? (
           <div style={s.vacio}>Cargando…</div>
         ) : actividades.length === 0 ? (
-          <div style={s.vacio}>No hay actividades activas. <Link to="/gestion/actividades/crear" style={s.link}>Creá una</Link>.</div>
+          <div style={s.vacio}>No hay actividades activas. <Link to={`${basePath}/crear`} style={s.link}>Creá una</Link>.</div>
         ) : (
           <table style={s.tabla}>
             <thead>
@@ -106,7 +163,7 @@ function ListaActividades() {
               {actividades.map((a) => (
                 <tr key={a.id}>
                   <td style={s.td}>
-                    <Link to={`/gestion/actividades/${a.id}`} style={s.link}>{a.name}</Link>
+                    <Link to={`${basePath}/${a.id}`} style={s.link}>{a.name}</Link>
                   </td>
                   <td style={s.td}>Sala {a.room_id}</td>
                   <td style={s.td}>
@@ -114,21 +171,21 @@ function ListaActividades() {
                       {TIPO_LABEL[a.activity_type] ?? a.activity_type}
                     </span>
                   </td>
-                  <td style={s.td}>{a.schedule}</td>
-                  <td style={s.td}>{a.professor}</td>
+                  <td style={s.td}>{formatearHorario(a)}</td>
+                  <td style={s.td}>{formatearProfesor(a)}</td>
                   <td style={s.td}>${Number(a.price).toLocaleString('es-AR')}</td>
-                  <td style={s.td}>{a.capacity}</td>
+                  <td style={s.td}>{cuposDisponibles[a.id] !== undefined ? `${cuposDisponibles[a.id]} / ${a.capacity}` : a.capacity}</td>
                   <td style={s.td}>
                     <div style={s.accionesCell}>
-                      <Link to={`/gestion/actividades/${a.id}`} style={s.botonVer}>
+                      <Link to={`${basePath}/${a.id}`} style={s.botonVer}>
                         Ver listado
                       </Link>
                       {rol === 'admin' && (
                         <>
-                          <Link to={`/gestion/actividades/editar/${a.id}`} style={s.botonEditar}>
+                          <Link to={`${basePath}/editar/${a.id}`} style={s.botonEditar}>
                             Editar
                           </Link>
-                          <button style={s.botonCancelar} onClick={() => handleCancelar(a.id, a.name)}>
+                          <button style={s.botonCancelar} onClick={() => requestCancelar(a.id, a.name)}>
                             Cancelar
                           </button>
                         </>
@@ -141,6 +198,19 @@ function ListaActividades() {
           </table>
         )}
       </div>
+
+      {confirmVisible && (
+        <div style={s.overlay} onClick={cancelarModal}>
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalTitulo}>Confirmar cancelación</div>
+            <div style={s.modalTexto}>{`¿Cancelar la actividad "${confirmTarget?.name}"?`}</div>
+            <div style={s.modalBotones}>
+              <button style={s.modalCancelar} onClick={cancelarModal}>Cancelar</button>
+              <button style={s.modalConfirmar} onClick={confirmarCancelacion}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutPrivado>
   );
 }

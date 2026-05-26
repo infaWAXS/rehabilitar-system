@@ -40,3 +40,35 @@ def invalid_password_exception():
         status_code=400,
         detail="La contraseña debe tener al menos 6 caracteres"
     )
+
+
+def activity_not_found_exception():
+
+    return HTTPException(
+        status_code=404,
+        detail="Actividad no encontrada"
+    )
+
+
+def attendance_not_found_exception():
+
+    return HTTPException(
+        status_code=404,
+        detail="Asistencia no encontrada"
+    )
+
+
+def attendance_already_exists_exception():
+
+    return HTTPException(
+        status_code=409,
+        detail="La asistencia ya se encuentra registrada"
+    )
+
+
+def user_not_enrolled_exception():
+
+    return HTTPException(
+        status_code=403,
+        detail="El cliente no se anotó para dicha clase"
+    )

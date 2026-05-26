@@ -391,8 +391,13 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
                 status_code=400,
                 detail="Solo los profesores pueden tener una especialización asignada"
             )
-        # TODO (Escenario 3): cuando el módulo de actividades esté implementado,
-        # desvincular al profesor de todas sus clases activas al cambiar especialización.
+        # E3: desvincular al profesor de todas sus clases activas cuando cambia la especialización
+        if specialization != employee.specialization:
+            nombre_profesor = f"{employee.name} {employee.lastname}"
+            db.query(Activity).filter(
+                Activity.professor == nombre_profesor,
+                Activity.status == "active",
+            ).update({Activity.professor: None}, synchronize_session=False)
         employee.specialization = specialization
 
     if direccion is not None:

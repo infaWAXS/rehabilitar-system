@@ -99,12 +99,12 @@ export function getStaff(search = '', specialization = '') {
   if (search) params.append('search', search);
   if (specialization) params.append('specialization', specialization);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  return apiRequest(`/staff${qs}`);
+  return apiRequest(`/auth/staff${qs}`);
 }
 
 // Devuelve las especializaciones disponibles para el filtro del staff.
 export function getStaffSpecializations() {
-  return apiRequest('/staff/specializations');
+  return apiRequest('/auth/staff/specializations');
 }
 
 // HU Verificar apto físico (admin) - devuelve clientes con medical_certificate_status = "pending".

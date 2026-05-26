@@ -11,6 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getUserById } from '../../../services/usersService';
 import { suspendClient, reinstateClient, rejectReintegration } from '../../../services/clientsService';
+import { getRole } from '../../../services/authService';
 
 const ESTADO_LABEL = {
   active: 'Activo',
@@ -142,7 +143,7 @@ function GestionCuentaAdmin() {
 
   return (
     <LayoutPrivado titulo="Gestión de Cuenta">
-      <button style={s.botonVolver} onClick={() => navigate('/gestion/clientes')}>← Volver</button>
+      <button style={s.botonVolver} onClick={() => navigate(getRole() === 'admin' ? '/admin/clientes' : '/recepcionista/clientes')}>← Volver</button>
 
       {error && <div style={s.error}>{error}</div>}
       {exito && <div style={s.exito}>{exito}</div>}

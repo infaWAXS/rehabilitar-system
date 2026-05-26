@@ -32,6 +32,7 @@ import EditarActividad from './pages/admin/actividades/EditarActividad';
 
 // ── Admin: Asistencias (Ezequiel) ────────────────────────
 import RegistrarAsistenciaAdmin from './pages/admin/asistencias/RegistrarAsistencia';
+import VerListaEsperaAdmin from './pages/admin/VerListaEsperaAdmin';
 
 // ── Cliente: Actividades (Angel) ─────────────────────────
 import ActividadesCliente from './pages/client/actividades/ActividadesCliente';
@@ -49,8 +50,11 @@ import GestionCuentaCliente from './pages/client/cuenta/GestionCuentaCliente';
 import SolicitarReintegro from './pages/client/cuenta/SolicitarReintegro';
 
 // ── Recepcionista (Nahuel) ────────────────────────────────
+// VerInscriptos fusionado en DetalleActividad (misma tabla, mismo endpoint)
 
-// ── Kinesiólogo (Angel + Ezequiel) ─── (usa /gestion/ compartido)
+// ── Kinesiólogo (Nahuel) ─────────────────────────────────
+import MisActividadesProfesor from './pages/kinesiologist/actividades/MisActividades';
+import RegistrarAsistenciaProfesor from './pages/kinesiologist/asistencias/RegistrarAsistencia';
 
 function App() {
   return (
@@ -69,24 +73,31 @@ function App() {
         <Route path="/perfil/editar" element={<EditarPerfil />} />
         <Route path="/perfil" element={<VerPerfil />} />
 
-        {/* Gestión — Usuarios (admin) */}
-        <Route path="/gestion/usuarios" element={<ListaUsuarios />} />
-        <Route path="/gestion/usuarios/crear" element={<CrearCuenta />} />
-        <Route path="/gestion/usuarios/:id" element={<DetalleUsuario />} />
+        {/* Admin — Usuarios */}
+        <Route path="/admin/usuarios" element={<ListaUsuarios />} />
+        <Route path="/admin/usuarios/crear" element={<CrearCuenta />} />
+        <Route path="/admin/usuarios/:id" element={<DetalleUsuario />} />
 
-        {/* Gestión — Clientes (admin + recepcionista) */}
-        <Route path="/gestion/clientes" element={<ListaClientes />} />
-        <Route path="/gestion/clientes/aptos-fisicos" element={<AptosFisicosAdmin />} />
-        <Route path="/gestion/clientes/:id" element={<GestionCuentaAdmin />} />
+        {/* Admin — Clientes */}
+        <Route path="/admin/clientes" element={<ListaClientes />} />
+        <Route path="/admin/clientes/aptos-fisicos" element={<AptosFisicosAdmin />} />
+        <Route path="/admin/clientes/:id" element={<GestionCuentaAdmin />} />
 
-        {/* Gestión — Actividades (admin + recepcionista + profesor) */}
-        <Route path="/gestion/actividades" element={<ListaActividades />} />
-        <Route path="/gestion/actividades/crear" element={<CrearActividad />} />
-        <Route path="/gestion/actividades/editar/:id" element={<EditarActividad />} />
-        <Route path="/gestion/actividades/:id" element={<DetalleActividad />} />
+        {/* Admin — Actividades */}
+        <Route path="/admin/actividades" element={<ListaActividades />} />
+        <Route path="/admin/actividades/crear" element={<CrearActividad />} />
+        <Route path="/admin/actividades/editar/:id" element={<EditarActividad />} />
+        <Route path="/admin/actividades/:id/lista-espera" element={<VerListaEsperaAdmin />} />
+        <Route path="/admin/actividades/:id" element={<DetalleActividad />} />
 
-        {/* Gestión — Asistencias (admin + profesor) */}
-        <Route path="/gestion/asistencias" element={<RegistrarAsistenciaAdmin />} />
+        {/* Admin — Asistencias */}
+        <Route path="/admin/asistencias" element={<RegistrarAsistenciaAdmin />} />
+
+        {/* Recepcionista */}
+        <Route path="/recepcionista/actividades" element={<ListaActividades />} />
+        <Route path="/recepcionista/actividades/:id" element={<DetalleActividad />} />
+        <Route path="/recepcionista/clientes" element={<ListaClientes />} />
+        <Route path="/recepcionista/clientes/:id" element={<GestionCuentaAdmin />} />
 
         {/* Cliente */}
         <Route path="/cliente/actividades" element={<ActividadesCliente />} />
@@ -96,7 +107,10 @@ function App() {
         <Route path="/cliente/suscripciones" element={<MisSuscripciones />} />
         <Route path="/cliente/cuenta" element={<GestionCuentaCliente />} />
 
-        {/* Recepcionista */}
+        {/* Profesor (Kinesiólogo) */}
+        <Route path="/profesor/actividades" element={<MisActividadesProfesor />} />
+        <Route path="/profesor/actividades/:id/asistencias" element={<RegistrarAsistenciaProfesor />} />
+        <Route path="/profesor/asistencias" element={<MisActividadesProfesor />} />
 
         {/* Redirect por defecto */}
         <Route path="*" element={<Navigate to="/" replace />} />

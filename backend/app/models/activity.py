@@ -37,3 +37,4 @@ class Activity(Base):
     )
 
     room = relationship("Room", backref="activities")
+    attendances = relationship("Attendance", back_populates="activity")

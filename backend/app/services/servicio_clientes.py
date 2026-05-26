@@ -3,7 +3,9 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.reservation import Reservation
+from app.models.reintegration import ReintegrationRequest
 from fastapi import HTTPException
+from datetime import datetime, timedelta
 
 
 def obtener_todos_los_clientes(db: Session):
@@ -57,8 +59,67 @@ def obtener_condiciones_cliente(cliente_id: int, db: Session):
     }
 
 
+# HU Solicitar reintegro - flujo JWT: verifica estado y restricción de 24hs (Nahuel)
+def verificar_estado_y_tiempo_reintegro(cliente: User, db: Session):
+    if cliente.role != "client":
+        return {"status": "not_a_client", "can_request": False, "horas_transcurridas": 0, "tiempo_restante": "0 minutos"}
+
+    if cliente.account_status != "suspended":
+        return {"status": cliente.account_status, "can_request": False, "horas_transcurridas": 0, "tiempo_restante": "0 minutos"}
+
+    ahora = datetime.utcnow()
+    ultima_solicitud = db.query(ReintegrationRequest).filter(
+        ReintegrationRequest.user_id == cliente.id
+    ).order_by(ReintegrationRequest.created_at.desc()).first()
+
+    if ultima_solicitud:
+        fecha_solicitud = ultima_solicitud.created_at
+        if ahora.tzinfo is not None:
+            ahora = ahora.replace(tzinfo=None)
+        if fecha_solicitud.tzinfo is not None:
+            fecha_solicitud = fecha_solicitud.replace(tzinfo=None)
+
+        segundos_transcurridos = max(0, (ahora - fecha_solicitud).total_seconds())
+
+        if segundos_transcurridos >= 3600:
+            hace_cuanto_legible = str(int(segundos_transcurridos // 3600))
+        else:
+            hace_cuanto_legible = f"{max(1, int(segundos_transcurridos // 60))} minutos"
+
+        if segundos_transcurridos < 86400:
+            segundos_restantes = 86400 - segundos_transcurridos
+            horas_faltantes = int(segundos_restantes // 3600)
+            minutos_faltantes = int((segundos_restantes % 3600) // 60)
+            tiempo_restante = f"{horas_faltantes} horas y {minutos_faltantes} minutos" if horas_faltantes > 0 else f"{minutos_faltantes} minutos"
+            return {"status": "suspended", "can_request": False, "horas_transcurridas": hace_cuanto_legible, "tiempo_restante": tiempo_restante}
+
+    return {"status": "suspended", "can_request": True, "horas_transcurridas": "0", "tiempo_restante": "0 minutos"}
+
+
+# HU Solicitar reintegro - flujo JWT: registra solicitud usando objeto User autenticado (Nahuel)
+def registrar_reintegro_jwt(cliente: User, motivo: str, db: Session):
+    validacion = verificar_estado_y_tiempo_reintegro(cliente, db)
+
+    if cliente.account_status != "suspended":
+        raise HTTPException(status_code=400, detail="La cuenta no está suspendida o ya tiene una solicitud en curso.")
+
+    if not validacion["can_request"]:
+        raise HTTPException(status_code=400, detail=f"Debe esperar {validacion['tiempo_restante']} para volver a solicitar un reintegro.")
+
+    try:
+        nueva_solicitud = ReintegrationRequest(user_id=cliente.id, motivo=motivo)
+        db.add(nueva_solicitud)
+        # E1: cambia estado a pending_reintegration para que el admin lo vea como solicitud pendiente
+        cliente.account_status = "pending_reintegration"
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error interno al guardar la solicitud en la base de datos.")
+
+    return {"status": "success", "mensaje": "Solicitud de reintegro registrada con éxito."}
+
+
 def registrar_reintegro(cliente_id: int, motivo: str, db: Session):
-    """HU: Solicitar reintegro de cuenta. Motivo obligatorio. Solo valido si la cuenta esta suspendida."""
     cliente = db.query(User).filter(User.id == cliente_id, User.role == "client").first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")

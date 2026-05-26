@@ -87,6 +87,12 @@ const s = {
     border: '1px solid var(--color-borde)', fontSize: '14px', background: 'var(--color-fondo)',
     color: 'var(--color-texto)', cursor: 'pointer', boxSizing: 'border-box',
   },
+  alertaInline: { background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', padding: '16px', color: '#b45309', fontSize: '13px', marginBottom: '16px', lineHeight: '1.5' },
+  backdrop: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' },
+  modalContent: { background: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '450px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' },
+  modalTitulo: { fontSize: '18px', fontWeight: '700', color: '#1e293b', marginBottom: '12px' },
+  modalTexto: { fontSize: '14px', color: '#475569', lineHeight: '1.6', marginBottom: '20px' },
+  modalAlertaCritica: { background: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b', padding: '12px', borderRadius: '8px', fontSize: '13px', marginBottom: '20px' },
 };
 
 function formDesdeDatos(datos) {
@@ -107,6 +113,8 @@ function DetalleUsuario() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const [exito, setExito] = useState('');
+  const [mostrarAlertaClases, setMostrarAlertaClases] = useState(false);
+  const [mostrarModalConfirmacion, setMostrarModalConfirmacion] = useState(false);
 
   useEffect(() => {
     getUserById(id)
@@ -122,6 +130,9 @@ function DetalleUsuario() {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     setExito('');
+    if (name === 'especializacion' && usuario?.role === 'professor') {
+      setMostrarAlertaClases(value !== usuario.specialization && !!usuario.tiene_clases_activas);
+    }
   };
 
   const cancelar = () => {
@@ -130,20 +141,7 @@ function DetalleUsuario() {
     setExito('');
   };
 
-  const guardar = async (e) => {
-    e.preventDefault();
-    setError('');
-    setExito('');
-
-    if (!form.nombre.trim() || !form.apellido.trim()) {
-      setError('El nombre y apellido no pueden estar vacios.');
-      return;
-    }
-    if (usuario.role === 'professor' && !form.especializacion.trim()) {
-      setError('Un profesor debe tener una especializacion asignada.');
-      return;
-    }
-
+  const realizarGuardado = async () => {
     setGuardando(true);
     try {
       const payload = {
@@ -157,18 +155,44 @@ function DetalleUsuario() {
       }
       const actualizado = await modifyUser(id, payload);
       setUsuario(actualizado);
+      setMostrarAlertaClases(false);
+      setMostrarModalConfirmacion(false);
       setExito('Datos actualizados correctamente.');
     } catch (err) {
       setError(err.message || 'No se pudieron guardar los cambios.');
+      setMostrarModalConfirmacion(false);
     } finally {
       setGuardando(false);
     }
   };
 
+  const guardar = (e) => {
+    e.preventDefault();
+    setError('');
+    setExito('');
+
+    if (!form.nombre.trim() || !form.apellido.trim()) {
+      setError('El nombre y apellido no pueden estar vacios.');
+      return;
+    }
+    if (usuario.role === 'professor' && !form.especializacion.trim()) {
+      setError('Un profesor debe tener una especializacion asignada.');
+      return;
+    }
+
+    // E3: si el profesor cambia su especialidad, pedir confirmación antes de guardar
+    if (usuario.role === 'professor' && form.especializacion !== usuario.specialization) {
+      setMostrarModalConfirmacion(true);
+      return;
+    }
+
+    realizarGuardado();
+  };
+
   return (
     <LayoutPrivado titulo="Detalle de Usuario">
       <div style={s.cabecera}>
-        <Link to="/gestion/usuarios" style={s.volver}>&#8592; Volver</Link>
+        <Link to="/admin/usuarios" style={s.volver}>&#8592; Volver</Link>
         <p style={s.titulo}>Editar usuario</p>
       </div>
 
@@ -243,6 +267,12 @@ function DetalleUsuario() {
                 </div>
               )}
 
+              {mostrarAlertaClases && (
+                <div style={s.alertaInline}>
+                  <strong>Atención:</strong> Este profesor tiene clases activas asignadas.
+                  Al confirmar el cambio de especialidad, será desvinculado automáticamente de todos sus turnos vigentes.
+                </div>
+              )}
               <div style={s.botones}>
                 <button type="submit" style={guardando ? s.botonDisabled : s.botonGuardar} disabled={guardando}>
                   {guardando ? 'Guardando...' : 'Guardar cambios'}
@@ -255,6 +285,40 @@ function DetalleUsuario() {
           </div>
         )}
       </div>
+      {mostrarModalConfirmacion && (
+        <div style={s.backdrop}>
+          <div style={s.modalContent}>
+            <h3 style={s.modalTitulo}>¿Confirmar cambio de especialidad?</h3>
+            <p style={s.modalTexto}>
+              ¿Estás seguro de que deseas cambiar la especialidad a <strong>"{form.especializacion}"</strong>?
+            </p>
+            {usuario?.tiene_clases_activas ? (
+              <div style={s.modalAlertaCritica}>
+                <strong>RIESGO CRÍTICO:</strong> Este profesor tiene clases activas asignadas.
+                Al confirmar, será <strong>DESVINCULADO</strong> automáticamente de todos sus turnos vigentes.
+                Esta acción no se puede deshacer.
+              </div>
+            ) : (
+              <p style={{ ...s.modalTexto, fontSize: '13px', color: '#64748b' }}>
+                <em>Se modificará el perfil técnico del profesional.</em>
+              </p>
+            )}
+            <div style={s.botones}>
+              <button type="button" style={s.botonCancelar} onClick={() => setMostrarModalConfirmacion(false)}>
+                No, cancelar
+              </button>
+              <button
+                type="button"
+                onClick={realizarGuardado}
+                style={guardando ? s.botonDisabled : { ...s.botonGuardar, ...(usuario?.tiene_clases_activas ? { background: '#dc2626' } : {}) }}
+                disabled={guardando}
+              >
+                {guardando ? 'Guardando...' : 'Sí, confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutPrivado>
   );
 }

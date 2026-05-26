@@ -59,6 +59,7 @@ const FILTROS_VACIOS = { busqueda: '', estado: '' };
 
 function ListaClientes() {
   const rol = getRole();
+  const basePath = rol === 'admin' ? '/admin/clientes' : '/recepcionista/clientes';
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -169,8 +170,8 @@ function ListaClientes() {
                     </span>
                   </td>
                   <td style={s.td}>
-                    {rol === 'admin' && (
-                      <Link to={`/gestion/clientes/${c.id}`} style={s.link}>Ver detalle</Link>
+                    {(rol === 'admin' || rol === 'recepcionista') && (
+                      <Link to={`${basePath}/${c.id}`} style={s.link}>Ver detalle</Link>
                     )}
                   </td>
                 </tr>

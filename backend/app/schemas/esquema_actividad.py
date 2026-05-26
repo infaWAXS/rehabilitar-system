@@ -34,6 +34,7 @@ class ActivityCreate(BaseModel):
 
 
 class ActivityUpdate(BaseModel):
+    room_id: Optional[int] = None
     name: Optional[str] = None
     specialization: Optional[str] = None
     activity_type: Optional[str] = None
@@ -77,6 +78,16 @@ class ActivityResponse(BaseModel):
     description: Optional[str]
     requirements: Optional[str]
     status: str
+
+    class Config:
+        from_attributes = True
+
+
+class ActivityAvailabilityResponse(BaseModel):
+    activity_id: int
+    capacity: int
+    reserved_count: int
+    available_spots: int
 
     class Config:
         from_attributes = True

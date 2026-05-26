@@ -146,7 +146,7 @@ function CrearCuenta() {
   return (
     <LayoutPrivado titulo="Crear Cuenta">
       <div style={s.cabecera}>
-        <Link to="/gestion/usuarios" style={s.volver}>← Volver</Link>
+        <Link to="/admin/usuarios" style={s.volver}>← Volver</Link>
         <p style={s.titulo}>Crear cuenta de usuario</p>
       </div>
 
@@ -158,7 +158,7 @@ function CrearCuenta() {
               <div style={s.exito}>{exito}</div>
               <div style={s.botones}>
                 <button style={s.botonOtra} onClick={resetForm}>Crear otra cuenta</button>
-                <Link to="/gestion/usuarios" style={{ ...s.botonEnviar, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Ver lista</Link>
+                <Link to="/admin/usuarios" style={{ ...s.botonEnviar, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Ver lista</Link>
               </div>
             </div>
           )}
@@ -257,7 +257,7 @@ function CrearCuenta() {
                 <button type="submit" style={cargando ? s.botonDisabled : s.botonEnviar} disabled={cargando}>
                   {cargando ? 'Creando...' : 'Crear cuenta'}
                 </button>
-                <Link to="/gestion/usuarios" style={{ ...s.botonDisabled, background: 'transparent', color: 'var(--color-texto-suave)', border: '1px solid var(--color-borde)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+                <Link to="/admin/usuarios" style={{ ...s.botonDisabled, background: 'transparent', color: 'var(--color-texto-suave)', border: '1px solid var(--color-borde)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
                   Cancelar
                 </Link>
               </div>

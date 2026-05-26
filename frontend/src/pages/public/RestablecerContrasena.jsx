@@ -1,4 +1,10 @@
-// Responsable: Francis
+// HU Restablecer contraseña - Responsable: Francis
+// Como usuario o empleado registrado quiero restablecer la contraseña para poder acceder a mi cuenta.
+// Regla de negocio: la contraseña debe tener al menos 6 caracteres.
+// E1: token válido + contraseña válida + contraseñas coinciden → registra nueva contraseña y redirige a /login
+// E2: contraseña < 6 caracteres → informa que la contraseña debe tener al menos 6 caracteres
+// E3: contraseñas no coinciden → informa "Las contraseñas no coinciden."
+// E4: token inválido o ausente en URL → informa que el enlace es inválido o ha expirado
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import LayoutPublico from '../../layouts/LayoutPublico';

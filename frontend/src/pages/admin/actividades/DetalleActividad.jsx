@@ -5,6 +5,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getActivityById, getActivityClients } from '../../../services/activitiesService';
+import { getRole } from '../../../services/authService';
 
 const TIPO_LABEL = { fixed: 'Fija', individual: 'Individual' };
 
@@ -111,9 +112,13 @@ function DetalleActividad() {
     );
   }
 
+  const rol = getRole();
+  const actividadesBase = rol === 'admin' ? '/admin/actividades' : '/recepcionista/actividades';
+  const clientesBase = rol === 'admin' ? '/admin/clientes' : '/recepcionista/clientes';
+
   return (
     <LayoutPrivado titulo="Detalle de Actividad">
-      <Link to="/gestion/actividades" style={s.volver}>← Volver a actividades</Link>
+      <Link to={actividadesBase} style={s.volver}>← Volver a actividades</Link>
 
       {error && <div style={s.error}>{error}</div>}
 
@@ -252,7 +257,7 @@ function DetalleActividad() {
                   </td>
 
                   <td style={s.td}>
-                    <Link to={`/gestion/clientes/${c.user_id}`} style={s.link}>Ver ficha</Link>
+                    <Link to={`${clientesBase}/${c.user_id}`} style={s.link}>Ver ficha</Link>
                   </td>
                 </tr>
               ))}

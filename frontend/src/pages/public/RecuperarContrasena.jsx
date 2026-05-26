@@ -1,4 +1,7 @@
-// Responsable: Francis
+// HU Recuperar contraseña - Responsable: Francis
+// Como usuario registrado quiero recuperar la contraseña para poder acceder a mi cuenta.
+// E1: email registrado → el sistema envía un link al mail ingresado (demo: el link se muestra en pantalla)
+// E2: email no registrado → el sistema informa que el mail no se encuentra registrado
 import React, { useState } from 'react';
 import LayoutPublico from '../../layouts/LayoutPublico';
 import { requestPasswordRecovery } from '../../services/authService';

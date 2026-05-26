@@ -16,6 +16,11 @@ export function getActivityById(activityId) {
   return apiRequest(`/activities/${activityId}`);
 }
 
+/** Obtiene disponibilidad (cupos) de una actividad */
+export function getActivityAvailability(activityId) {
+  return apiRequest(`/activities/${activityId}/availability`);
+}
+
 /** Crea una actividad (solo admin) */
 export function createActivity(data) {
   return apiRequest('/activities', {
@@ -35,6 +40,11 @@ export function updateActivity(activityId, data) {
 /** Cancela una actividad (solo admin) — soft delete */
 export function cancelActivity(activityId) {
   return apiRequest(`/activities/${activityId}`, { method: 'DELETE' });
+}
+
+/** El profesor autenticado renuncia a su asignación en la actividad */
+export function resignActivity(activityId) {
+  return apiRequest(`/activities/${activityId}/resign`, { method: 'PATCH' });
 }
 
 /**

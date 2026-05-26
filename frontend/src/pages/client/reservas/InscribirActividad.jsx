@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
-import { reserveFixed, reserveIndividual } from '../../../services/reservationsService';
+import { reserveFixed, reserveIndividual, getMyReservations } from '../../../services/reservationsService';
 import { addToWaitlist } from '../../../services/waitlistService';
 import { getActivities } from '../../../services/activitiesService';
 
@@ -126,7 +126,7 @@ function normalizarActividad(a) {
     name: a.name || a.nombre || `Actividad ${a.id}`,
     price: Number(a.price ?? a.precio ?? 0),
     capacity: Number(a.capacity ?? a.cupos ?? 1),
-    reservationType: (a.reservation_type || a.tipo || 'fixed') === 'individual' ? 'individual' : 'fixed',
+    reservationType: (a.activity_type || a.reservation_type || a.tipo || 'fixed') === 'individual' ? 'individual' : 'fixed',
   };
 }
 
@@ -173,15 +173,27 @@ function InscribirActividad() {
 
   useEffect(() => {
     const idFromState = location.state?.actividadId;
-    getActivities()
-      .then((data) => {
+    Promise.all([
+      getActivities(),
+      getMyReservations().catch(() => []),
+    ])
+      .then(([data, reservations]) => {
         const lista = Array.isArray(data) ? data : (data.activities || []);
         const normalizadas = lista.map(normalizarActividad);
-        setActividades(normalizadas);
-        if (idFromState) {
+
+        // Excluir actividades en las que el usuario ya tiene una reserva activa
+        const idsInscritos = new Set(
+          (Array.isArray(reservations) ? reservations : [])
+            .filter((r) => r.status !== 'cancelled')
+            .map((r) => r.activity_id)
+        );
+        const disponibles = normalizadas.filter((a) => !idsInscritos.has(a.id));
+
+        setActividades(disponibles);
+        if (idFromState && !idsInscritos.has(Number(idFromState))) {
           setActividadId(String(idFromState));
-        } else if (normalizadas.length > 0) {
-          setActividadId(String(normalizadas[0].id));
+        } else if (disponibles.length > 0) {
+          setActividadId(String(disponibles[0].id));
         }
       })
       .catch(() => {
@@ -316,7 +328,7 @@ function InscribirActividad() {
                 <p style={{ color: 'var(--color-texto-suave)', fontSize: '14px' }}>Cargando actividades...</p>
               ) : actividades.length === 0 ? (
                 <p style={{ color: 'var(--color-texto-suave)', fontSize: '14px' }}>
-                  No hay actividades disponibles en este momento.
+                  No hay actividades disponibles para inscribirse. Es posible que ya estés inscripto en todas las actividades activas.
                 </p>
               ) : (
                 <>

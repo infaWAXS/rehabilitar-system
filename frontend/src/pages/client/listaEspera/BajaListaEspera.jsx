@@ -1,6 +1,8 @@
 // Responsable: Nahuel - HU Dar de baja en lista de espera
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
+import { getMyWaitlist, removeWaitlistItem } from '../../../services/waitlistService';
+import { getActivities } from '../../../services/activitiesService';
 
 const s = {
   wrapper: { maxWidth: '640px', margin: '0 auto' },
@@ -32,34 +34,98 @@ const s = {
   metaText: { fontSize: '13px', color: 'var(--color-texto-suave)', marginBottom: '6px' },
   botones: { display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' },
   btnPeligro: {
-    padding: '10px 20px', borderRadius: '8px', border: 'none',
-    background: '#dc2626', color: '#fff', fontWeight: '700', fontSize: '14px', cursor: 'pointer',
+    padding: '10px 20px',
+    borderRadius: '8px',
+    border: 'none',
+    background: '#dc2626',
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: '14px',
+    cursor: 'pointer',
+  },
+  btnPrimario: {
+    padding: '10px 24px',
+    borderRadius: '8px',
+    border: 'none',
+    background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))',
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: '14px',
+    cursor: 'pointer',
   },
   btnSecundario: {
-    padding: '10px 20px', borderRadius: '8px', border: '1px solid var(--color-borde)',
-    background: 'transparent', color: 'var(--color-texto-suave)', fontWeight: '600', fontSize: '14px', cursor: 'pointer',
+    padding: '10px 20px',
+    borderRadius: '8px',
+    border: '1px solid var(--color-borde)',
+    background: 'transparent',
+    color: 'var(--color-texto-suave)',
+    fontWeight: '600',
+    fontSize: '14px',
+    cursor: 'pointer',
   },
   exito: {
-    background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px',
-    padding: '14px 18px', color: '#15803d', fontSize: '14px', fontWeight: '600', marginBottom: '20px',
+    background: '#f0fdf4',
+    border: '1px solid #86efac',
+    borderRadius: '8px',
+    padding: '14px 18px',
+    color: '#15803d',
+    fontSize: '14px',
+    fontWeight: '600',
+    marginBottom: '20px',
   },
-  listaVacia: { textAlign: 'center', padding: '40px 20px', color: 'var(--color-texto-suave)', fontSize: '14px' }
+  listaVacia: {
+    textAlign: 'center',
+    padding: '40px 20px',
+    color: 'var(--color-texto-suave)',
+    fontSize: '14px'
+  }
 };
 
-function ListaEspera() {
-  const [listaEspera, setListaEspera] = useState([
-    { id: 101, nombre: 'Rehabilitar Codo', turno: 'Lunes 18:00 hs', posicion: 2, tipo: 'priority' },
-    { id: 102, nombre: 'Kinesiología Funcional', turno: 'Miércoles 10:30 hs', posicion: 5, tipo: 'general' }
-  ]);
-
+function BajaListaEspera() {
+  const [listaEspera, setListaEspera] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
   const [confirmandoId, setConfirmandoId] = useState(null);
   const [mensajeExito, setMensajeExito] = useState('');
 
-  const handleConfirmarBaja = (id, nombreActividad) => {
-    setListaEspera(prev => prev.filter(item => item.id !== id));
-    setConfirmandoId(null);
-    setMensajeExito(`Baja registrada con éxito. Se envió un mail confirmando la baja de "${nombreActividad}" a tu casilla.`);
-    setTimeout(() => setMensajeExito(''), 7000);
+  useEffect(() => { cargarLista(); }, []);
+
+  const cargarLista = async () => {
+    setCargando(true);
+    setError('');
+    try {
+      const [waitlist, actividades] = await Promise.all([
+        getMyWaitlist(),
+        getActivities(),
+      ]);
+      const actMap = Object.fromEntries(actividades.map(a => [a.id, a]));
+      setListaEspera(waitlist.map(item => {
+        const act = actMap[item.activity_id] || {};
+        return {
+          ...item,
+          nombre: act.name || `Actividad #${item.activity_id}`,
+          turno: act.schedule || act.time_slot || '—',
+          posicion: item.position,
+          tipo: item.waitlist_type,
+        };
+      }));
+    } catch (err) {
+      setError(err.message || 'Error al cargar la lista de espera.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const handleConfirmarBaja = async (id, nombreActividad) => {
+    try {
+      await removeWaitlistItem(id);
+      setListaEspera(prev => prev.filter(item => item.id !== id));
+      setConfirmandoId(null);
+      setMensajeExito(`Baja registrada con éxito. Se envió un mail confirmando la baja de "${nombreActividad}" a tu casilla.`);
+      setTimeout(() => setMensajeExito(''), 7000);
+    } catch (err) {
+      setError(err.message || 'Error al dar de baja.');
+    }
   };
 
   const handleCancelarBaja = () => {
@@ -67,16 +133,19 @@ function ListaEspera() {
   };
 
   return (
-    <LayoutPrivado titulo="Lista de Espera">
+    <LayoutPrivado titulo="Dar de Baja en Lista de Espera">
       <div style={s.wrapper}>
-        <h2 style={s.tituloPage}>Lista de Espera</h2>
+        <h2 style={s.tituloPage}>Dar de Baja en Lista de Espera</h2>
         <p style={s.descripcionPage}>
-          Ver y gestionar tu posición en la lista de espera para actividades.
+          Selecciona la actividad de la cual deseas retirarte de la lista de espera.
         </p>
 
         {mensajeExito && <div style={s.exito}>{mensajeExito}</div>}
+        {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '16px' }}>{error}</div>}
 
-        {listaEspera.length === 0 ? (
+        {cargando ? (
+          <div style={s.card}><p style={s.listaVacia}>Cargando lista de espera...</p></div>
+        ) : listaEspera.length === 0 ? (
           <div style={s.card}>
             <p style={s.listaVacia}>No te encuentras en la lista de espera de ninguna actividad en este momento.</p>
           </div>
@@ -134,4 +203,4 @@ function ListaEspera() {
   );
 }
 
-export default ListaEspera;
+export default BajaListaEspera;

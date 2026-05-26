@@ -2,7 +2,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getToken, getRole, getUserName, clearUserData, logout } from '../../services/authService';
-import { getActivities } from '../../services/activitiesService';
+import { getActivities, getActivityById, getActivityAvailability } from '../../services/activitiesService';
+import { getMyReservations } from '../../services/reservationsService';
+import FiltroActividades from './FiltroActividades';
 
 /* ── Menús por rol (no-admin) ──────────────────────────── */
 const MENUS_ROL = {
@@ -12,24 +14,24 @@ const MENUS_ROL = {
     { label: 'Mi Perfil',           ruta: '/perfil' },
   ],
   professor: [
-    { label: 'Actividades', ruta: '/gestion/actividades' },
-    { label: 'Asistencias', ruta: '/gestion/asistencias' },
+    { label: 'Actividades', ruta: '/profesor/actividades' },
+    { label: 'Asistencias', ruta: '/profesor/asistencias' },
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
   receptionist: [
-    { label: 'Actividades', ruta: '/gestion/actividades' },
-    { label: 'Clientes',    ruta: '/gestion/clientes' },
+    { label: 'Actividades', ruta: '/recepcionista/actividades' },
+    { label: 'Clientes',    ruta: '/recepcionista/clientes' },
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
 };
 
 /* ── Menú del sidebar de admin ─────────────────────────── */
 const MENU_ADMIN = [
-  { label: 'Usuarios',      ruta: '/gestion/usuarios' },
-  { label: 'Clientes',      ruta: '/gestion/clientes' },
-  { label: 'Aptos Físicos', ruta: '/gestion/clientes/aptos-fisicos' },
-  { label: 'Actividades',   ruta: '/gestion/actividades' },
-  { label: 'Asistencias',   ruta: '/gestion/asistencias' },
+  { label: 'Usuarios',      ruta: '/admin/usuarios' },
+  { label: 'Clientes',      ruta: '/admin/clientes' },
+  { label: 'Aptos Físicos', ruta: '/admin/clientes/aptos-fisicos' },
+  { label: 'Actividades',   ruta: '/admin/actividades' },
+  { label: 'Asistencias',   ruta: '/admin/asistencias' },
 ];
 
 const s = {
@@ -359,6 +361,15 @@ const s = {
     background: 'var(--color-primario)', color: '#fff', fontSize: '13px', fontWeight: '600',
     cursor: 'pointer',
   },
+  actBtnYaInscripto: {
+    flex: 1, padding: '8px 0', borderRadius: '7px', border: '1px solid #86efac',
+    background: '#f0fdf4', color: '#15803d', fontSize: '13px', fontWeight: '600',
+    cursor: 'default',
+  },
+  actModalBtnYaInscripto: {
+    flex: 1, padding: '11px 0', borderRadius: '8px', border: '1px solid #86efac',
+    background: '#f0fdf4', color: '#15803d', fontWeight: '600', fontSize: '14px', cursor: 'default',
+  },
   /* Modal detalle actividad */
   actModalOverlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
@@ -456,7 +467,10 @@ function InicioPublico() {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [confirmarVisible, setConfirmarVisible] = useState(false);
   const [actividades, setActividades] = useState([]);
+  const [actividadesFiltradas, setActividadesFiltradas] = useState([]);
   const [actividadDetalle, setActividadDetalle] = useState(null);
+  const [actividadesInscritas, setActividadesInscritas] = useState(new Set());
+  const [cuposMap, setCuposMap] = useState({});
   const dropdownRef = useRef(null);
 
   const token   = getToken();
@@ -475,6 +489,37 @@ function InicioPublico() {
       .then((data) => setActividades(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
+
+  // Cargar cupos disponibles en tiempo real para cada actividad
+  useEffect(() => {
+    if (actividades.length === 0) return;
+    Promise.allSettled(actividades.map((a) => getActivityAvailability(a.id)))
+      .then((results) => {
+        const mapa = {};
+        results.forEach((res, i) => {
+          if (res.status === 'fulfilled') {
+            mapa[actividades[i].id] = res.value.available_spots;
+          }
+        });
+        setCuposMap(mapa);
+      })
+      .catch(() => {});
+  }, [actividades]);
+
+  // Cargar inscripciones activas del cliente para deshabilitar botones
+  useEffect(() => {
+    if (role !== 'client') return;
+    getMyReservations()
+      .then((data) => {
+        const ids = new Set(
+          (Array.isArray(data) ? data : [])
+            .filter((r) => r.status !== 'cancelled')
+            .map((r) => r.activity_id)
+        );
+        setActividadesInscritas(ids);
+      })
+      .catch(() => {});
+  }, [role]);
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
@@ -498,6 +543,18 @@ function InicioPublico() {
   const handleInscribirse = (act) => {
     if (!estaLogueado) { navigate('/login'); return; }
     navigate('/cliente/reservas/inscribir', { state: { actividadId: act.id } });
+  };
+
+  const handleVerActividad = async (actividad) => {
+    try {
+      const [detalle, disponibilidad] = await Promise.all([
+        getActivityById(actividad.id),
+        getActivityAvailability(actividad.id),
+      ]);
+      setActividadDetalle({ ...detalle, ...disponibilidad });
+    } catch {
+      setActividadDetalle(actividad);
+    }
   };
 
   const pedirConfirmacion = () => {
@@ -539,9 +596,9 @@ function InicioPublico() {
               <div style={s.cardTitle}>Hola, {nombre}</div>
               <p style={s.cardText}>Usá el menú arriba a la derecha para navegar.</p>
               {role === 'client'       && <Link to="/cliente/actividades"    style={s.cardLink}>Ver actividades →</Link>}
-              {role === 'professor'    && <Link to="/gestion/actividades" style={s.cardLink}>Mis actividades →</Link>}
-              {role === 'receptionist' && <Link to="/gestion/actividades" style={s.cardLink}>Ver actividades →</Link>}
-              {role === 'admin'        && <Link to="/gestion/usuarios"    style={s.cardLink}>Gestión de usuarios →</Link>}
+              {role === 'professor'    && <Link to="/profesor/actividades"     style={s.cardLink}>Mis actividades →</Link>}
+              {role === 'receptionist' && <Link to="/recepcionista/actividades" style={s.cardLink}>Ver actividades →</Link>}
+              {role === 'admin'        && <Link to="/admin/usuarios"            style={s.cardLink}>Gestión de usuarios →</Link>}
             </>
           )}
         </div>
@@ -570,11 +627,18 @@ function InicioPublico() {
 
       <section style={s.seccion}>
         <h2 style={s.seccionTitulo}>Salas Disponibles</h2>
-        {actividades.length === 0 ? (
-          <p style={s.actVacio}>No hay actividades disponibles en este momento.</p>
+
+        <FiltroActividades actividades={actividades} onChange={setActividadesFiltradas} />
+
+        {actividadesFiltradas.length === 0 ? (
+          <p style={s.actVacio}>
+            {actividades.length === 0
+              ? 'No hay actividades disponibles en este momento.'
+              : 'No hay actividades que coincidan con los filtros.'}
+          </p>
         ) : (
           <div style={s.gridActividades}>
-            {actividades.map((a) => (
+            {actividadesFiltradas.map((a) => (
               <div key={a.id} style={s.actCard}>
                 <span style={s.actSala}>Sala {a.room_id}</span>
                 <span style={s.actNombre}>{a.name}</span>
@@ -589,10 +653,15 @@ function InicioPublico() {
                   </span>
                 )}
                 {a.professor && <span style={s.actProfesor}>👤 {a.professor}</span>}
+                <span style={s.actHorario}>🪑 {cuposMap[a.id] !== undefined ? cuposMap[a.id] : a.capacity} cupos disponibles</span>
                 <span style={s.actPrecio}>${Number(a.price).toLocaleString('es-AR')}</span>
                 <div style={s.actBotones}>
-                  <button style={s.actBtnVer} onClick={() => setActividadDetalle(a)}>Ver</button>
-                  <button style={s.actBtnInscribir} onClick={() => handleInscribirse(a)}>Inscribirse</button>
+                  <button style={s.actBtnVer} onClick={() => handleVerActividad(a)}>Ver</button>
+                  {(role === 'client' || !estaLogueado) && (
+                    actividadesInscritas.has(a.id)
+                      ? <span style={s.actBtnYaInscripto}>Ya inscripto</span>
+                      : <button style={s.actBtnInscribir} onClick={() => handleInscribirse(a)}>Inscribirse</button>
+                  )}
                 </div>
               </div>
             ))}
@@ -746,8 +815,8 @@ function InicioPublico() {
               <span>${Number(actividadDetalle.price).toLocaleString('es-AR')}</span>
             </div>
             <div style={s.actModalRow}>
-              <span style={s.actModalLabel}>Cupos</span>
-              <span>{actividadDetalle.capacity}</span>
+              <span style={s.actModalLabel}>Cupos disponibles</span>
+              <span>{actividadDetalle.available_spots ?? actividadDetalle.capacity} / {actividadDetalle.capacity}</span>
             </div>
             {actividadDetalle.description && (
               <div style={s.actModalRow}>
@@ -766,9 +835,13 @@ function InicioPublico() {
 
             <div style={s.actModalActions}>
               <button style={s.actModalBtnCerrar} onClick={() => setActividadDetalle(null)}>Cerrar</button>
-              <button style={s.actModalBtnInscribir} onClick={() => { setActividadDetalle(null); handleInscribirse(actividadDetalle); }}>
-                Inscribirse
-              </button>
+              {(role === 'client' || !estaLogueado) && (
+                actividadesInscritas.has(actividadDetalle?.id)
+                  ? <span style={s.actModalBtnYaInscripto}>Ya inscripto</span>
+                  : <button style={s.actModalBtnInscribir} onClick={() => { setActividadDetalle(null); handleInscribirse(actividadDetalle); }}>
+                      Inscribirse
+                    </button>
+              )}
             </div>
           </div>
         </div>

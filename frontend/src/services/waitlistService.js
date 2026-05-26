@@ -17,3 +17,8 @@ export function removeWaitlistItem(waitlistId) {
     method: 'DELETE',
   });
 }
+
+// HU: Listar lista de espera - admin y recepcionista
+export function getActivityWaitlist(activityId) {
+  return apiRequest(`/waitlist/activity/${activityId}`);
+}

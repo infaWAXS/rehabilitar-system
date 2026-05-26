@@ -69,6 +69,8 @@ class UserResponse(BaseModel):
 
     medical_certificate_status: Optional[str] = None
 
+    tiene_clases_activas: Optional[bool] = None
+
     class Config:
         from_attributes = True
     
