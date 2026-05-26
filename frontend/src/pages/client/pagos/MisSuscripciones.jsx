@@ -1,8 +1,8 @@
 // Responsable: Ezequiel
 // HU: Ver suscripciones + Pagar Mercado Pago
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
-import { getPlans, mercadoPagoCheckout } from '../../../services/paymentsService';
+import { getPlans, getMyPlan, mercadoPagoCheckout } from '../../../services/paymentsService';
 
 const DURACION = (dias) => {
   if (dias === 30)  return '1 mes';
@@ -31,11 +31,19 @@ const s = {
   cardDesc: { fontSize: '13px', color: 'var(--color-texto-suave)', flex: 1 },
   cardPrecio: { fontSize: '22px', fontWeight: '800', color: 'var(--color-primario)' },
   cardDetalle: { fontSize: '12px', color: 'var(--color-texto-suave)' },
-  botonPagar: {
+  botonPagar: (deshabilitado) => ({
     marginTop: '8px', padding: '10px', borderRadius: '8px', border: 'none',
-    background: 'var(--color-primario)', color: '#fff',
-    fontWeight: '600', fontSize: '14px', cursor: 'pointer', width: '100%',
+    background: deshabilitado ? '#9ca3af' : 'var(--color-primario)',
+    color: '#fff', fontWeight: '600', fontSize: '14px',
+    cursor: deshabilitado ? 'not-allowed' : 'pointer', width: '100%',
+  }),
+  planActivo: {
+    background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '12px',
+    padding: '14px 18px', marginBottom: '24px',
+    display: 'flex', alignItems: 'center', gap: '12px',
   },
+  planActivoTexto: { fontSize: '14px', color: '#15803d', fontWeight: '600' },
+  planActivoSub: { fontSize: '12px', color: '#166534' },
   vacio: {
     textAlign: 'center', padding: '48px 24px', color: 'var(--color-texto-suave)',
     fontSize: '14px', background: 'var(--color-fondo-card)', borderRadius: '12px',
@@ -80,6 +88,7 @@ export default function MisSuscripciones() {
   const [planes, setPlanes]         = useState([]);
   const [cargando, setCargando]     = useState(true);
   const [errorCarga, setErrorCarga] = useState('');
+  const [miPlan, setMiPlan]         = useState(null); // { id, name, coverage_type, end_date } o null
 
   // Modal
   const [planSeleccionado, setPlanSeleccionado] = useState(null);
@@ -87,9 +96,18 @@ export default function MisSuscripciones() {
   const [pagando, setPagando]                   = useState(false);
   const [resultado, setResultado]               = useState(null); // { tipo, mensaje }
 
+  const cargarMiPlan = useCallback(() => {
+    getMyPlan()
+      .then((data) => setMiPlan(data.es_abonado ? data.plan : null))
+      .catch(() => setMiPlan(null));
+  }, []);
+
   useEffect(() => {
-    getPlans()
-      .then(setPlanes)
+    Promise.all([getPlans(), getMyPlan()])
+      .then(([planesData, miPlanData]) => {
+        setPlanes(planesData);
+        setMiPlan(miPlanData.es_abonado ? miPlanData.plan : null);
+      })
       .catch(() => setErrorCarga('No se pudieron cargar los planes.'))
       .finally(() => setCargando(false));
   }, []);
@@ -113,6 +131,7 @@ export default function MisSuscripciones() {
     try {
       const res = await mercadoPagoCheckout(planSeleccionado.id, escenario);
       setResultado({ tipo: res.success ? 'success' : 'warn', mensaje: res.message });
+      if (res.success) cargarMiPlan(); // actualizar badge de plan activo
     } catch (err) {
       const detalle = err?.detail || 'Error de conexión con el servidor del banco. Intente nuevamente.';
       setResultado({ tipo: 'error', mensaje: detalle });
@@ -127,6 +146,17 @@ export default function MisSuscripciones() {
       <p style={s.subtitulo}>Comparar opciones disponibles y suscribirse al plan que mejor se adapte a tus necesidades.</p>
 
       {errorCarga && <div style={s.alerta('error')}>{errorCarga}</div>}
+
+      {/* Banner plan activo */}
+      {miPlan && (
+        <div style={s.planActivo}>
+          <span style={{ fontSize: '24px' }}>✅</span>
+          <div>
+            <div style={s.planActivoTexto}>Abonado — {miPlan.name}</div>
+            <div style={s.planActivoSub}>{miPlan.coverage_type} · Válido hasta {miPlan.end_date}</div>
+          </div>
+        </div>
+      )}
 
       {cargando ? (
         <div style={s.vacio}>Cargando planes...</div>
@@ -147,8 +177,13 @@ export default function MisSuscripciones() {
               <div style={s.cardPrecio}>${Number(plan.price).toLocaleString('es-AR')}</div>
               <div style={s.cardDetalle}>Duración: {DURACION(plan.duration_days)}</div>
               <div style={s.cardDetalle}>Cobertura: {plan.coverage_type}</div>
-              <button style={s.botonPagar} onClick={() => abrirModal(plan)}>
-                Suscribirse
+              <button
+                style={s.botonPagar(!!miPlan)}
+                onClick={() => !miPlan && abrirModal(plan)}
+                disabled={!!miPlan}
+                title={miPlan ? 'Ya tenés un plan activo' : undefined}
+              >
+                {miPlan ? 'Plan activo' : 'Suscribirse'}
               </button>
             </div>
           ))}

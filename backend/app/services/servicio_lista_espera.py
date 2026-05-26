@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from app.models.waitlist import Waitlist
 from app.models.user import User
 from app.exceptions.http_exceptions import user_not_found_exception
+from app.utils.subscriptions import is_abonado
 
 
 # Añade un usuario a la lista de espera de una actividad
@@ -40,14 +41,8 @@ def add_to_waitlist(user_id: int, activity_id: int, db: Session):
             detail="El usuario ya está en la lista de espera de esta actividad"
         )
 
-    # Determinar cola: abonado -> "priority", resto -> "general"
-    es_abonado = db.query(Reservation).filter(
-        Reservation.user_id == user_id,
-        Reservation.reservation_type == "fixed",
-        Reservation.status != "cancelled"
-    ).first() is not None
-
-    tipo_cola = "priority" if es_abonado else "general"
+    # Determinar cola: abonado (UserPlan activo) -> "priority", resto -> "general"
+    tipo_cola = "priority" if is_abonado(user_id, db) else "general"
 
     # Posición dentro de su propia cola (independiente de la otra)
     max_position = db.query(func.max(Waitlist.position)).filter(

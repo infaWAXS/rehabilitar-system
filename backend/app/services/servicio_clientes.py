@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.reservation import Reservation
 from app.models.reintegration import ReintegrationRequest
+from app.utils.subscriptions import is_abonado
 from fastapi import HTTPException
 from datetime import datetime, timedelta
 
@@ -12,17 +13,8 @@ def obtener_todos_los_clientes(db: Session):
     clientes = db.query(User).filter(User.role == "client").all()
     resultado = []
     for c in clientes:
-        # NOTA: un cliente es "abonado" cuando tiene una suscripcion mensual activa.
-        # La suscripcion mensual incluye 4-5 clases por semana (actividades fijas).
-        # TODO (Ezequiel): cuando se implemente el modelo Subscription, reemplazar
-        # esta query por: db.query(Subscription).filter(Subscription.user_id == c.id,
-        #   Subscription.status == "active").first() is not None
-        # Por ahora se aproxima consultando si tiene reservas fijas activas.
-        es_abonado = db.query(Reservation).filter(
-            Reservation.user_id == c.id,
-            Reservation.reservation_type == "fixed",
-            Reservation.status != "cancelled",
-        ).first() is not None
+        # Un cliente es "abonado" cuando tiene un UserPlan activo y vigente.
+        es_abonado_val = is_abonado(c.id, db)
         resultado.append({
             "id": c.id,
             "name": c.name,
@@ -35,7 +27,7 @@ def obtener_todos_los_clientes(db: Session):
             "dni_verified": c.dni_verified,
             "medical_certificate_status": c.medical_certificate_status,
             "created_at": c.created_at,
-            "es_abonado": es_abonado,
+            "es_abonado": es_abonado_val,
         })
     return resultado
 

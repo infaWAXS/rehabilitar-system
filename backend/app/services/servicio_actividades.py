@@ -10,6 +10,7 @@ from app.models.room import Room
 from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
+from app.utils.subscriptions import is_abonado
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
@@ -398,7 +399,7 @@ def listar_clientes_actividad(activity_id: int, db: Session) -> List[ClientCondi
                 email=user.email,
                 reservation_type=res.reservation_type,
                 payment_status=res.payment_status,
-                es_abonado=(res.reservation_type == "fixed"),
+                es_abonado=is_abonado(user.id, db),
             )
         )
     return resultado

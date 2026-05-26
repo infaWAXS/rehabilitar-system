@@ -20,6 +20,7 @@ Credenciales de acceso:
 
 import sys
 import os
+from datetime import date, timedelta
 
 # Asegura que el directorio raíz del backend esté en el path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,6 +29,7 @@ from database.connection import SessionLocal, engine, Base
 from app.models.user import User
 from app.models.room import Room
 from app.models.plan import Plan
+from app.models.user_plan import UserPlan
 from app.utils.security import hash_password
 
 # Importar todos los modelos para que Base cree las tablas si no existen
@@ -68,6 +70,14 @@ USUARIOS_MOCK = [
         "role": "professor",
         "dni": "44444444",
         "specialization": "Kinesiología deportiva",
+    },
+    {
+        "name": "Ana",
+        "lastname": "Abonada",
+        "email": "abonado@rehabilitar.com",
+        "password": "Abonado123",
+        "role": "client",
+        "dni": "55555555",
     },
 ]
 
@@ -192,6 +202,32 @@ def seed():
             print(f"[seed_mock] Planes creados: {', '.join(planes_creados)}")
         else:
             print("[seed_mock] Planes: ya existían, sin cambios.")
+    finally:
+        db.close()
+
+    # ── Seed del UserPlan del usuario abonado ──────────────────────────────────
+    db = SessionLocal()
+    try:
+        usuario_abonado = db.query(User).filter(User.email == "abonado@rehabilitar.com").first()
+        plan_completo = db.query(Plan).filter(Plan.name == "Plan Mensual Completo").first()
+        if usuario_abonado and plan_completo:
+            ya_tiene_plan = db.query(UserPlan).filter(
+                UserPlan.user_id == usuario_abonado.id,
+                UserPlan.status == "active",
+            ).first()
+            if not ya_tiene_plan:
+                hoy = date.today()
+                db.add(UserPlan(
+                    user_id=usuario_abonado.id,
+                    plan_id=plan_completo.id,
+                    start_date=hoy,
+                    end_date=hoy + timedelta(days=plan_completo.duration_days),
+                    status="active",
+                ))
+                db.commit()
+                print("[seed_mock] UserPlan abonado@rehabilitar.com → Plan Mensual Completo creado.")
+            else:
+                print("[seed_mock] UserPlan abonado@rehabilitar.com: ya existía, sin cambios.")
     finally:
         db.close()
 

@@ -5,6 +5,7 @@ import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { reserveFixed, reserveIndividual, getMyReservations } from '../../../services/reservationsService';
 import { addToWaitlist } from '../../../services/waitlistService';
 import { getActivities } from '../../../services/activitiesService';
+import { getMyPlan } from '../../../services/paymentsService';
 
 const PASOS = ['Actividad', 'Metodo de pago', 'Confirmacion', 'Resultado'];
 
@@ -176,8 +177,9 @@ function InscribirActividad() {
     Promise.all([
       getActivities(),
       getMyReservations().catch(() => []),
+      getMyPlan().catch(() => ({ es_abonado: false })),
     ])
-      .then(([data, reservations]) => {
+      .then(([data, reservations, planData]) => {
         const lista = Array.isArray(data) ? data : (data.activities || []);
         const normalizadas = lista.map(normalizarActividad);
 
@@ -190,6 +192,7 @@ function InscribirActividad() {
         const disponibles = normalizadas.filter((a) => !idsInscritos.has(a.id));
 
         setActividades(disponibles);
+        setEsAbonado(!!planData.es_abonado);
         if (idFromState && !idsInscritos.has(Number(idFromState))) {
           setActividadId(String(idFromState));
         } else if (disponibles.length > 0) {
@@ -357,10 +360,11 @@ function InscribirActividad() {
                     Tu situacion
                   </p>
 
-                  <label style={s.checkRow}>
-                    <input type="checkbox" checked={esAbonado} onChange={(e) => setEsAbonado(e.target.checked)} />
-                    Tengo suscripcion activa
-                  </label>
+                  <div style={{ fontSize: '13px', marginBottom: '8px', color: esAbonado ? '#15803d' : 'var(--color-texto-suave)' }}>
+                    {esAbonado
+                      ? '✅ Sos abonado — podés usar tu suscripción activa.'
+                      : 'No tenés suscripción activa.'}
+                  </div>
                   <label style={s.checkRow}>
                     <input type="checkbox" checked={tieneCredito} onChange={(e) => setTieneCredito(e.target.checked)} />
                     Tengo credito disponible

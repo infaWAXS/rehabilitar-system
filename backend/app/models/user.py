@@ -27,3 +27,4 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     attendances = relationship("Attendance", back_populates="user")
+    user_plans = relationship("UserPlan", back_populates="user")
