@@ -9,11 +9,12 @@ from app.schemas.esquema_reservas import ReservationCreate, ReservationResponse,
 from app.utils.dependencies import get_current_user
 from app.models.user import User
 from app.services.servicio_reservas import (
-    create_reservation, 
-    get_user_reservations, 
+    create_reservation,
+    get_user_reservations,
     get_user_reservations_enriched,
     get_reservation_by_id,
     cancel_reservation,
+    cancel_reservation_with_policy,
     update_reservation_payment_status,
     confirm_reservation
 )
@@ -97,21 +98,14 @@ def get_reservation(
     return reservation
 
 
-# Cancelar reserva
-@router.put("/{reservation_id}/cancel", response_model=ReservationResponse)
+# HU: Cancelar turno — aplica políticas según tipo de cliente y anticipación
+@router.put("/{reservation_id}/cancel")
 def cancel_user_reservation(
     reservation_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    reservation = get_reservation_by_id(reservation_id, db)
-    
-    # Verificar que el usuario sea el propietario o admin
-    if reservation.user_id != current_user.id and current_user.role != "admin":
-        from app.exceptions.http_exceptions import forbidden_exception
-        raise forbidden_exception()
-    
-    return cancel_reservation(reservation_id, db)
+    return cancel_reservation_with_policy(reservation_id, current_user.id, db)
 
 
 # Actualizar estado de pago

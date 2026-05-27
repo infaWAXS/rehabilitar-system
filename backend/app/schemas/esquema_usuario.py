@@ -15,7 +15,7 @@ class UserCreate(BaseModel):
     lastname: str
     email: EmailStr
     password: str
-    dni: str
+    dni: Optional[str] = None
     direccion: Optional[str] = None
     telefono: Optional[str] = None
     role: Optional[str] = "client"           # client | admin | receptionist | professor

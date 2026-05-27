@@ -15,6 +15,7 @@ const MENUS_ROL = {
   ],
   professor: [
     { label: 'Actividades', ruta: '/profesor/actividades' },
+    { label: 'Asistencias', ruta: '/profesor/asistencias' },
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
   receptionist: [

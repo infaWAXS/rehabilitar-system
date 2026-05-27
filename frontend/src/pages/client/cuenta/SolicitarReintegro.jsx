@@ -27,13 +27,6 @@ function SolicitarReintegro() {
   const navigate = useNavigate();
   const token = localStorage.getItem('access_token');
 
-  // Limpiar el token temporal al salir de la página (fue guardado solo para este flujo)
-  useEffect(() => {
-    return () => {
-      localStorage.removeItem('access_token');
-    };
-  }, []);
-
   const [motivo, setMotivo] = useState('');
   const [cargando, setCargando] = useState(true);
   const [enviando, setEnviando] = useState(false);

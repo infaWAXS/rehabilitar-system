@@ -96,6 +96,6 @@ Columnas:
 
 | HU | Responsable | Escenario resumido | Front | Back | Estado |
 |---|---|---|---|---|---|
-| Cancelar turno | Ezequiel |  |  |  |  |
+| Cancelar turno | Ezequiel | E1: abonado +72 h → turno cancelado + crédito otorgado. E2: abonado 24-48 h, 0 cancels mes → 30 % desc próxima cuota. E3: abonado 24-48 h, 1 cancel → 20 % desc. E4: abonado 24-48 h, ≥2 cancels → sin descuento. E5: abonado o no abonado <24 h → pierde turno, sin beneficio. E6: clase en curso o finalizada → error 400. E7: no abonado +24 h → devuelve seña. E8: no abonado <24 h → pierde turno y seña. | `/cliente/reservas` → `MisReservas.jsx` (botón "Cancelar turno" en cada tarjeta, deshabilitado si la clase ya comenzó; modal de confirmación; banner con resultado) | `PUT /reservations/{id}/cancel` → `rutas_reservas.py` → `cancel_reservation_with_policy()` en `servicio_reservas.py` (chequea horas restantes, `is_abonado()`, cuenta cancels del mes) | Front ✓ / Back ✓ |
 
 

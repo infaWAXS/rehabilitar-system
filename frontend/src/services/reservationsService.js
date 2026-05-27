@@ -20,3 +20,8 @@ export function reserveIndividual(data) {
     body: JSON.stringify(data),
   });
 }
+
+// HU: Cancelar turno
+export function cancelReservation(reservationId) {
+  return apiRequest(`/reservations/${reservationId}/cancel`, { method: 'PUT' });
+}

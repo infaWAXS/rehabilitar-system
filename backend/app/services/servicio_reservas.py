@@ -118,22 +118,103 @@ def get_reservation_by_id(reservation_id: int, db: Session):
     return reservation
 
 
-# Cancela una reserva
+# Cancela una reserva (stub simple, sin lógica de negocio)
 def cancel_reservation(reservation_id: int, db: Session):
-    """Cancela una reserva existente"""
+    """Cancela una reserva existente (sin aplicar políticas)"""
     reservation = get_reservation_by_id(reservation_id, db)
-    
+
     if reservation.status == "cancelled":
-        raise HTTPException(
-            status_code=400,
-            detail="La reserva ya ha sido cancelada"
-        )
-    
+        raise HTTPException(status_code=400, detail="La reserva ya ha sido cancelada")
+
     reservation.status = "cancelled"
     db.commit()
     db.refresh(reservation)
-    
     return reservation
+
+
+# HU: Cancelar turno — aplica reglas de negocio según tipo de cliente y anticipación
+def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Session):
+    """
+    Cancela una reserva aplicando la política según:
+    - si el cliente es abonado o no
+    - cuántas horas faltan para la clase
+    - cantidad de cancelaciones previas en el mes (solo para abonados en franja 24-48h)
+
+    Resultados posibles:
+      credit           → abonado + > 48 h
+      discount_30      → abonado + 24-48 h, primera cancelación del mes
+      discount_20      → abonado + 24-48 h, segunda cancelación del mes
+      no_benefit       → abonado + < 24 h  | abonado + ≥ 3 cancelaciones del mes
+      deposit_returned → no abonado + > 24 h
+      no_refund        → no abonado + ≤ 24 h
+    """
+    from datetime import datetime, date as date_cls
+    from app.utils.subscriptions import is_abonado
+
+    reservation = get_reservation_by_id(reservation_id, db)
+
+    if reservation.user_id != user_id:
+        raise HTTPException(status_code=403, detail="No tenés permiso para cancelar esta reserva")
+
+    if reservation.status == "cancelled":
+        raise HTTPException(status_code=400, detail="La reserva ya fue cancelada")
+
+    now = datetime.now()
+    class_start = reservation.reservation_date
+
+    # Escenario 6: clase ya comenzó o finalizó
+    if class_start <= now:
+        raise HTTPException(status_code=400, detail="No se puede cancelar: la clase está en curso o ya finalizó")
+
+    hours_until = (class_start - now).total_seconds() / 3600
+
+    abonado = is_abonado(user_id, db)
+
+    # Contar cancelaciones previas del mes actual (para abonados en franja 24-48 h)
+    today = date_cls.today()
+    inicio_mes = datetime(today.year, today.month, 1)
+    prev_cancellations = db.query(Reservation).filter(
+        Reservation.user_id == user_id,
+        Reservation.status == "cancelled",
+        Reservation.updated_at >= inicio_mes,
+    ).count()
+
+    # ── Reglas de negocio ──────────────────────────────────────────────────────
+    if abonado:
+        if hours_until > 48:
+            result = "credit"
+            message = "Turno cancelado. Se te otorgó un crédito para tu próxima clase."
+        elif hours_until >= 24:
+            if prev_cancellations == 0:
+                result = "discount_30"
+                message = "Turno cancelado. Tendrás un 30 % de descuento en tu próxima cuota."
+            elif prev_cancellations == 1:
+                result = "discount_20"
+                message = "Turno cancelado. Tendrás un 20 % de descuento en tu próxima cuota."
+            else:
+                result = "no_benefit"
+                message = "Turno cancelado. No aplica descuento (ya cancelaste 2 o más veces este mes)."
+        else:
+            result = "no_benefit"
+            message = "Turno cancelado. No aplica devolución: cancelaste con menos de 24 hs de anticipación."
+    else:
+        if hours_until > 24:
+            result = "deposit_returned"
+            message = "Turno cancelado. Se te devuelve la seña."
+        else:
+            result = "no_refund"
+            message = "Turno cancelado. No se devuelve la seña: cancelaste con menos de 24 hs de anticipación."
+
+    reservation.status = "cancelled"
+    db.commit()
+    db.refresh(reservation)
+
+    return {
+        "id": reservation.id,
+        "result": result,
+        "message": message,
+        "hours_until_class": round(hours_until, 1),
+    }
 
 
 # Actualiza el estado de pago de una reserva
