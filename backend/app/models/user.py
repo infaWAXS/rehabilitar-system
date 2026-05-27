@@ -25,5 +25,4 @@ class User(Base):
     medical_certificate_status = Column(String, default="none")
     failed_login_attempts = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
-
     attendances = relationship("Attendance", back_populates="user")
