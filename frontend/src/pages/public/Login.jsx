@@ -92,7 +92,8 @@ function Login() {
     } catch (err) {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('deshabilitada')) {
-        setError('Tu cuenta está deshabilitada. Contactate con el centro.');
+        //setError('Tu cuenta está deshabilitada. Contactate con el centro.');
+        setError("cuenta_deshabilitada");
       } else if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('404')) {
         setError('El correo no está registrado en el sistema.');
       } else {
@@ -142,7 +143,20 @@ function Login() {
     <LayoutPublico>
       <form onSubmit={enviar}>
         {mensajeExito && <div style={s.exito}>{mensajeExito}</div>}
-        {error && <div style={s.error}>{error}</div>}
+        {error && (
+          <div style={s.error}>
+            {error === 'cuenta_deshabilitada' ? (
+              <>
+                Tu cuenta está deshabilitada. Para habilitarla hacé click en{' '}
+                <a href="/recuperar-contrasena" style={{color: 'var(--color-primario)', textDecoration: 'none', fontWeight: 400}}>
+                  recuperar contraseña
+                </a>
+              </>
+            ) : (
+              error
+            )}
+          </div>
+        )}
         <div style={s.campo}>
           <label style={s.label}>Correo electrónico</label>
           {fieldErrors.email && <span style={s.errInline}>{fieldErrors.email}</span>}
