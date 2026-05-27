@@ -26,7 +26,8 @@ router = APIRouter(prefix="/attendances", tags=["Asistencias"])
 def inicializar_asistencias(activity_id: int, db: Session = Depends(get_db)):
     return pregenerar_ausentes(activity_id, db)
 
- response_model=AsistenciaRespuesta, status_code=201)
+
+@router.post("/by-dni", response_model=AsistenciaRespuesta, status_code=201)
 def registrar_asistencia(request: MarcarAsistenciaPorDNI, db: Session = Depends(get_db)):
     return marcar_asistencia_por_dni(request.dni, request.activity_id, request.comment, db)
 
