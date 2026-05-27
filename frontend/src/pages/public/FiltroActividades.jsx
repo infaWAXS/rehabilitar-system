@@ -73,7 +73,7 @@ const FILTROS_INICIAL = {
   soloCupos: false,
 };
 
-function aplicarFiltros(actividades, filtros) {
+function aplicarFiltros(actividades, filtros, cuposMap = {}) {
   const textoBusqueda = filtros.busqueda.trim().toLowerCase();
 
   return actividades.filter(a => {
@@ -93,7 +93,7 @@ function aplicarFiltros(actividades, filtros) {
     if (filtros.profesor && a.professor !== filtros.profesor) return false;
     if (filtros.precioMin !== '' && Number(a.price) < Number(filtros.precioMin)) return false;
     if (filtros.precioMax !== '' && Number(a.price) > Number(filtros.precioMax)) return false;
-    if (filtros.soloCupos && !(Number(a.capacity) > 0)) return false;
+    if (filtros.soloCupos && Number(cuposMap[a.id] ?? a.capacity ?? 0) <= 0) return false;
     return true;
   });
 }
@@ -216,7 +216,7 @@ const s = {
 };
 
 /* ── Componente ─────────────────────────────────────────── */
-export default function FiltroActividades({ actividades = [], onChange }) {
+export default function FiltroActividades({ actividades = [], cuposMap = {}, onChange }) {
   const [filtros, setFiltros] = useState(FILTROS_INICIAL);
   const [profesores, setProfesores] = useState([]);
 
@@ -248,14 +248,14 @@ export default function FiltroActividades({ actividades = [], onChange }) {
 
   // Notificar resultado filtrado al padre
   useEffect(() => {
-    onChange?.(aplicarFiltros(actividades, filtros));
-  }, [filtros, actividades, onChange]);
+    onChange?.(aplicarFiltros(actividades, filtros, cuposMap));
+  }, [filtros, actividades, cuposMap, onChange]);
 
   const setFiltro = (campo) => (e) =>
     setFiltros(f => ({ ...f, [campo]: e.target.value }));
 
   const hayFiltros = Object.entries(filtros).some(([, v]) => v !== '' && v !== false);
-  const totalFiltrado = useMemo(() => aplicarFiltros(actividades, filtros).length, [filtros, actividades]);
+  const totalFiltrado = useMemo(() => aplicarFiltros(actividades, filtros, cuposMap).length, [filtros, actividades, cuposMap]);
 
   return (
     <div style={s.wrapper}>

@@ -1021,17 +1021,6 @@ function EditarActividad() {
                   required
 
                 />
-
-                <span style={s.hint}>
-
-                  {feriadoSeleccionado.esFeriado
-
-                    ? `No hay fecha disponible: feriado (${feriadoSeleccionado.nombre}).`
-
-                    : 'Eleg?? una fecha disponible para el turno.'}
-
-                </span>
-
               </div>
 
             )}
