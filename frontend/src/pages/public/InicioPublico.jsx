@@ -70,6 +70,29 @@ function formatFechaLarga(fechaStr) {
   });
 }
 
+function parseHoraMinutos(valor) {
+  if (!valor) return null;
+  const match = String(valor).match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function actividadSigueVigente(actividad) {
+  if (actividad.activity_type !== 'individual') return true;
+  if (!actividad.specific_date) return true;
+
+  const fechaActividad = new Date(`${actividad.specific_date}T00:00:00`);
+  const hoy = new Date();
+  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const minutosActividad = parseHoraMinutos(actividad.time_slot);
+  const minutosAhora = hoy.getHours() * 60 + hoy.getMinutes();
+
+  if (fechaActividad < inicioHoy) return false;
+  if (fechaActividad > inicioHoy) return true;
+  if (minutosActividad === null) return true;
+  return minutosActividad >= minutosAhora;
+}
+
 /* ── Estilos ────────────────────────────────────────────── */
 const s = {
   pagina: {
@@ -484,7 +507,14 @@ function InicioPublico() {
   // Cargar actividades activas
   useEffect(() => {
     getActivities({ status: 'active' })
+<<<<<<< HEAD
       .then((data) => setActividades((Array.isArray(data) ? data : []).filter(actividadSigueVigente)))
+=======
+      .then(data => {
+        const lista = Array.isArray(data) ? data : [];
+        setActividades(lista.filter(actividadSigueVigente));
+      })
+>>>>>>> f84c9d7 (Arreglo el filtro de actividades)
       .catch(() => {});
   }, []);
 

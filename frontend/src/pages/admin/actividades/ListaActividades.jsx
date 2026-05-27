@@ -126,6 +126,7 @@ function ListaActividades() {
     setCargando(true);
     setError('');
     getActivities({ status: 'active' })
+<<<<<<< HEAD
       .then(async (data) => {
         const lista = (Array.isArray(data) ? data : []).filter(actividadSigueVigente);
         setActividades(lista);
@@ -135,6 +136,11 @@ function ListaActividades() {
           if (res.status === 'fulfilled') mapa[lista[i].id] = res.value.available_spots;
         });
         setCuposDisponibles(mapa);
+=======
+      .then((data) => {
+        const lista = Array.isArray(data) ? data : [];
+        setActividades(lista.filter(actividadSigueVigente));
+>>>>>>> f84c9d7 (Arreglo el filtro de actividades)
       })
       .catch(() => setError('No se pudieron cargar las actividades.'))
       .finally(() => setCargando(false));

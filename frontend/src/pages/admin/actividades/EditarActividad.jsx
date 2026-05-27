@@ -1157,11 +1157,6 @@ function EditarActividad() {
                   min={new Date().toISOString().split('T')[0]}
                   required
                 />
-                <span style={s.hint}>
-                  {feriadoSeleccionado.esFeriado
-                    ? `No hay fecha disponible: feriado (${feriadoSeleccionado.nombre}).`
-                    : 'Elegí una fecha disponible para el turno.'}
-                </span>
               </div>
             )}
 >>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
