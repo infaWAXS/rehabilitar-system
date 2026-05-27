@@ -11,6 +11,11 @@ export function getAttendancesByActivity(activityId) {
   return apiRequest(`/attendances/by-activity/${activityId}`);
 }
 
+// Pre-genera registros "absent" para todos los inscriptos confirmados
+export function initializeAttendances(activityId) {
+  return apiRequest(`/attendances/initialize/${activityId}`, { method: 'POST' });
+}
+
 export function updateAttendanceComment(attendanceId, comment) {
   return apiRequest(`/attendances/${attendanceId}/comment`, {
     method: 'PATCH',

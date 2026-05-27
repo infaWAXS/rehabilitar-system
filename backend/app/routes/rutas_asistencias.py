@@ -15,12 +15,18 @@ from app.services.servicio_asistencias import (
     actualizar_comentario,
     eliminar_comentario,
     listar_asistencias_por_actividad,
+    pregenerar_ausentes,
 )
 
 router = APIRouter(prefix="/attendances", tags=["Asistencias"])
 
 
-@router.post("/by-dni", response_model=AsistenciaRespuesta, status_code=201)
+# Pre-genera registros 'absent' para todos los inscriptos de la actividad
+@router.post("/initialize/{activity_id}")
+def inicializar_asistencias(activity_id: int, db: Session = Depends(get_db)):
+    return pregenerar_ausentes(activity_id, db)
+
+ response_model=AsistenciaRespuesta, status_code=201)
 def registrar_asistencia(request: MarcarAsistenciaPorDNI, db: Session = Depends(get_db)):
     return marcar_asistencia_por_dni(request.dni, request.activity_id, request.comment, db)
 

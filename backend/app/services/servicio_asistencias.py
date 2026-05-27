@@ -10,8 +10,42 @@ from app.exceptions.http_exceptions import (
     activity_not_found_exception,
     attendance_not_found_exception,
     attendance_already_exists_exception,
+    attendance_already_marked_exception,
     user_not_enrolled_exception,
 )
+
+
+def pregenerar_ausentes(activity_id: int, db: Session):
+    """
+    Pre-genera registros de asistencia con status='absent' para todos los
+    clientes con reserva confirmada en la actividad que aún no tengan registro.
+    Idempotente: llamarlo varias veces no duplica registros.
+    """
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise activity_not_found_exception()
+
+    reservas = db.query(Reservation).filter(
+        Reservation.activity_id == activity_id,
+        Reservation.status == "confirmed",
+    ).all()
+
+    creados = 0
+    for reserva in reservas:
+        ya_existe = db.query(Attendance).filter(
+            Attendance.user_id == reserva.user_id,
+            Attendance.activity_id == activity_id,
+        ).first()
+        if not ya_existe:
+            db.add(Attendance(
+                user_id=reserva.user_id,
+                activity_id=activity_id,
+                status="absent",
+            ))
+            creados += 1
+
+    db.commit()
+    return {"creados": creados, "actividad_id": activity_id}
 
 
 def marcar_asistencia_por_dni(dni: str, activity_id: int, comment: str | None, db: Session):
@@ -31,12 +65,23 @@ def marcar_asistencia_por_dni(dni: str, activity_id: int, comment: str | None, d
     if not enrolled:
         raise user_not_enrolled_exception()
 
-    if db.query(Attendance).filter(
+    existing = db.query(Attendance).filter(
         Attendance.user_id == user.id,
-        Attendance.activity_id == activity_id
-    ).first():
-        raise attendance_already_exists_exception()
+        Attendance.activity_id == activity_id,
+    ).first()
 
+    if existing:
+        if existing.status == "present":
+            raise attendance_already_marked_exception()
+        # Estaba pre-generado como "absent" → actualizamos a "present"
+        existing.status = "present"
+        if comment is not None:
+            existing.comment = comment
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    # No existe aún → crear directamente como "present"
     attendance = Attendance(
         user_id=user.id,
         activity_id=activity_id,
@@ -47,6 +92,7 @@ def marcar_asistencia_por_dni(dni: str, activity_id: int, comment: str | None, d
     db.commit()
     db.refresh(attendance)
     return attendance
+
 
 
 def actualizar_comentario(attendance_id: int, comment: str, db: Session):

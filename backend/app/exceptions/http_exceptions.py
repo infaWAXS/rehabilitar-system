@@ -66,6 +66,14 @@ def attendance_already_exists_exception():
     )
 
 
+def attendance_already_marked_exception():
+
+    return HTTPException(
+        status_code=409,
+        detail="La asistencia ya ha sido marcada como presente"
+    )
+
+
 def user_not_enrolled_exception():
 
     return HTTPException(

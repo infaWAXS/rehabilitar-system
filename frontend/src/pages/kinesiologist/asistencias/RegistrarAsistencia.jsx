@@ -7,6 +7,7 @@ import { getActivityById } from '../../../services/activitiesService';
 import {
   registerAttendanceByDni,
   getAttendancesByActivity,
+  initializeAttendances,
   updateAttendanceComment,
   deleteAttendanceComment,
 } from '../../../services/attendanceService';
@@ -132,10 +133,15 @@ export default function RegistrarAsistencia() {
   const cargarAsistencias = useCallback(() => {
     setCargandoLista(true);
     setErrorLista('');
-    getAttendancesByActivity(actividadId)
-      .then(setAsistencias)
-      .catch(() => setErrorLista('No se pudieron cargar las asistencias.'))
-      .finally(() => setCargandoLista(false));
+    // Primero inicializa (idempotente), luego carga la lista completa
+    initializeAttendances(actividadId)
+      .catch(() => {}) // silenciar si la actividad no tiene reservas aún
+      .finally(() => {
+        getAttendancesByActivity(actividadId)
+          .then(setAsistencias)
+          .catch(() => setErrorLista('No se pudieron cargar las asistencias.'))
+          .finally(() => setCargandoLista(false));
+      });
   }, [actividadId]);
 
   useEffect(() => { cargarAsistencias(); }, [cargarAsistencias]);
@@ -298,6 +304,7 @@ export default function RegistrarAsistencia() {
               <tr>
                 <th style={s.th}>Cliente</th>
                 <th style={s.th}>DNI</th>
+                <th style={s.th}>Estado</th>
                 <th style={s.th}>Comentario</th>
                 <th style={s.th}>Acciones</th>
               </tr>
@@ -307,6 +314,16 @@ export default function RegistrarAsistencia() {
                 <tr key={a.id}>
                   <td style={s.td}>{a.nombre} {a.apellido}</td>
                   <td style={s.tdSuave}>{a.dni}</td>
+                  <td style={s.td}>
+                    <span style={{
+                      display: 'inline-block', padding: '3px 10px', borderRadius: '20px',
+                      fontSize: '12px', fontWeight: '600',
+                      background: a.status === 'present' ? '#dcfce7' : '#f3f4f6',
+                      color: a.status === 'present' ? '#16a34a' : '#6b7280',
+                    }}>
+                      {a.status === 'present' ? 'Presente' : 'Ausente'}
+                    </span>
+                  </td>
                   <td style={s.td}>
                     {editandoId === a.id ? (
                       <input
