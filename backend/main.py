@@ -35,6 +35,17 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)
 
+# Migración ligera: agrega columnas nuevas si la BD ya existía antes de agregarlas al modelo
+def _migrate(engine):
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(users)"))]
+        if "credits" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN credits INTEGER NOT NULL DEFAULT 0"))
+            conn.commit()
+
+_migrate(engine)
+
 # Cargar usuarios mock al arrancar (sólo crea los que no existen)
 seed_mock_users()
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])

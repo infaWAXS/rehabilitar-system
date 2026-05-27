@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getMyReservations, cancelReservation } from '../../../services/reservationsService';
+import { getMyWaitlist, removeWaitlistItem } from '../../../services/waitlistService';
 
 const ESTADO_LABEL = {
   confirmed:  { texto: 'Confirmada',  color: '#16a34a', bg: '#dcfce7' },
@@ -101,6 +102,39 @@ const s = {
     marginTop: '10px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
     background: estilo.bg, border: `1px solid ${estilo.border}`, color: estilo.color,
   }),
+  // Pestañas
+  tabs: { display: 'flex', marginBottom: '24px', borderBottom: '2px solid var(--color-borde)' },
+  tab: (activo) => ({
+    padding: '10px 22px', fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+    border: 'none', background: 'transparent',
+    color: activo ? 'var(--color-primario)' : 'var(--color-texto-suave)',
+    borderBottom: activo ? '2px solid var(--color-primario)' : '2px solid transparent',
+    marginBottom: '-2px',
+  }),
+  // Lista de espera
+  wBadge: (tipo) => ({
+    display: 'inline-block', padding: '3px 10px', borderRadius: '20px',
+    fontSize: '12px', fontWeight: '700',
+    background: tipo === 'priority' ? '#eff6ff' : '#f3f4f6',
+    color: tipo === 'priority' ? '#1d4ed8' : '#374151',
+    border: `1px solid ${tipo === 'priority' ? '#bfdbfe' : '#e5e7eb'}`,
+  }),
+  wInfoBox: {
+    background: '#fefce8', border: '1px solid #fde068', borderRadius: '8px',
+    padding: '12px 14px', fontSize: '13px', color: '#854d0e', marginTop: '12px',
+  },
+  btnDanger: {
+    padding: '7px 16px', borderRadius: '8px', border: 'none',
+    background: '#dc2626', color: '#fff', fontWeight: '700', fontSize: '13px', cursor: 'pointer',
+  },
+  btnGhost: {
+    padding: '7px 16px', borderRadius: '8px', border: '1px solid var(--color-borde)',
+    background: 'transparent', color: 'var(--color-texto-suave)', fontWeight: '600', fontSize: '13px', cursor: 'pointer',
+  },
+  exito: {
+    background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px',
+    padding: '12px 16px', color: '#15803d', fontSize: '13px', fontWeight: '600', marginBottom: '16px',
+  },
 };
 
 export default function MisReservas() {
@@ -114,6 +148,14 @@ export default function MisReservas() {
   const [cancelando, setCancelando] = useState(false);
   // Resultados por ID de reserva: { [id]: { result, message } }
   const [resultados, setResultados] = useState({});
+
+  // Lista de espera
+  const [pestana, setPestana] = useState('reservas');
+  const [listaEspera, setListaEspera] = useState([]);
+  const [cargandoEspera, setCargandoEspera] = useState(false);
+  const [errorEspera, setErrorEspera] = useState('');
+  const [confirmandoId, setConfirmandoId] = useState(null);
+  const [mensajeExitoBaja, setMensajeExitoBaja] = useState('');
 
   useEffect(() => {
     cargar();
@@ -152,6 +194,31 @@ export default function MisReservas() {
     setModalReserva(null);
   }
 
+  useEffect(() => {
+    if (pestana === 'espera') cargarEspera();
+  }, [pestana]); 
+
+  function cargarEspera() {
+    setCargandoEspera(true);
+    setErrorEspera('');
+    getMyWaitlist()
+      .then(setListaEspera)
+      .catch(() => setErrorEspera('No se pudo cargar la lista de espera.'))
+      .finally(() => setCargandoEspera(false));
+  }
+
+  async function confirmarBaja(id, nombre) {
+    try {
+      await removeWaitlistItem(id);
+      setListaEspera((prev) => prev.filter((item) => item.id !== id));
+      setConfirmandoId(null);
+      setMensajeExitoBaja(`Baja registrada de "${nombre}". Correo de confirmación enviado a tu casilla. (simulado — Sprint 2)`);
+      setTimeout(() => setMensajeExitoBaja(''), 8000);
+    } catch (err) {
+      setErrorEspera(err?.message || 'No se pudo procesar la baja.');
+    }
+  }
+
   async function confirmarCancelacion() {
     if (!modalReserva) return;
     setCancelando(true);
@@ -176,11 +243,19 @@ export default function MisReservas() {
     <LayoutPrivado>
       <div style={s.cabecera}>
         <h1 style={s.titulo}>Mis Reservas</h1>
-        <button style={s.botonInscribir} onClick={() => navigate('/cliente/reservas/inscribir')}>
-          + Inscribirse a una actividad
-        </button>
+        {pestana === 'reservas' && (
+          <button style={s.botonInscribir} onClick={() => navigate('/cliente/reservas/inscribir')}>
+            + Inscribirse a una actividad
+          </button>
+        )}
       </div>
 
+      <div style={s.tabs}>
+        <button style={s.tab(pestana === 'reservas')} onClick={() => setPestana('reservas')}>Mis Reservas</button>
+        <button style={s.tab(pestana === 'espera')} onClick={() => setPestana('espera')}>Lista de Espera</button>
+      </div>
+
+      {pestana === 'reservas' && <>
       {error && <div style={s.alerta('error')}>{error}</div>}
 
       {cargando ? (
@@ -235,8 +310,67 @@ export default function MisReservas() {
           );
         })
       )}
+      </>}
 
-      {/* Modal de confirmación */}
+      {/* ── Lista de Espera ── */}
+      {pestana === 'espera' && <>
+        {mensajeExitoBaja && <div style={s.exito}>{mensajeExitoBaja}</div>}
+        {errorEspera && <div style={s.alerta('error')}>{errorEspera}</div>}
+        {cargandoEspera ? (
+          <div style={s.vacio}>Cargando lista de espera...</div>
+        ) : listaEspera.length === 0 ? (
+          <div style={s.vacio}>
+            <div style={s.vacioIcono}>⏳</div>
+            <div style={s.vacioTexto}>No estás en ninguna lista de espera</div>
+            <div>Cuando no haya cupos en una actividad y te inscribas, aparecerá aquí.</div>
+          </div>
+        ) : (
+          listaEspera.map((item) => {
+            const confirmando = confirmandoId === item.id;
+            return (
+              <div key={item.id} style={s.tarjeta}>
+                <div style={s.tarjetaFila}>
+                  <div>
+                    <div style={s.actividadNombre}>{item.activity_name ?? `Actividad #${item.activity_id}`}</div>
+                    {item.activity_schedule && (
+                      <div style={s.detalle}>{item.activity_schedule}</div>
+                    )}
+                  </div>
+                </div>
+                <div style={s.badges}>
+                  <span style={s.wBadge(item.waitlist_type)}>
+                    {item.waitlist_type === 'priority' ? 'Cola Prioritaria (Abonado)' : 'Cola General'}
+                  </span>
+                  <span style={s.badge('#6b7280', '#f3f4f6')}>Posición N° {item.position}</span>
+                  {!confirmando && (
+                    <button style={s.botonCancelar(false)} onClick={() => setConfirmandoId(item.id)}>
+                      Salir de la lista
+                    </button>
+                  )}
+                </div>
+                {confirmando && (
+                  <div style={s.wInfoBox}>
+                    <p style={{ margin: '0 0 10px 0' }}>
+                      ¿Salir de la lista de espera de <strong>{item.activity_name}</strong>?
+                      Perderás tu lugar N° {item.position}.
+                    </p>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button style={s.btnDanger} onClick={() => confirmarBaja(item.id, item.activity_name)}>
+                        Confirmar
+                      </button>
+                      <button style={s.btnGhost} onClick={() => setConfirmandoId(null)}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </>}
+
+      {/* Modal de confirmación de reserva */}
       {modalReserva && (
         <div style={s.overlay} onClick={cerrarModal}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>

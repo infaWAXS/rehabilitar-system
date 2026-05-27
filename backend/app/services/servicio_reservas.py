@@ -32,6 +32,12 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         raise HTTPException(status_code=400,
                             detail=f"Metodo de pago invalido. Debe ser uno de: {', '.join(valid_methods)}")
 
+    # Validar y descontar crédito si corresponde
+    if payment_method == "credit":
+        if user.credits <= 0:
+            raise HTTPException(status_code=400, detail="No tenés créditos disponibles para usar.")
+        user.credits -= 1
+
     # Estado de la reserva segun metodo de pago
     if payment_method in ("subscription", "full_payment", "credit"):
         status = "confirmed"
@@ -169,6 +175,7 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
     hours_until = (class_start - now).total_seconds() / 3600
 
     abonado = is_abonado(user_id, db)
+    user = db.query(User).filter(User.id == user_id).first()
 
     # Contar cancelaciones previas del mes actual (para abonados en franja 24-48 h)
     today = date_cls.today()
@@ -184,6 +191,7 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
         if hours_until > 48:
             result = "credit"
             message = "Turno cancelado. Se te otorgó un crédito para tu próxima clase."
+            user.credits += 1
         elif hours_until >= 24:
             if prev_cancellations == 0:
                 result = "discount_30"

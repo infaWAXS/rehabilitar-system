@@ -69,7 +69,7 @@ USUARIOS_MOCK = [
         "password": "Profesor123",
         "role": "professor",
         "dni": "44444444",
-        "specialization": "Kinesiología deportiva",
+        "specialization": "Fisioterapia",
     },
     {
         "name": "Ana",
@@ -131,7 +131,7 @@ def seed():
         {"name": "Sala 4", "capacity":  8},
         {"name": "Sala 5", "capacity":  8},
         {"name": "Sala 6", "capacity":  5},
-        {"name": "Sala 7", "capacity":  3},
+        {"name": "Sala 7", "capacity":  1},
     ]
 
     db = SessionLocal()

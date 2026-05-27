@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getCurrentUser, uploadMedicalCertificate } from '../../../services/usersService';
+import { getMyPlan } from '../../../services/paymentsService';
 
 const s = {
   seccion: {
@@ -25,6 +26,12 @@ const s = {
   badgeInactivo: { background: '#fee2e2', color: '#991b1b' },
   badgeVerificado: { background: '#d1fae5', color: '#065f46' },
   badgePendiente: { background: '#fef08a', color: '#78350f' },
+  badgePlan: { background: '#dbeafe', color: '#1e40af' },
+  planCTA: {
+    display: 'inline-block', padding: '8px 18px', borderRadius: '8px',
+    background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))',
+    color: '#fff', fontWeight: '600', fontSize: '13px', textDecoration: 'none',
+  },
 };
 
 function VerPerfil() {
@@ -35,6 +42,8 @@ function VerPerfil() {
   const [aptoSubiendo, setAptoSubiendo] = useState(false);
   const [aptoError, setAptoError] = useState('');
   const [aptoExito, setAptoExito] = useState('');
+  const [planInfo, setPlanInfo] = useState(null);   // { es_abonado, plan }
+  const [planCargando, setPlanCargando] = useState(true);
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -51,6 +60,13 @@ function VerPerfil() {
     };
 
     cargarDatos();
+  }, []);
+
+  useEffect(() => {
+    getMyPlan()
+      .then((data) => setPlanInfo(data))
+      .catch(() => setPlanInfo({ es_abonado: false, plan: null, credits: 0 }))
+      .finally(() => setPlanCargando(false));
   }, []);
 
   // HU Adjuntar apto físico (Agustin)
@@ -154,24 +170,6 @@ function VerPerfil() {
             )}
           </div>
 
-          {/* ── Estado de la Cuenta ───────────────────────── */}
-          <div style={s.seccion}>
-            <p style={s.titulo}>Estado de la Cuenta</p>
-            <div style={s.fila}>
-              <div style={s.campo}>
-                <label style={s.label}>Rol</label>
-                <p style={s.valor}>{usuario.role || '-'}</p>
-              </div>
-              <div style={s.campo}>
-                <label style={s.label}>Estado</label>
-                <div>
-                  <span style={{ ...s.badge, ...(usuario.account_status?.toLowerCase() === 'active' ? s.badgeActivo : s.badgeInactivo) }}>
-                    {getEstadoCuenta()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* ── Apto Físico — solo clientes ─────────────── */}
           {usuario.role === 'client' && <div style={s.seccion}>
@@ -218,6 +216,54 @@ function VerPerfil() {
               {aptoExito && <p style={{ color: '#16a34a', fontSize: '13px', marginTop: '8px' }}>{aptoExito}</p>}
             </div>
           </div>}
+
+          {/* ── Suscripción / Plan — solo clientes ──────── */}
+          {usuario.role === 'client' && (
+            <div style={s.seccion}>
+              <p style={s.titulo}>Mi Suscripción</p>
+              {planCargando ? (
+                <p style={{ fontSize: '13px', color: 'var(--color-texto-suave)' }}>Cargando información del plan...</p>
+              ) : planInfo?.es_abonado ? (
+                <>
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={{ ...s.badge, ...s.badgeActivo }}>Abonado activo</span>
+                  </div>
+                  <div style={s.fila}>
+                    <div style={s.campo}>
+                      <label style={s.label}>Plan</label>
+                      <p style={s.valor}>{planInfo.plan.name}</p>
+                    </div>
+                    <div style={s.campo}>
+                      <label style={s.label}>Cobertura</label>
+                      <p style={s.valor}>{planInfo.plan.coverage_type}</p>
+                    </div>
+                  </div>
+                  <div style={s.fila}>
+                    <div style={s.campo}>
+                      <label style={s.label}>Vencimiento</label>
+                      <p style={s.valor}>{formatearFecha(planInfo.plan.end_date)}</p>
+                    </div>
+                    <div style={s.campo}>
+                      <label style={s.label}>Créditos disponibles</label>
+                      <p style={s.valor}>
+                        <strong>{planInfo.credits ?? 0}</strong>
+                        {(planInfo.credits ?? 0) === 0 && (
+                          <span style={{ fontSize: '12px', color: 'var(--color-texto-suave)', marginLeft: '8px' }}></span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)', margin: 0 }}>
+                    No tenés un plan activo. Adquirí uno para acceder a beneficios de abonado, descuentos y reservas prioritarias.
+                  </p>
+                  <Link to="/cliente/suscripciones" style={s.planCTA}>Ver planes disponibles</Link>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Información del Registro ──────────────────── */}
           <div style={s.seccion}>

@@ -40,9 +40,10 @@ def get_my_plan(
     """Devuelve el plan activo del usuario o null si no es abonado."""
     user_plan = get_active_user_plan(current_user.id, db)
     if not user_plan:
-        return {"es_abonado": False, "plan": None}
+        return {"es_abonado": False, "plan": None, "credits": current_user.credits}
     return {
         "es_abonado": True,
+        "credits": current_user.credits,
         "plan": {
             "id": user_plan.plan.id,
             "name": user_plan.plan.name,

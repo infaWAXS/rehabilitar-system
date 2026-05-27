@@ -59,6 +59,18 @@ const s = {
     color: 'var(--color-texto)',
   }),
   metodoBtnSub: { fontSize: '12px', color: 'var(--color-texto-suave)', marginTop: '3px' },
+  metodoBtnDeshabilitado: {
+    padding: '14px 18px',
+    borderRadius: '10px',
+    cursor: 'not-allowed',
+    textAlign: 'left',
+    border: '1px solid var(--color-borde)',
+    background: 'var(--color-fondo)',
+    fontWeight: '400',
+    fontSize: '14px',
+    color: 'var(--color-texto-suave)',
+    opacity: 0.55,
+  },
   botones: { display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap' },
   btnPrimario: {
     padding: '10px 28px',
@@ -198,7 +210,7 @@ function InscribirActividad() {
   const [fecha, setFecha] = useState('');
   const [esMayor65, setEsMayor65] = useState(false);
   const [esAbonado, setEsAbonado] = useState(false);
-  const [tieneCredito, setTieneCredito] = useState(false);
+  const [credits, setCredits] = useState(0);
   const [metodo, setMetodo] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
@@ -208,7 +220,10 @@ function InscribirActividad() {
   // Detectar si el cliente es abonado desde el backend
   useEffect(() => {
     getMyPlan()
-      .then((data) => setEsAbonado(data?.es_abonado === true))
+      .then((data) => {
+        setEsAbonado(data?.es_abonado === true);
+        setCredits(data?.credits ?? 0);
+      })
       .catch(() => {});
   }, []);
 
@@ -288,7 +303,7 @@ function InscribirActividad() {
     setError('');
     if (!hayCupos) setMetodo('waitlist');
     else if (esAbonado && tipoReserva === 'fixed') setMetodo('subscription');
-    else if (tieneCredito) setMetodo('credit');
+    else if (credits > 0) setMetodo('credit');
     else setMetodo('full_payment');
     setPaso(1);
   };
@@ -425,15 +440,18 @@ function InscribirActividad() {
                     <div style={{ fontSize: '13px', color: 'var(--color-texto-suave)', marginBottom: '8px' }}>Sin suscripción activa</div>
                   )}
                   {esAbonado && (
-                    <label style={s.checkRow}>
-                      <input type="checkbox" checked={tieneCredito} onChange={(e) => setTieneCredito(e.target.checked)} />
-                      Tengo crédito disponible
-                    </label>
+                    <div style={{ fontSize: '13px', color: 'var(--color-texto)', marginBottom: '6px', opacity: !hayCupos ? 0.45 : 1 }}>
+                      Créditos disponibles: 
+                      <strong>{credits}</strong>
+                      {credits === 0 && <span style={{ fontSize: '11px', color: 'var(--color-texto-suave)', marginLeft: '4px' }}>(se otorgan al cancelar con &gt;48 h de anticipación)</span>}
+                      {!hayCupos && credits > 0 && <span style={{ fontSize: '11px', color: 'var(--color-texto-suave)', marginLeft: '4px' }}>(no aplica sin cupos)</span>}
+                    </div>
                   )}
-                  {tipoReserva === 'fixed' && (
-                    <label style={s.checkRow}>
-                      <input type="checkbox" checked={esMayor65} onChange={(e) => setEsMayor65(e.target.checked)} />
-                      Soy mayor de 65 anos (descuento 20%)
+                  {(tipoReserva === 'fixed' || tipoReserva === 'individual') && (
+                    <label style={{ ...s.checkRow, opacity: !hayCupos ? 0.45 : 1 }}>
+                      <input type="checkbox" checked={esMayor65} onChange={(e) => setEsMayor65(e.target.checked)} disabled={!hayCupos} />
+                      Soy mayor de 65 años (descuento 20%)
+                      {!hayCupos && <span style={{ fontSize: '11px', marginLeft: '4px' }}>(no aplica sin cupos)</span>}
                     </label>
                   )}
 
@@ -483,10 +501,16 @@ function InscribirActividad() {
                       <div style={s.metodoBtnSub}>Sin costo adicional</div>
                     </button>
                   )}
-                  {tieneCredito && (
-                    <button style={s.metodoBtn(metodo === 'credit')} onClick={() => setMetodo('credit')}>
-                      Usar credito
-                      <div style={s.metodoBtnSub}>Se descuenta un credito disponible</div>
+                  {esAbonado && (
+                    <button
+                      style={credits > 0 ? s.metodoBtn(metodo === 'credit') : s.metodoBtnDeshabilitado}
+                      onClick={() => credits > 0 && setMetodo('credit')}
+                      disabled={credits <= 0}
+                    >
+                      Usar crédito
+                      <div style={s.metodoBtnSub}>
+                        {credits > 0 ? `Se descuenta 1 crédito (tenés ${credits})` : 'No tenés créditos disponibles'}
+                      </div>
                     </button>
                   )}
                   <button style={s.metodoBtn(metodo === 'full_payment')} onClick={() => setMetodo('full_payment')}>
