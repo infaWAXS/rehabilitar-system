@@ -97,7 +97,7 @@ function aplicarFiltros(actividades, filtros) {
     if (filtros.profesor && a.professor !== filtros.profesor) return false;
     if (filtros.precioMin !== '' && Number(a.price) < Number(filtros.precioMin)) return false;
     if (filtros.precioMax !== '' && Number(a.price) > Number(filtros.precioMax)) return false;
-    if (filtros.soloCupos && !(Number(a.capacity) > 0)) return false;
+    if (filtros.soloCupos && Number(a.available_spots ?? 0) <= 0) return false;
     return true;
   });
 }

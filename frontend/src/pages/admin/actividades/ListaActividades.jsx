@@ -11,6 +11,29 @@ const CHIP_TIPO = {
   individual: { background: '#f3e8ff', color: '#7e22ce' },
 };
 
+function parseHoraMinutos(valor) {
+  if (!valor) return null;
+  const match = String(valor).match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function actividadSigueVigente(actividad) {
+  if (actividad.activity_type !== 'individual') return true;
+  if (!actividad.specific_date) return true;
+
+  const fechaActividad = new Date(`${actividad.specific_date}T00:00:00`);
+  const hoy = new Date();
+  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const minutosActividad = parseHoraMinutos(actividad.time_slot);
+  const minutosAhora = hoy.getHours() * 60 + hoy.getMinutes();
+
+  if (fechaActividad < inicioHoy) return false;
+  if (fechaActividad > inicioHoy) return true;
+  if (minutosActividad === null) return true;
+  return minutosActividad >= minutosAhora;
+}
+
 const s = {
   cabecera: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' },
   titulo: { fontSize: '22px', fontWeight: '700', color: 'var(--color-texto)', margin: 0 },
@@ -86,7 +109,10 @@ function ListaActividades() {
     setCargando(true);
     setError('');
     getActivities({ status: 'active' })
-      .then((data) => setActividades(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const lista = Array.isArray(data) ? data : [];
+        setActividades(lista.filter(actividadSigueVigente));
+      })
       .catch(() => setError('No se pudieron cargar las actividades.'))
       .finally(() => setCargando(false));
   };
