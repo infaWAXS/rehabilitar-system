@@ -93,8 +93,14 @@ function Registro() {
             // E3: sube apto físico → medical_certificate_status = "pending"
             await uploadMedicalCertificateWithToken(loginData.access_token, aptoFile);
           }
-        } catch {
-          // Si falla la subida, el usuario puede subirlo desde su perfil
+        } catch (err) {
+          const msg = err.message || '';
+
+          if (msg.includes('Solo se permiten archivos')) {
+            setError('Solo se permiten archivos PNG, JPG y PDF');
+          } else {
+            setError('Error al subir el certificado médico');
+          }
         }
       }
 
