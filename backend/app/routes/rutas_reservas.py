@@ -51,7 +51,8 @@ def inscribe_fixed_activity(
         "fixed",
         request.reservation_date,
         db,
-        request.payment_method or "full_payment"
+        request.payment_method or "full_payment",
+        request.test_scenario or "success",
     )
 
 
@@ -68,7 +69,8 @@ def inscribe_individual_activity(
         "individual",
         request.reservation_date,
         db,
-        request.payment_method or "full_payment"
+        request.payment_method or "full_payment",
+        request.test_scenario or "success",
     )
 
 

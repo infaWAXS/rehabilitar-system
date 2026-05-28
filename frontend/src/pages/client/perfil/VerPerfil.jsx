@@ -1,6 +1,6 @@
-// HU Ver perfil - Responsable: Agustin
+// HU Ver perfil — Responsable: Agustin
 // E1: usuario autenticado selecciona "Mi Perfil" → sistema muestra datos del perfil (GET /users/me)
-// HU Subir DNI: el campo "Estado del DNI" refleja si la foto fue validada por el sistema externo (dni_verified)
+// E2: no autenticado → redirigido por LayoutPrivado
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
@@ -13,53 +13,54 @@ const s = {
     padding: '24px', marginBottom: '24px', boxShadow: 'var(--sombra)',
   },
   titulo: { fontSize: '16px', fontWeight: '700', marginBottom: '20px', color: 'var(--color-texto)' },
-  campo: { marginBottom: '18px' },
-  label: { display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '600', color: 'var(--color-texto-suave)' },
-  valor: { fontSize: '14px', fontWeight: '500', color: 'var(--color-texto)', padding: '10px 0' },
-  fila: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '8px' },
-  cargando: { fontSize: '14px', color: 'var(--color-texto-suave)', fontStyle: 'italic', padding: '40px 20px', textAlign: 'center' },
-  badge: {
-    display: 'inline-block', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600',
-    marginTop: '4px'
+  fila: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '12px' },
+  campo: { marginBottom: '4px' },
+  label: { display: 'block', marginBottom: '4px', fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  valor: { fontSize: '14px', color: 'var(--color-texto)', margin: 0, fontWeight: '500' },
+  badge: { display: 'inline-block', padding: '3px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' },
+  badgeActivo: { background: '#dcfce7', color: '#16a34a' },
+  badgePendiente: { background: '#fef3c7', color: '#d97706' },
+  badgeInactivo: { background: '#f3f4f6', color: '#6b7280' },
+  alerta: (tipo) => ({
+    padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px',
+    background: tipo === 'error' ? '#fef2f2' : '#f0fdf4',
+    border: `1px solid ${tipo === 'error' ? '#fecaca' : '#bbf7d0'}`,
+    color: tipo === 'error' ? '#dc2626' : '#15803d',
+  }),
+  aptoBox: {
+    background: '#f9fafb', border: '1px solid var(--color-borde)', borderRadius: '8px',
+    padding: '14px', marginTop: '12px',
   },
-  badgeActivo: { background: '#d1fae5', color: '#065f46' },
-  badgeInactivo: { background: '#fee2e2', color: '#991b1b' },
-  badgeVerificado: { background: '#d1fae5', color: '#065f46' },
-  badgePendiente: { background: '#fef08a', color: '#78350f' },
-  badgePlan: { background: '#dbeafe', color: '#1e40af' },
+  aptoInput: {
+    display: 'block', marginTop: '8px', fontSize: '13px',
+  },
+  aptoBoton: {
+    marginTop: '10px', padding: '8px 18px', borderRadius: '8px', border: 'none',
+    background: 'var(--color-primario)', color: '#fff', fontWeight: '600', fontSize: '13px', cursor: 'pointer',
+  },
   planCTA: {
-    display: 'inline-block', padding: '8px 18px', borderRadius: '8px',
+    display: 'inline-block', padding: '9px 20px', borderRadius: '8px',
     background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))',
-    color: '#fff', fontWeight: '600', fontSize: '13px', textDecoration: 'none',
+    color: '#fff', fontWeight: '700', fontSize: '14px', textDecoration: 'none',
   },
 };
 
-function VerPerfil() {
+export default function VerPerfil() {
   const [usuario, setUsuario] = useState(null);
+  const [planInfo, setPlanInfo] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [planCargando, setPlanCargando] = useState(true);
   const [error, setError] = useState('');
   const [aptoFile, setAptoFile] = useState(null);
   const [aptoSubiendo, setAptoSubiendo] = useState(false);
   const [aptoError, setAptoError] = useState('');
   const [aptoExito, setAptoExito] = useState('');
-  const [planInfo, setPlanInfo] = useState(null);   // { es_abonado, plan }
-  const [planCargando, setPlanCargando] = useState(true);
 
   useEffect(() => {
-    const cargarDatos = async () => {
-      try {
-        const datos = await getCurrentUser();
-        setUsuario(datos);
-        setError('');
-      } catch (err) {
-        setError('No se pudo cargar los datos del perfil.');
-        console.error(err);
-      } finally {
-        setCargando(false);
-      }
-    };
-
-    cargarDatos();
+    getCurrentUser()
+      .then((datos) => { setUsuario(datos); setError(''); })
+      .catch(() => setError('No se pudo cargar los datos del perfil.'))
+      .finally(() => setCargando(false));
   }, []);
 
   useEffect(() => {
@@ -69,10 +70,6 @@ function VerPerfil() {
       .finally(() => setPlanCargando(false));
   }, []);
 
-  // HU Adjuntar apto físico (Agustin)
-  // E1: cliente sube apto → POST /users/upload-medical-certificate → status = "pending"
-  // E2: no selecciona archivo → validación HTML evita el envío
-  // E3: re-sube apto (vencido o rechazado) → mismo flujo, backend reemplaza el archivo anterior
   const subirApto = async (e) => {
     e.preventDefault();
     if (!aptoFile) {
@@ -88,7 +85,7 @@ function VerPerfil() {
       setAptoFile(null);
       const datos = await getCurrentUser();
       setUsuario(datos);
-    } catch (err) {
+    } catch {
       setAptoError('No se pudo subir el archivo. Intentá de nuevo.');
     } finally {
       setAptoSubiendo(false);
@@ -96,39 +93,34 @@ function VerPerfil() {
   };
 
   const formatearFecha = (fecha) => {
-    if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-AR', { year: 'numeric', month: 'long', day: 'numeric' });
+    if (!fecha) return '—';
+    return new Date(fecha).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   };
 
-  const getEstadoCuenta = () => {
-    if (!usuario?.account_status) return '-';
-    const estado = usuario.account_status.toLowerCase();
-    return estado === 'active' ? 'Activa' : estado === 'disabled' ? 'Deshabilitada' : estado;
+  const estadoCertificadoLabel = (status) => {
+    if (status === 'approved') return { texto: 'Aprobado', estilo: s.badgeActivo };
+    if (status === 'pending') return { texto: 'Pendiente de revisión', estilo: s.badgePendiente };
+    if (status === 'rejected') return { texto: 'Rechazado', estilo: { background: '#fef2f2', color: '#dc2626' } };
+    return null;
   };
 
-  const getEstadoDNI = () => {
-    return usuario?.dni_verified ? 'Verificado' : 'No verificado';
-  };
-
-  const getEstadoAptoDni = () => {
-    const status = usuario?.medical_certificate_status || 'none';
-    if (status === 'approved') return 'Aprobado';
-    if (status === 'pending') return 'Pendiente de aprobación';
-    if (status === 'rejected') return 'Rechazado';
-    return 'Sin subir';
-  };
+  if (cargando) {
+    return (
+      <LayoutPrivado>
+        <p style={{ color: 'var(--color-texto-suave)', fontSize: '14px' }}>Cargando perfil...</p>
+      </LayoutPrivado>
+    );
+  }
 
   return (
-    <LayoutPrivado titulo="Mi Perfil">
-      {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px 16px', color: '#dc2626', marginBottom: '20px' }}>{error}</div>}
+    <LayoutPrivado>
+      {error && <div style={s.alerta('error')}>{error}</div>}
 
-      {cargando ? (
-        <div style={s.cargando}>Cargando datos del perfil...</div>
-      ) : usuario ? (
+      {usuario && (
         <>
-          {/* ── Información Personal ─────────────────────── */}
+          {/* ── Datos personales ────────────────────────── */}
           <div style={s.seccion}>
-            <p style={s.titulo}>Información Personal</p>
+            <p style={s.titulo}>Datos Personales</p>
             <div style={s.fila}>
               <div style={s.campo}>
                 <label style={s.label}>Nombre</label>
@@ -146,124 +138,106 @@ function VerPerfil() {
               </div>
               <div style={s.campo}>
                 <label style={s.label}>DNI</label>
-                <div>
-                  <p style={s.valor}>{usuario.dni || '-'}</p>
-                  <span style={{ ...s.badge, ...s.badgeVerificado }}>{getEstadoDNI()}</span>
-                </div>
+                <p style={s.valor}>{usuario.dni || '—'}</p>
               </div>
             </div>
-            {(usuario.direccion || usuario.telefono) && (
-              <div style={s.fila}>
-                {usuario.direccion && (
+            <div style={s.fila}>
+              <div style={s.campo}>
+                <label style={s.label}>Dirección</label>
+                <p style={s.valor}>{usuario.direccion || '—'}</p>
+              </div>
+              <div style={s.campo}>
+                <label style={s.label}>Teléfono</label>
+                <p style={s.valor}>{usuario.telefono || '—'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Mi Suscripción ───────────────────────────── */}
+          <div style={s.seccion}>
+            <p style={s.titulo}>Mi Suscripción</p>
+            {planCargando ? (
+              <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)' }}>Cargando suscripción...</p>
+            ) : planInfo?.es_abonado ? (
+              <>
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{ ...s.badge, ...s.badgeActivo }}>Abonado activo</span>
+                </div>
+                <div style={s.fila}>
                   <div style={s.campo}>
-                    <label style={s.label}>Dirección</label>
-                    <p style={s.valor}>{usuario.direccion}</p>
+                    <label style={s.label}>Plan</label>
+                    <p style={s.valor}>{planInfo.plan.name}</p>
+                  </div>
+                  <div style={s.campo}>
+                    <label style={s.label}>Cobertura</label>
+                    <p style={s.valor}>{planInfo.plan.coverage_type}</p>
+                  </div>
+                </div>
+                <div style={s.fila}>
+                  <div style={s.campo}>
+                    <label style={s.label}>Vencimiento</label>
+                    <p style={s.valor}>{formatearFecha(planInfo.plan.end_date)}</p>
+                  </div>
+                  <div style={s.campo}>
+                    <label style={s.label}>Créditos disponibles</label>
+                    <p style={s.valor}>
+                      <strong>{planInfo.credits ?? 0}</strong>
+                      {(planInfo.credits ?? 0) === 0 && (
+                        <span style={{ fontSize: '12px', color: 'var(--color-texto-suave)', marginLeft: '8px' }}></span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                {(planInfo.pending_discount_percent ?? 0) > 0 && (
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#15803d', marginTop: '4px' }}>
+                    Tenés un <strong>{planInfo.pending_discount_percent}% de descuento</strong> pendiente por cancelación. Se aplicará automáticamente en tu próximo pago monetario.
                   </div>
                 )}
-                {usuario.telefono && (
-                  <div style={s.campo}>
-                    <label style={s.label}>Teléfono</label>
-                    <p style={s.valor}>{usuario.telefono}</p>
-                  </div>
-                )}
+              </>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)', margin: 0 }}>
+                  No tenés un plan activo. Adquirí uno para acceder a beneficios de abonado, descuentos y reservas prioritarias.
+                </p>
+                <Link to="/cliente/suscripciones" style={s.planCTA}>Ver planes disponibles</Link>
               </div>
             )}
           </div>
 
-
-          {/* ── Apto Físico — solo clientes ─────────────── */}
-          {usuario.role === 'client' && <div style={s.seccion}>
+          {/* ── Apto físico ──────────────────────────────── */}
+          <div style={s.seccion}>
             <p style={s.titulo}>Apto Físico</p>
-            <div style={s.campo}>
-              <label style={s.label}>Estado del Apto Físico</label>
-              <div>
-                <span style={{ ...s.badge, ...(usuario.medical_certificate_status === 'approved' ? s.badgeVerificado : usuario.medical_certificate_status === 'pending' ? s.badgePendiente : s.badgeInactivo) }}>
-                  {getEstadoAptoDni()}
-                </span>
-              </div>
-            </div>
-            {usuario.medical_certificate_path && (
-              <div style={s.campo}>
-                <label style={s.label}>Archivo Adjunto</label>
-                <p style={s.valor}>{usuario.medical_certificate_path.split('/').pop()}</p>
-              </div>
-            )}
-            <div style={{ borderTop: '1px solid var(--color-borde)', paddingTop: '18px', marginTop: '8px' }}>
-              <label style={s.label}>
-                {usuario.medical_certificate_path ? 'Renovar apto físico' : 'Subir apto físico'}
-              </label>
-              <form onSubmit={subirApto} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  required
-                  onChange={(e) => setAptoFile(e.target.files[0] || null)}
-                  style={{ fontSize: '13px', color: 'var(--color-texto)' }}
-                />
-                <button
-                  type="submit"
-                  disabled={aptoSubiendo}
-                  style={{
-                    padding: '7px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                    background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))',
-                    color: '#fff', fontWeight: '600', fontSize: '13px',
-                  }}
-                >
-                  {aptoSubiendo ? 'Enviando...' : 'Enviar certificado'}
-                </button>
-              </form>
-              {aptoError && <p style={{ color: '#dc2626', fontSize: '13px', marginTop: '8px' }}>{aptoError}</p>}
-              {aptoExito && <p style={{ color: '#16a34a', fontSize: '13px', marginTop: '8px' }}>{aptoExito}</p>}
-            </div>
-          </div>}
-
-          {/* ── Suscripción / Plan — solo clientes ──────── */}
-          {usuario.role === 'client' && (
-            <div style={s.seccion}>
-              <p style={s.titulo}>Mi Suscripción</p>
-              {planCargando ? (
-                <p style={{ fontSize: '13px', color: 'var(--color-texto-suave)' }}>Cargando información del plan...</p>
-              ) : planInfo?.es_abonado ? (
-                <>
-                  <div style={{ marginBottom: '12px' }}>
-                    <span style={{ ...s.badge, ...s.badgeActivo }}>Abonado activo</span>
-                  </div>
-                  <div style={s.fila}>
-                    <div style={s.campo}>
-                      <label style={s.label}>Plan</label>
-                      <p style={s.valor}>{planInfo.plan.name}</p>
-                    </div>
-                    <div style={s.campo}>
-                      <label style={s.label}>Cobertura</label>
-                      <p style={s.valor}>{planInfo.plan.coverage_type}</p>
-                    </div>
-                  </div>
-                  <div style={s.fila}>
-                    <div style={s.campo}>
-                      <label style={s.label}>Vencimiento</label>
-                      <p style={s.valor}>{formatearFecha(planInfo.plan.end_date)}</p>
-                    </div>
-                    <div style={s.campo}>
-                      <label style={s.label}>Créditos disponibles</label>
-                      <p style={s.valor}>
-                        <strong>{planInfo.credits ?? 0}</strong>
-                        {(planInfo.credits ?? 0) === 0 && (
-                          <span style={{ fontSize: '12px', color: 'var(--color-texto-suave)', marginLeft: '8px' }}></span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)', margin: 0 }}>
-                    No tenés un plan activo. Adquirí uno para acceder a beneficios de abonado, descuentos y reservas prioritarias.
-                  </p>
-                  <Link to="/cliente/suscripciones" style={s.planCTA}>Ver planes disponibles</Link>
+            {(() => {
+              const cert = estadoCertificadoLabel(usuario.medical_certificate_status);
+              return cert ? (
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{ ...s.badge, ...cert.estilo }}>{cert.texto}</span>
                 </div>
-              )}
-            </div>
-          )}
+              ) : (
+                <p style={{ fontSize: '13px', color: 'var(--color-texto-suave)', marginBottom: '12px' }}>
+                  No has subido ningún apto físico todavía.
+                </p>
+              );
+            })()}
+
+            {aptoError && <div style={s.alerta('error')}>{aptoError}</div>}
+            {aptoExito && <div style={s.alerta('ok')}>{aptoExito}</div>}
+
+            <form onSubmit={subirApto} style={s.aptoBox}>
+              <label style={s.label}>
+                {usuario.medical_certificate_status === 'none' ? 'Subir apto físico' : 'Actualizar apto físico'}
+              </label>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                style={s.aptoInput}
+                onChange={(e) => setAptoFile(e.target.files[0] || null)}
+              />
+              <button type="submit" style={s.aptoBoton} disabled={aptoSubiendo}>
+                {aptoSubiendo ? 'Subiendo...' : 'Enviar'}
+              </button>
+            </form>
+          </div>
 
           {/* ── Información del Registro ──────────────────── */}
           <div style={s.seccion}>
@@ -297,11 +271,7 @@ function VerPerfil() {
             </Link>
           </p>
         </>
-      ) : (
-        <div style={s.cargando}>No se pudieron cargar los datos.</div>
       )}
     </LayoutPrivado>
   );
 }
-
-export default VerPerfil;

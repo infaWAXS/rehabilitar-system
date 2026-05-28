@@ -28,17 +28,21 @@ def obtener_actividad(activity_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{activity_id}/availability", response_model=ActivityAvailabilityResponse)
-def obtener_disponibilidad_actividad(activity_id: int, db: Session = Depends(get_db)):
-    return servicio_actividades.obtener_disponibilidad_actividad(activity_id, db)
+def obtener_disponibilidad_actividad(
+    activity_id: int,
+    date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    return servicio_actividades.obtener_disponibilidad_actividad(activity_id, db, date)
 
 
-@router.post("/", response_model=ActivityResponse, status_code=201)
+@router.post("/", response_model=List[ActivityResponse], status_code=201)
 def crear_actividad(
     datos: ActivityCreate,
     db: Session = Depends(get_db),
     _: object = Depends(require_role(["admin"])),
 ):
-    """Solo administradores. Crea una actividad en una sala."""
+    """Solo administradores. Para actividades fijas con repetitions>1 crea varias en batch."""
     return servicio_actividades.crear_actividad(datos, db)
 
 

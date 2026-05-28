@@ -1,6 +1,6 @@
 // Responsable: Nahuel - HU Listar lista de espera (Vista Admin/Staff)
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../layouts/LayoutPrivado';
 import { getActivityWaitlist } from '../../services/waitlistService';
 import { getActivityById } from '../../services/activitiesService';
@@ -29,6 +29,7 @@ const s = {
     border: `1px solid ${tipo === 'priority' ? '#bfdbfe' : '#e5e7eb'}`,
   }),
   btnSecundario: { padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: 'transparent', color: 'var(--color-texto-suave)', fontWeight: '600', fontSize: '14px', cursor: 'pointer' },
+  botonVolver: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)', marginBottom: '20px' },
   infoBox: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '12px 14px', fontSize: '13px', marginBottom: '20px', color: '#15803d' },
   avisoClase: { background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '8px', padding: '12px 14px', fontSize: '13px', color: '#c2410c', marginBottom: '20px', fontWeight: '500' },
   noResultados: { textAlign: 'center', padding: '32px', color: 'var(--color-texto-suave)', fontSize: '15px' }
@@ -36,6 +37,7 @@ const s = {
 
 function VerListaEsperaAdmin() {
   const { id: activityId } = useParams();
+  const navigate = useNavigate();
   const [lista, setLista] = useState([]);
   const [actividad, setActividad] = useState(null);
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -74,6 +76,7 @@ function VerListaEsperaAdmin() {
     <LayoutPrivado titulo="Gestión de Listas de Espera">
       <div style={s.wrapper}>
 
+        <button style={s.botonVolver} onClick={() => navigate(`/admin/actividades/${activityId}`)}>← Volver</button>
         <div style={s.headerFlex}>
           <div>
             <h2 style={s.tituloPage}>

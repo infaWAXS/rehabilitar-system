@@ -12,6 +12,7 @@ class ReservationCreate(BaseModel):
     reservation_type: str  # "fixed" o "individual"
     reservation_date: datetime
     payment_method: Optional[str] = "full_payment"  # subscription | full_payment | partial_payment | credit
+    test_scenario: Optional[str] = "success"        # Simulación MP: success | insufficient_funds | connection_error
 
 
 class ReservationUpdate(BaseModel):
@@ -30,6 +31,7 @@ class ReservationResponse(BaseModel):
     payment_status: str
     reservation_date: datetime
     created_at: datetime
+    discount_applied: int = 0  # % de descuento por cancelación aplicado en este pago
 
     class Config:
         from_attributes = True

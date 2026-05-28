@@ -1,5 +1,6 @@
 // Responsable: Nahuel - HU Dar de baja en lista de espera
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getMyWaitlist, removeWaitlistItem } from '../../../services/waitlistService';
 import { getActivities } from '../../../services/activitiesService';
@@ -82,6 +83,7 @@ const s = {
 };
 
 function BajaListaEspera() {
+  const navigate = useNavigate();
   const [listaEspera, setListaEspera] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -135,6 +137,7 @@ function BajaListaEspera() {
   return (
     <LayoutPrivado titulo="Dar de Baja en Lista de Espera">
       <div style={s.wrapper}>
+        <button style={s.botonVolver} onClick={() => navigate(-1)}>← Volver</button>
         <h2 style={s.tituloPage}>Dar de Baja en Lista de Espera</h2>
         <p style={s.descripcionPage}>
           Selecciona la actividad de la cual deseas retirarte de la lista de espera.

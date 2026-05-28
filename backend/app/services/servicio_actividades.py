@@ -67,6 +67,17 @@ def _solapa_en_sala(propuesta: Activity, existente: Activity) -> bool:
     if propuesta.room_id != existente.room_id:
         return False
 
+    # Actividades con fecha específica: solo conflicto si son la MISMA fecha
+    if propuesta.specific_date and existente.specific_date:
+        if propuesta.specific_date != existente.specific_date:
+            return False  # fechas distintas, no hay solapamiento posible
+        inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
+        inicio_existente, fin_existente = _rango_horario(existente)
+        if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
+            return False
+        return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
+
+    # Al menos una es legacy (schedule): comparar por día de semana
     dias_propuesta = _dias_actividad(propuesta)
     dias_existente = _dias_actividad(existente)
     if not dias_propuesta or not dias_existente or dias_propuesta.isdisjoint(dias_existente):
@@ -113,6 +124,16 @@ def _solapa_en_profesor(propuesta: Activity, existente: Activity) -> bool:
         return False
     if propuesta.professor.strip().lower() != existente.professor.strip().lower():
         return False
+
+    # Actividades con fecha específica: solo conflicto si son la MISMA fecha
+    if propuesta.specific_date and existente.specific_date:
+        if propuesta.specific_date != existente.specific_date:
+            return False
+        inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
+        inicio_existente, fin_existente = _rango_horario(existente)
+        if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
+            return False
+        return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
 
     dias_propuesta = _dias_actividad(propuesta)
     dias_existente = _dias_actividad(existente)
@@ -179,18 +200,32 @@ def obtener_actividad(activity_id: int, db: Session) -> Activity:
     return actividad
 
 
-def obtener_disponibilidad_actividad(activity_id: int, db: Session) -> dict:
-    """Devuelve capacidad total, reservas activas y cupos disponibles de una actividad."""
+def obtener_disponibilidad_actividad(activity_id: int, db: Session, date: str = None) -> dict:
+    """Devuelve capacidad total, reservas activas y cupos disponibles de una actividad.
+    Para actividades fijas, filtra por la fecha específica del turno (ISO 8601 YYYY-MM-DD o datetime).
+    Para actividades individuales devuelve el total general."""
     actividad = obtener_actividad(activity_id, db)
 
-    reserved_count = (
-        db.query(func.count(Reservation.id))
-        .filter(
-            Reservation.activity_id == activity_id,
-            Reservation.status != "cancelled",
-        )
-        .scalar()
-    ) or 0
+    query = db.query(func.count(Reservation.id)).filter(
+        Reservation.activity_id == activity_id,
+        Reservation.status != "cancelled",
+    )
+
+    if actividad.activity_type == "fixed" and date:
+        try:
+            from datetime import datetime as dt
+            # Acepta YYYY-MM-DD o ISO completo; filtra por día calendario
+            fecha = dt.fromisoformat(date.replace("Z", "+00:00")) if "T" in date else dt.strptime(date, "%Y-%m-%d")
+            inicio_dia = fecha.replace(hour=0, minute=0, second=0, microsecond=0)
+            fin_dia = fecha.replace(hour=23, minute=59, second=59, microsecond=999999)
+            query = query.filter(
+                Reservation.reservation_date >= inicio_dia,
+                Reservation.reservation_date <= fin_dia,
+            )
+        except (ValueError, AttributeError):
+            pass  # fecha invalida -> conteo general
+
+    reserved_count = query.scalar() or 0
 
     available_spots = max(int(actividad.capacity) - int(reserved_count), 0)
     return {
@@ -201,8 +236,10 @@ def obtener_disponibilidad_actividad(activity_id: int, db: Session) -> dict:
     }
 
 
-def crear_actividad(datos, db: Session) -> Activity:
-    """Crea una actividad validando cupos, disponibilidad de sala y de profesor."""
+def crear_actividad(datos, db: Session) -> list:
+    """Crea una o varias actividades (batch para fijas con repeticiones).
+    Devuelve siempre una lista de Activity."""
+    from datetime import timedelta
     sala = db.query(Room).filter(Room.id == datos.room_id).first()
     if not sala:
         raise HTTPException(status_code=404, detail="Sala no encontrada")
@@ -213,14 +250,37 @@ def crear_actividad(datos, db: Session) -> Activity:
             detail=f"Los cupos ({datos.capacity}) no pueden superar la capacidad de la sala ({sala.capacity})",
         )
 
-    actividad = Activity(**datos.model_dump())
-    actividad.status = "active"
-    _validar_disponibilidad_sala(actividad, db)
-    _validar_disponibilidad_profesor(actividad, db)
-    db.add(actividad)
+    repetitions = max(1, datos.repetitions or 1) if datos.activity_type == "fixed" else 1
+
+    if datos.activity_type == "fixed" and not datos.specific_date:
+        raise HTTPException(status_code=400, detail="Las actividades fijas requieren una fecha de inicio (specific_date).")
+
+    base_data = datos.model_dump(exclude={"repetitions"})
+    creadas = []
+
+    for i in range(repetitions):
+        data_i = dict(base_data)
+        if datos.activity_type == "fixed" and datos.specific_date:
+            data_i["specific_date"] = datos.specific_date + timedelta(weeks=i)
+            # schedule como texto legible para display (ej. "Lunes · 09:00–10:00")
+            dia_nombre = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][
+                data_i["specific_date"].weekday()
+            ]
+            hora_fin = f"{int(datos.time_slot.split(':')[0]) + 1:02d}:00" if datos.time_slot else ""
+            data_i["schedule"] = f"{dia_nombre} · {datos.time_slot}–{hora_fin}" if hora_fin else dia_nombre
+
+        act = Activity(**data_i)
+        act.status = "active"
+        _validar_disponibilidad_sala(act, db)
+        _validar_disponibilidad_profesor(act, db)
+        db.add(act)
+        db.flush()  # asigna id sin commit para la siguiente validacion
+        creadas.append(act)
+
     db.commit()
-    db.refresh(actividad)
-    return actividad
+    for act in creadas:
+        db.refresh(act)
+    return creadas
 
 
 def editar_actividad(activity_id: int, datos, db: Session) -> Activity:

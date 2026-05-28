@@ -53,6 +53,7 @@ const s = {
   modalBotones: { display: 'flex', gap: '10px', justifyContent: 'flex-end' },
   modalCancelar: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)' },
   modalConfirmar: { padding: '9px 18px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '700' },
+  botonVolver: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)', marginBottom: '20px' },
 };
 
 function GestionCuentaCliente() {
@@ -149,6 +150,7 @@ function GestionCuentaCliente() {
 
   return (
     <LayoutPrivado titulo="Mi Cuenta">
+      <button style={s.botonVolver} onClick={() => navigate(-1)}>← Volver</button>
 
       {/* HU Cambiar contraseña (Agustin)
            E1: nueva ≥ 6 chars + coinciden → PUT /users/change-password → logout → /login

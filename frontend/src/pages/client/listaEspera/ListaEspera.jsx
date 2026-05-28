@@ -1,5 +1,6 @@
 // Responsable: Nahuel - HU Dar de baja en lista de espera
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getMyWaitlist, removeWaitlistItem } from '../../../services/waitlistService';
 
@@ -44,10 +45,12 @@ const s = {
     background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px',
     padding: '14px 18px', color: '#15803d', fontSize: '14px', fontWeight: '600', marginBottom: '20px',
   },
-  listaVacia: { textAlign: 'center', padding: '40px 20px', color: 'var(--color-texto-suave)', fontSize: '14px' }
+  listaVacia: { textAlign: 'center', padding: '40px 20px', color: 'var(--color-texto-suave)', fontSize: '14px' },
+  botonVolver: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)', marginBottom: '20px' },
 };
 
 function ListaEspera() {
+  const navigate = useNavigate();
   const [listaEspera, setListaEspera] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -96,6 +99,7 @@ function ListaEspera() {
   return (
     <LayoutPrivado titulo="Lista de Espera">
       <div style={s.wrapper}>
+        <button style={s.botonVolver} onClick={() => navigate(-1)}>← Volver</button>
         <h2 style={s.tituloPage}>Lista de Espera</h2>
         <p style={s.descripcionPage}>
           Ver y gestionar tu posición en la lista de espera para actividades.

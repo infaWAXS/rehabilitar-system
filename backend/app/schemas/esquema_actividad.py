@@ -9,14 +9,15 @@ class ActivityCreate(BaseModel):
     name: str
     specialization: str
     activity_type: str          # "fixed" | "individual"
-    schedule: Optional[str] = None        # recurrente (clases fijas)
-    specific_date: Optional[date] = None  # fecha puntual (clases individuales)
-    time_slot: Optional[str] = None       # ej: "15:00" (para clases individuales con fecha específica)
+    schedule: Optional[str] = None        # solo para display en actividades fijas legacy
+    specific_date: Optional[date] = None  # fecha de inicio (fijas) o fecha puntual (individuales)
+    time_slot: Optional[str] = None       # ej: "15:00"
     professor: Optional[str] = None
     price: Decimal
     capacity: int
     description: Optional[str] = None
     requirements: Optional[str] = None
+    repetitions: Optional[int] = 1        # actividades fijas: cuántas semanas consecutivas crear
 
     @field_validator("activity_type")
     @classmethod

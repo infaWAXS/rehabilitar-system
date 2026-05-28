@@ -17,7 +17,8 @@ from app.exceptions.http_exceptions import user_not_found_exception
 #   - partial_payment (sena 50%)          -> pendiente  + pago parcial
 def create_reservation(user_id: int, activity_id: int, reservation_type: str,
                        reservation_date: datetime, db: Session,
-                       payment_method: str = "full_payment"):
+                       payment_method: str = "full_payment",
+                       test_scenario: str = "success"):
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
@@ -37,6 +38,22 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         if user.credits <= 0:
             raise HTTPException(status_code=400, detail="No tenés créditos disponibles para usar.")
         user.credits -= 1
+
+    # Consumir descuento pendiente por cancelación (solo pagos monetarios)
+    discount_applied = 0
+    if payment_method in ("full_payment", "partial_payment"):
+        if user.pending_discount_percent > 0:
+            discount_applied = user.pending_discount_percent
+            user.pending_discount_percent = 0
+
+    # Simulación Mercado Pago para pagos monetarios (full y partial)
+    if payment_method in ("full_payment", "partial_payment"):
+        escenario = test_scenario or "success"
+        if escenario == "insufficient_funds":
+            raise HTTPException(status_code=402, detail="Pago rechazado: fondos insuficientes en la cuenta.")
+        elif escenario == "connection_error":
+            raise HTTPException(status_code=503, detail="Error de conexión con el servidor del banco. Intentá nuevamente.")
+        # escenario == "success" → continuar normalmente
 
     # Estado de la reserva segun metodo de pago
     if payment_method in ("subscription", "full_payment", "credit"):
@@ -59,7 +76,17 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
     db.commit()
     db.refresh(new_reservation)
 
-    return new_reservation
+    return {
+        "id": new_reservation.id,
+        "user_id": new_reservation.user_id,
+        "activity_id": new_reservation.activity_id,
+        "reservation_type": new_reservation.reservation_type,
+        "status": new_reservation.status,
+        "payment_status": new_reservation.payment_status,
+        "reservation_date": new_reservation.reservation_date,
+        "created_at": new_reservation.created_at,
+        "discount_applied": discount_applied,
+    }
 
 
 # Obtiene todas las reservas de un usuario
@@ -195,10 +222,12 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
         elif hours_until >= 24:
             if prev_cancellations == 0:
                 result = "discount_30"
-                message = "Turno cancelado. Tendrás un 30 % de descuento en tu próxima cuota."
+                message = "Turno cancelado. Tendrás un 30 % de descuento en tu próximo pago monetario."
+                user.pending_discount_percent = max(user.pending_discount_percent or 0, 30)
             elif prev_cancellations == 1:
                 result = "discount_20"
-                message = "Turno cancelado. Tendrás un 20 % de descuento en tu próxima cuota."
+                message = "Turno cancelado. Tendrás un 20 % de descuento en tu próximo pago monetario."
+                user.pending_discount_percent = max(user.pending_discount_percent or 0, 20)
             else:
                 result = "no_benefit"
                 message = "Turno cancelado. No aplica descuento (ya cancelaste 2 o más veces este mes)."

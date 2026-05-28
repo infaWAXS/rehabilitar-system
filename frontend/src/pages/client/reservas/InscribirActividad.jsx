@@ -122,6 +122,17 @@ const s = {
     textAlign: 'center',
     marginBottom: '12px',
   },
+  actCard: (sel) => ({
+    padding: '14px 16px',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    border: sel ? '2px solid var(--color-primario)' : '1px solid var(--color-borde)',
+    background: sel ? '#f0f4ff' : 'var(--color-fondo-card)',
+    transition: 'border-color 0.12s, background 0.12s',
+  }),
+  actCardNombre: { fontSize: '15px', fontWeight: '700', color: 'var(--color-texto)', marginBottom: '2px' },
+  actCardMeta: { fontSize: '12px', color: 'var(--color-texto-suave)', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '4px' },
+  actCardPrecio: { fontSize: '14px', fontWeight: '700', color: 'var(--color-primario)' },
   resumenBox: { background: 'var(--color-fondo)', borderRadius: '8px', padding: '14px', marginBottom: '16px', fontSize: '14px', lineHeight: '1.8' },
   divider: { borderTop: '1px solid var(--color-borde)', margin: '18px 0' },
   mpBox: { textAlign: 'center', padding: '20px 0' },
@@ -137,6 +148,8 @@ function normalizarActividad(a) {
   return {
     id: Number(a.id),
     name: a.name || a.nombre || `Actividad ${a.id}`,
+    specialization: a.specialization || null,
+    professor: a.professor || null,
     price: Number(a.price ?? a.precio ?? 0),
     capacity: Number(a.capacity ?? a.cupos ?? 1),
     reservationType: (a.activity_type || a.reservation_type || a.tipo || 'fixed') === 'individual' ? 'individual' : 'fixed',
@@ -155,8 +168,8 @@ const DIA_NUMS = { lunes: 1, martes: 2, miercoles: 3, jueves: 4, viernes: 5, sab
 function turnosDeActividad(actividad) {
   if (!actividad) return [];
 
-  if (actividad.reservationType === 'individual') {
-    if (!actividad.specificDate) return [];
+  // Actividad con fecha específica (individual o fija nueva): un solo turno
+  if (actividad.specificDate) {
     const hora = actividad.timeSlot || '10:00';
     const [h, m] = hora.split(':').map(Number);
     const d = new Date(actividad.specificDate + 'T00:00:00');
@@ -167,7 +180,7 @@ function turnosDeActividad(actividad) {
     }];
   }
 
-  // Actividad fija: detectar días por nombre (igual que el backend)
+  // Fija legacy: generar turnos por schedule
   if (!actividad.schedule) return [];
   const schedNorm = normStr(actividad.schedule);
   const diasNums = Object.entries(DIA_NUMS)
@@ -211,11 +224,14 @@ function InscribirActividad() {
   const [esMayor65, setEsMayor65] = useState(false);
   const [esAbonado, setEsAbonado] = useState(false);
   const [credits, setCredits] = useState(0);
+  const [pendingDiscount, setPendingDiscount] = useState(0);
   const [metodo, setMetodo] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const [resultado, setResultado] = useState(null);
   const [cuposDisponibles, setCuposDisponibles] = useState(null);
+  const [testScenario, setTestScenario] = useState('success');
+  const [filtro, setFiltro] = useState('');
 
   // Detectar si el cliente es abonado desde el backend
   useEffect(() => {
@@ -223,6 +239,7 @@ function InscribirActividad() {
       .then((data) => {
         setEsAbonado(data?.es_abonado === true);
         setCredits(data?.credits ?? 0);
+        setPendingDiscount(data?.pending_discount_percent ?? 0);
       })
       .catch(() => {});
   }, []);
@@ -258,14 +275,17 @@ function InscribirActividad() {
       .finally(() => setCargandoActividades(false));
   }, []); // eslint-disable-line
 
-  // Obtener cupos reales del backend cuando cambia la actividad seleccionada
+  // Obtener cupos reales del backend cuando cambia la actividad o el turno seleccionado.
+  // Para actividades fijas se pasa la fecha del turno para obtener cupos de ESA clase específica.
   useEffect(() => {
     if (!actividadId) return;
+    const act = actividades.find((a) => a.id === Number(actividadId));
+    const dateParam = act?.reservationType === 'fixed' && fecha ? fecha : null;
     setCuposDisponibles(null);
-    getActivityAvailability(Number(actividadId))
+    getActivityAvailability(Number(actividadId), dateParam)
       .then((data) => setCuposDisponibles(data.available_spots ?? 0))
       .catch(() => setCuposDisponibles(null));
-  }, [actividadId]);
+  }, [actividadId, fecha]); // eslint-disable-line
 
   const actividad = actividades.find((a) => a.id === Number(actividadId));
   const turnos = useMemo(() => turnosDeActividad(actividad), [actividad]);
@@ -280,11 +300,23 @@ function InscribirActividad() {
   }, [turnos]);
 
   const tipoReserva = actividad?.reservationType || 'fixed';
+  const actividadesFiltradas = useMemo(() => {
+    const q = normStr(filtro.trim());
+    if (!q) return actividades;
+    return actividades.filter((a) =>
+      normStr(a.name).includes(q) ||
+      normStr(a.specialization || '').includes(q) ||
+      normStr(a.professor || '').includes(q)
+    );
+  }, [actividades, filtro]);
   const hayCupos = cuposDisponibles !== null ? cuposDisponibles > 0 : (actividad ? actividad.capacity > 0 : false);
   const cuposMostrar = cuposDisponibles ?? actividad?.capacity ?? 0;
   const precioBase = actividad?.price || 0;
   const descuento = esMayor65 && tipoReserva === 'fixed' ? precioBase * 0.2 : 0;
-  const precioFinal = precioBase - descuento;
+  const precioConDescuento = precioBase - descuento;
+  const descuentoCancelacion = (metodo === 'full_payment' || metodo === 'partial_payment') && pendingDiscount > 0
+    ? Math.round(precioConDescuento * pendingDiscount / 100) : 0;
+  const precioFinal = precioConDescuento - descuentoCancelacion;
   const sena = Math.round(precioFinal * 0.5);
   const montoAPagar = metodo === 'partial_payment' ? sena : precioFinal;
 
@@ -336,18 +368,23 @@ function InscribirActividad() {
         reservation_type: tipoReserva,
         reservation_date: new Date(fecha).toISOString(),
         payment_method: paymentMethod,
+        test_scenario: testScenario,
       };
 
       const fn = tipoReserva === 'fixed' ? reserveFixed : reserveIndividual;
-      await fn(payload);
+      const data = await fn(payload);
+
+      const discountMsg = data?.discount_applied > 0
+        ? ` Se aplicó un ${data.discount_applied}% de descuento por cancelación previa.`
+        : '';
 
       if (paymentMethod === 'partial_payment') {
         setResultado({
           tipo: 'pendiente',
-          mensaje: `Tu reserva quedo en estado pendiente. Monto abonado: ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.`,
+          mensaje: `Tu reserva quedo en estado pendiente. Monto abonado: ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.${discountMsg}`,
         });
       } else {
-        setResultado({ tipo: 'confirmada', mensaje: 'Inscripcion confirmada. Tu lugar esta reservado.' });
+        setResultado({ tipo: 'confirmada', mensaje: `Inscripcion confirmada. Tu lugar esta reservado.${discountMsg}` });
       }
       setPaso(3);
     } catch (err) {
@@ -370,12 +407,7 @@ function InscribirActividad() {
     else setPaso(2);
   };
 
-  const handlePagoSimulado = async (simPayment) => {
-    if (!simPayment) {
-      setResultado({ tipo: 'error', mensaje: 'Error en el pago. No se pudo completar la inscripcion.' });
-      setPaso(3);
-      return;
-    }
+  const handlePagoSimulado = async () => {
     await handleReservar(metodo);
   };
 
@@ -393,7 +425,7 @@ function InscribirActividad() {
 
           {paso === 0 && (
             <>
-              <p style={s.titulo}>Selecciona la actividad y el turno</p>
+              <p style={s.titulo}>Selecciona una actividad</p>
 
               {cargandoActividades ? (
                 <p style={{ color: 'var(--color-texto-suave)', fontSize: '14px' }}>Cargando actividades...</p>
@@ -403,30 +435,57 @@ function InscribirActividad() {
                 </p>
               ) : (
                 <>
-                  <div style={s.campo}>
-                    <label style={s.label}>Actividad</label>
-                    <select style={s.select} value={actividadId} onChange={(e) => { setActividadId(e.target.value); setMetodo(''); setFecha(''); }}>
-                      {actividades.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name} - {a.reservationType === 'fixed' ? 'Fija' : 'Individual'} - {formatPrecio(a.price)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div style={s.campo}>
-                    <label style={s.label}>Turno disponible</label>
-                    {turnos.length === 0 ? (
-                      <p style={{ fontSize: '13px', color: 'var(--color-texto-suave)', margin: '4px 0' }}>
-                        No hay turnos disponibles para esta actividad.
-                      </p>
-                    ) : (
-                      <select style={s.select} value={fecha} onChange={(e) => setFecha(e.target.value)}>
-                        {turnos.map((t) => (
-                          <option key={t.value} value={t.value}>{t.label}</option>
-                        ))}
-                      </select>
-                    )}
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, especialidad o profesor..."
+                    value={filtro}
+                    onChange={(e) => setFiltro(e.target.value)}
+                    style={{ ...s.select, marginBottom: '12px' }}
+                  />
+                  {actividadesFiltradas.length === 0 && (
+                    <p style={{ fontSize: '13px', color: 'var(--color-texto-suave)', margin: '0 0 12px' }}>
+                      No se encontraron actividades para &ldquo;{filtro}&rdquo;.
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '4px' }}>
+                    {actividadesFiltradas.map((a) => {
+                      const turnoLabel = a.specificDate
+                        ? (() => {
+                            const d = new Date(a.specificDate + 'T00:00:00');
+                            const [h, m] = (a.timeSlot || '10:00').split(':').map(Number);
+                            d.setHours(h, m, 0, 0);
+                            return d.toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                          })()
+                        : (a.schedule || 'Sin fecha definida');
+                      const sel = String(a.id) === actividadId;
+                      return (
+                        <div
+                          key={a.id}
+                          style={s.actCard(sel)}
+                          onClick={() => { setActividadId(String(a.id)); setMetodo(''); setFecha(''); }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={s.actCardNombre}>{a.name}</div>
+                              <div style={s.actCardMeta}>
+                                {a.specialization && <span>{a.specialization}</span>}
+                                {a.professor && (
+                                  <><span>·</span><span>{a.professor}</span></>
+                                )}
+                                <span>·</span>
+                                <span>{turnoLabel}</span>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={s.actCardPrecio}>{formatPrecio(a.price)}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--color-texto-suave)', marginTop: '2px' }}>
+                                {a.reservationType === 'fixed' ? 'Fija' : 'Individual'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div style={s.divider} />
@@ -443,11 +502,14 @@ function InscribirActividad() {
                     <div style={{ fontSize: '13px', color: 'var(--color-texto)', marginBottom: '6px', opacity: !hayCupos ? 0.45 : 1 }}>
                       Créditos disponibles: 
                       <strong>{credits}</strong>
-                      {credits === 0 && <span style={{ fontSize: '11px', color: 'var(--color-texto-suave)', marginLeft: '4px' }}>(se otorgan al cancelar con &gt;48 h de anticipación)</span>}
+                      {credits === 0 && <span style={{ fontSize: '11px', color: 'var(--color-texto-suave)', marginLeft: '4px' }}></span>}
                       {!hayCupos && credits > 0 && <span style={{ fontSize: '11px', color: 'var(--color-texto-suave)', marginLeft: '4px' }}>(no aplica sin cupos)</span>}
                     </div>
-                  )}
-                  {(tipoReserva === 'fixed' || tipoReserva === 'individual') && (
+                  )}                  {pendingDiscount > 0 && (
+                    <div style={{ ...s.infoBox('green'), marginBottom: '8px', fontSize: '13px' }}>
+                      Tenés un <strong>{pendingDiscount}% de descuento</strong> acumulado por cancelación. Se aplicará automáticamente al abonar total o seña.
+                    </div>
+                  )}                  {(tipoReserva === 'fixed' || tipoReserva === 'individual') && (
                     <label style={{ ...s.checkRow, opacity: !hayCupos ? 0.45 : 1 }}>
                       <input type="checkbox" checked={esMayor65} onChange={(e) => setEsMayor65(e.target.checked)} disabled={!hayCupos} />
                       Soy mayor de 65 años (descuento 20%)
@@ -514,12 +576,16 @@ function InscribirActividad() {
                     </button>
                   )}
                   <button style={s.metodoBtn(metodo === 'full_payment')} onClick={() => setMetodo('full_payment')}>
-                    Abonar total - {formatPrecio(precioFinal)}
-                    <div style={s.metodoBtnSub}>Reserva confirmada al instante</div>
+                    Abonar total - {formatPrecio(metodo === 'full_payment' ? precioFinal : precioConDescuento - (pendingDiscount > 0 ? Math.round(precioConDescuento * pendingDiscount / 100) : 0))}
+                    <div style={s.metodoBtnSub}>
+                      {pendingDiscount > 0 ? `Con ${pendingDiscount}% de descuento — Reserva confirmada al instante` : 'Reserva confirmada al instante'}
+                    </div>
                   </button>
                   <button style={s.metodoBtn(metodo === 'partial_payment')} onClick={() => setMetodo('partial_payment')}>
-                    Abonar sena (50%) - {formatPrecio(sena)}
-                    <div style={s.metodoBtnSub}>Reserva en estado pendiente hasta completar el pago</div>
+                    Abonar seña (50%) - {formatPrecio(metodo === 'partial_payment' ? sena : Math.round((precioConDescuento - (pendingDiscount > 0 ? Math.round(precioConDescuento * pendingDiscount / 100) : 0)) * 0.5))}
+                    <div style={s.metodoBtnSub}>
+                      {pendingDiscount > 0 ? `Con ${pendingDiscount}% de descuento — Reserva en estado pendiente` : 'Reserva en estado pendiente hasta completar el pago'}
+                    </div>
                   </button>
                 </div>
               )}
@@ -544,14 +610,29 @@ function InscribirActividad() {
                 <strong>Detalle del pago</strong><br />
                 Actividad: {actividad.name}<br />
                 Monto a pagar: <strong>{formatPrecio(montoAPagar)}</strong>
-                {metodo === 'partial_payment' && <><br /><span style={{ color: 'var(--color-texto-suave)', fontSize: '12px' }}>Sena del 50% - monto restante: {formatPrecio(precioFinal - sena)}</span></>}
+                {metodo === 'partial_payment' && <><br /><span style={{ color: 'var(--color-texto-suave)', fontSize: '12px' }}>Seña del 50% - monto restante: {formatPrecio(precioFinal - sena)}</span></>}
+              </div>
+
+              {/* Selector de escenario MP (solo visible en desarrollo/testing) */}
+              <div style={{ margin: '16px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '13px', color: 'var(--color-texto-suave)', fontWeight: 600 }}>
+                  Simular escenario de pago:
+                </label>
+                <select
+                  value={testScenario}
+                  onChange={(e) => setTestScenario(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px', width: 'fit-content' }}
+                >
+                  <option value="success">✅ Pago exitoso</option>
+                  <option value="insufficient_funds">❌ Fondos insuficientes</option>
+                  <option value="connection_error">⚠️ Error de conexión</option>
+                </select>
               </div>
 
               <div style={s.botones}>
-                <button style={cargando ? s.btnDisabled : s.btnPrimario} onClick={() => handlePagoSimulado(true)} disabled={cargando}>
-                  {cargando ? 'Procesando...' : 'Confirmar pago'}
+                <button style={cargando ? s.btnDisabled : s.btnPrimario} onClick={handlePagoSimulado} disabled={cargando}>
+                  {cargando ? 'Procesando...' : 'Simular pago'}
                 </button>
-                <button style={s.btnSecundario} onClick={() => handlePagoSimulado(false)} disabled={cargando}>Simular error</button>
                 <button style={s.btnSecundario} onClick={handleCancelar}>Cancelar</button>
               </div>
             </>

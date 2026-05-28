@@ -378,8 +378,6 @@ function EditarActividad() {
 
   const [form, setForm] = useState(null);
 
-  const [diasSeleccionados, setDiasSeleccionados] = useState([]);
-
   const [horaInicio, setHoraInicio] = useState('');
 
   const [salas, setSalas] = useState([]);
@@ -431,8 +429,6 @@ function EditarActividad() {
         setSalas(rooms);
 
         setActividadesActivas(Array.isArray(acts) ? acts : []);
-
-        setDiasSeleccionados(parseDias(actividad.schedule));
 
         setHoraInicio(parseHora(actividad));
 
@@ -495,140 +491,40 @@ function EditarActividad() {
   
 
   const profesoresDisponibles = useMemo(() => {
-
     if (!form?.specialization) return [];
-
-    if (esIndividual && !form.specific_date) return profesores;
-
-    if (!horaInicio) return profesores;
-
-
-
+    if (!form?.specific_date || !horaInicio) return profesores;
+    const diaFormulario = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
     return profesores.filter((profesor) => {
-
       const nombreCompleto = `${profesor.name} ${profesor.lastname}`;
-
       return !actividadesActivas.some((actividad) => {
-
         if (actividad.id === Number(id)) return false;
-
         if (!actividad.professor) return false;
-
         if (!esMismoProfesor(actividad.professor, nombreCompleto)) return false;
-
-
-
-        let diasActividad;
-
-        if (actividad.activity_type === 'individual') {
-
-          if (!actividad.specific_date) return false;
-
-          diasActividad = new Set([DIAS_SEMANA[new Date(`${actividad.specific_date}T00:00:00`).getDay()]]);
-
-        } else {
-
-          const s = (actividad.schedule || '').toLowerCase();
-
-          diasActividad = new Set(DIAS.filter((dia) => s.includes(dia.toLowerCase())));
-
-        }
-
-
-
-        let diasPropuesta;
-
-        if (esIndividual) {
-
-          if (!form.specific_date) return false;
-
-          diasPropuesta = new Set([DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()]]);
-
-        } else {
-
-          diasPropuesta = new Set(diasSeleccionados);
-
-        }
-
-
-
-        const hayDiaComun = [...diasPropuesta].some((dia) => diasActividad.has(dia));
-
-        if (!hayDiaComun) return false;
-
-
-
+        const diasActividad = diasDeActividad(actividad);
+        if (!diasActividad.has(diaFormulario)) return false;
         const [inicioExist, finExist] = rangoDeActividad(actividad);
-
         if (inicioExist === null) return false;
-
         const inicioProp = parseMinutes(horaInicio);
-
         return inicioProp < finExist && inicioExist < inicioProp + 60;
-
       });
-
     });
-
-  }, [profesores, actividadesActivas, horaInicio, esIndividual, form?.specific_date, diasSeleccionados, id]);
+  }, [profesores, actividadesActivas, horaInicio, form?.specific_date, id]);
 
 
 
   const salasDisponibles = useMemo(() => {
-
-    if (esIndividual) {
-
-      if (!form?.specific_date || !horaInicio) return salas;
-
-      const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
-
-      return salas.filter((sala) => !ocupada(sala.id, dia, horaInicio));
-
-    }
-
-
-
-    if (diasSeleccionados.length === 0 || !horaInicio) return salas;
-
-    return salas.filter((sala) => diasSeleccionados.every((dia) => !ocupada(sala.id, dia, horaInicio)));
-
-  }, [salas, esIndividual, form?.specific_date, horaInicio, diasSeleccionados, ocupada]);
-
-
-
-  const diasDisponibles = useMemo(() => {
-
-    if (esIndividual || !form?.room_id || !horaInicio) return DIAS;
-
-    return DIAS.filter((dia) => !ocupada(form.room_id, dia, horaInicio));
-
-  }, [esIndividual, form?.room_id, horaInicio, ocupada]);
+    if (!form?.specific_date || !horaInicio) return salas;
+    const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
+    return salas.filter((sala) => !ocupada(sala.id, dia, horaInicio));
+  }, [salas, form?.specific_date, horaInicio, ocupada]);
 
 
 
   const horasDisponibles = useMemo(() => {
-
-    if (!form?.room_id) return HORAS;
-
-
-
-    if (esIndividual) {
-
-      if (!form.specific_date) return HORAS;
-
-      const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
-
-      return HORAS.filter((hora) => !ocupada(form.room_id, dia, hora.valor));
-
-    }
-
-
-
-    if (diasSeleccionados.length === 0) return HORAS;
-
-    return HORAS.filter((hora) => diasSeleccionados.every((dia) => !ocupada(form.room_id, dia, hora.valor)));
-
-  }, [form?.room_id, esIndividual, form?.specific_date, diasSeleccionados, ocupada]);
+    if (!form?.room_id || !form?.specific_date) return HORAS;
+    const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
+    return HORAS.filter((hora) => !ocupada(form.room_id, dia, hora.valor));
+  }, [form?.room_id, form?.specific_date, ocupada]);
 
 
 
@@ -656,12 +552,6 @@ function EditarActividad() {
 
 
 
-  useEffect(() => {
-
-    setDiasSeleccionados((prev) => prev.filter((dia) => diasDisponibles.includes(dia)));
-
-  }, [diasDisponibles]);
-
 
 
   const handleChange = (e) => {
@@ -684,8 +574,6 @@ function EditarActividad() {
 
       }));
 
-      setDiasSeleccionados([]);
-
       setHoraInicio('');
 
     } else {
@@ -693,34 +581,6 @@ function EditarActividad() {
       setForm((prev) => ({ ...prev, [name]: value }));
 
     }
-
-  };
-
-
-
-  const toggleDia = (dia) => {
-
-    if (!diasDisponibles.includes(dia)) return;
-
-    setDiasSeleccionados((prev) =>
-
-      prev.includes(dia) ? prev.filter((d) => d !== dia) : [...prev, dia]
-
-    );
-
-  };
-
-
-
-  const buildSchedule = () => {
-
-    if (diasSeleccionados.length === 0 || !horaInicio) return '';
-
-    const ordenados = DIAS.filter((d) => diasSeleccionados.includes(d));
-
-    const horaFin = `${String(parseInt(horaInicio) + 1).padStart(2, '0')}:00`;
-
-    return `${ordenados.join(', ')} ?? ${horaInicio}???${horaFin}`;
 
   };
 
@@ -740,21 +600,19 @@ function EditarActividad() {
 
     if (!horaInicio) return setError('Seleccion?? un horario.');
 
-    if (esIndividual && !form.specific_date) return setError('Seleccion?? la fecha del turno.');
+    if (!form.specific_date) return setError('Seleccion?? la fecha.');
 
-    if (esIndividual && feriadoSeleccionado.esFeriado) {
+    if (feriadoSeleccionado.esFeriado) {
 
       return setError(`La fecha seleccionada es feriado (${feriadoSeleccionado.nombre}). Eleg?? otra fecha.`);
 
     }
 
-    if (esIndividual && esFinDeSemana(form.specific_date)) {
+    if (esFinDeSemana(form.specific_date)) {
 
-      return setError('Las actividades individuales no se pueden programar en fin de semana.');
+      return setError('Las actividades no se pueden programar en fin de semana.');
 
     }
-
-    if (!esIndividual && diasSeleccionados.length === 0) return setError('Seleccion?? al menos un d??a.');
 
     if (Number(form.capacity) <= 0) return setError('Los cupos deben ser mayor a 0.');
 
@@ -772,9 +630,7 @@ function EditarActividad() {
 
       activity_type: form.activity_type,
 
-      schedule:      esIndividual ? null : buildSchedule(),
-
-      specific_date: esIndividual ? form.specific_date : null,
+      specific_date: form.specific_date || null,
 
       time_slot:     horaInicio,
 
@@ -958,72 +814,31 @@ function EditarActividad() {
 
 
 
-            {/* Selector de d??as ??? solo para clase fija */}
+            {/* Fecha */}
 
-            {form.activity_type === 'fixed' && (
+            <div style={s.grupo}>
 
-              <div style={{ ...s.grupo, ...s.gridFull }}>
+              <label style={s.label}>{esIndividual ? 'Fecha del turno *' : 'Fecha de la actividad *'}</label>
 
-                <label style={s.label}>D??as *</label>
+              <input
 
-                <div style={s.diasRow}>
+                style={s.input}
 
-                  {diasDisponibles.map((dia) => (
+                type="date"
 
-                    <button
+                name="specific_date"
 
-                      key={dia}
+                value={form.specific_date}
 
-                      type="button"
+                onChange={handleChange}
 
-                      style={s.diaBtn(diasSeleccionados.includes(dia))}
+                min={new Date().toISOString().split('T')[0]}
 
-                      onClick={() => toggleDia(dia)}
+                required
 
-                    >
+              />
 
-                      {dia}
-
-                    </button>
-
-                  ))}
-
-                </div>
-
-              </div>
-
-            )}
-
-
-
-            {/* Fecha espec??fica ??? solo para clase individual */}
-
-            {form.activity_type === 'individual' && (
-
-              <div style={s.grupo}>
-
-                <label style={s.label}>Fecha del turno *</label>
-
-                <input
-
-                  style={s.input}
-
-                  type="date"
-
-                  name="specific_date"
-
-                  value={form.specific_date}
-
-                  onChange={handleChange}
-
-                  min={new Date().toISOString().split('T')[0]}
-
-                  required
-
-                />
-              </div>
-
-            )}
+            </div>
 
 
 
@@ -1061,9 +876,13 @@ function EditarActividad() {
 
               </select>
 
-              {form.activity_type === 'fixed' && diasSeleccionados.length > 0 && horaInicio && (
+              {horaInicio && form.specific_date && (
 
-                <span style={s.hint}>Horario: {buildSchedule()}</span>
+                <span style={s.hint}>
+
+                  {`${form.specific_date} · ${horaInicio}–${String(parseInt(horaInicio) + 1).padStart(2, '0')}:00`}
+
+                </span>
 
               )}
 

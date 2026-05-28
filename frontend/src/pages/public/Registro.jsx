@@ -38,6 +38,7 @@ const s = {
     padding: '10px 14px', color: '#16a34a', fontSize: '13px', marginBottom: '16px',
   },
   errInline: { fontSize: '12px', color: '#dc2626', display: 'block', marginBottom: '4px' },
+  enlaceVolver: { display: 'block', textAlign: 'center', marginTop: '16px', fontSize: '13px', color: 'var(--color-primario)', textDecoration: 'none' },
 };
 
 function Registro() {
@@ -178,6 +179,7 @@ function Registro() {
           {cargando ? 'Registrando...' : 'Registrarse'}
         </button>
         <a href="/login" style={s.enlace}>¿Ya tenés cuenta? Iniciar sesión</a>
+        <a href="/login" style={s.enlaceVolver}>← Volver al login</a>
       </form>
     </LayoutPublico>
   );

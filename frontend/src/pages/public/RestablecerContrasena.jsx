@@ -39,6 +39,7 @@ const s = {
     background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px',
     padding: '14px', color: '#c2410c', fontSize: '13px',
   },
+  enlaceVolver: { display: 'block', textAlign: 'center', marginTop: '16px', fontSize: '13px', color: 'var(--color-primario)', textDecoration: 'none' },
 };
 
 function RestablecerContrasena() {
@@ -103,6 +104,7 @@ function RestablecerContrasena() {
         <button type="submit" style={cargando ? s.botonDisabled : s.boton} disabled={cargando}>
           {cargando ? 'Guardando...' : 'Restablecer contraseña'}
         </button>
+        <a href="/login" style={s.enlaceVolver}>← Volver al login</a>
       </form>
     </LayoutPublico>
   );

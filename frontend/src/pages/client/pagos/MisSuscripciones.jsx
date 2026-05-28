@@ -1,6 +1,7 @@
 // Responsable: Ezequiel
 // HU: Ver suscripciones + Pagar Mercado Pago
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getPlans, getMyPlan, mercadoPagoCheckout } from '../../../services/paymentsService';
 
@@ -48,6 +49,7 @@ const s = {
     textAlign: 'center', padding: '48px 24px', color: 'var(--color-texto-suave)',
     fontSize: '14px', background: 'var(--color-fondo-card)', borderRadius: '12px',
   },
+  botonVolver: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)', marginBottom: '20px' },
   // Modal
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
@@ -85,6 +87,7 @@ const s = {
 };
 
 export default function MisSuscripciones() {
+  const navigate = useNavigate();
   const [planes, setPlanes]         = useState([]);
   const [cargando, setCargando]     = useState(true);
   const [errorCarga, setErrorCarga] = useState('');
@@ -142,6 +145,7 @@ export default function MisSuscripciones() {
 
   return (
     <LayoutPrivado>
+      <button style={s.botonVolver} onClick={() => navigate(-1)}>← Volver</button>
       <h1 style={s.titulo}>Planes y Abonos</h1>
       <p style={s.subtitulo}>Comparar opciones disponibles y suscribirse al plan que mejor se adapte a tus necesidades.</p>
 

@@ -46,6 +46,7 @@ const s = {
   },
   cargando: { fontSize: '14px', color: 'var(--color-texto-suave)', fontStyle: 'italic', padding: '40px 20px', textAlign: 'center' },
   errInline: { fontSize: '12px', color: '#dc2626', display: 'block', marginBottom: '4px' },
+  botonVolver: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)', marginBottom: '20px' },
 };
 
 function EditarPerfil() {
@@ -111,6 +112,7 @@ function EditarPerfil() {
 
   return (
     <LayoutPrivado titulo="Editar Perfil">
+      <button style={s.botonVolver} onClick={() => navigate('/perfil')}>← Volver</button>
       <div style={s.seccion}>
         <p style={s.titulo}>Editar información personal</p>
         <form onSubmit={enviar}>
