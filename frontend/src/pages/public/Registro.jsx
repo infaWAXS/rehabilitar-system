@@ -71,7 +71,7 @@ function Registro() {
       return;
     }
     setFieldErrors({});
-
+ 
     setCargando(true);
     try {
       // E1/E2/E3: registra el usuario con datos opcionales
@@ -165,8 +165,20 @@ function Registro() {
             <input
               style={{ ...s.input, padding: '7px 14px' }}
               type="file"
-              accept="image/*,application/pdf"
-              onChange={(e) => setAptoFile(e.target.files[0] || null)}
+              accept=".jpg,.jpeg,.png,application/pdf" 
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const tiposPermitidos = ['image/jpeg', 'image/png', 'application/pdf'];
+                if (!tiposPermitidos.includes(file.type)) {
+                  setError('Solo se permiten archivos JPG, PNG y PDF');
+                  e.target.value = null;
+                  return;
+                }
+                
+                setAptoFile(file);
+                }}
             />
           </div>
         </div>
