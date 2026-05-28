@@ -190,45 +190,43 @@ function VerPerfil() {
                 <p style={s.valor}>{usuario.medical_certificate_path.split('/').pop()}</p>
               </div>
             )}
-            <div style={{ borderTop: '1px solid var(--color-borde)', paddingTop: '18px', marginTop: '8px' }}>
-              <label style={s.label}>
-                {usuario.medical_certificate_path ? 'Renovar apto físico' : 'Subir apto físico'}
-              </label>
-              <form onSubmit={subirApto} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <input
-                  type="file"
-                  accept=".jpg,.jpeg,.png,application/pdf"
-                  required
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    
-                    const tiposPermitidos = ['image/jpeg', 'image/png', 'application/pdf'];
-                    if (!tiposPermitidos.includes(file.type)) {
-                      setAptoError('Solo se permiten archivos JPG, PNG y PDF');
-                      e.target.value = null;
-                      return;
-                    }
-                    
-                    setAptoFile(file);
-                  }}
-                  style={{ fontSize: '13px', color: 'var(--color-texto)' }}
-                />
-                <button
-                  type="submit"
-                  disabled={aptoSubiendo}
-                  style={{
-                    padding: '7px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                    background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))',
-                    color: '#fff', fontWeight: '600', fontSize: '13px',
-                  }}
-                >
-                  {aptoSubiendo ? 'Enviando...' : 'Enviar certificado'}
-                </button>
-              </form>
-              {aptoError && <p style={{ color: '#dc2626', fontSize: '13px', marginTop: '8px' }}>{aptoError}</p>}
-              {aptoExito && <p style={{ color: '#16a34a', fontSize: '13px', marginTop: '8px' }}>{aptoExito}</p>}
-            </div>
+            {usuario.medical_certificate_status !== 'pending' && usuario.medical_certificate_status !== 'approved' && (
+              <div style={{ borderTop: '1px solid var(--color-borde)', paddingTop: '18px', marginTop: '8px' }}>
+                <label style={s.label}>Subir apto físico</label>
+                <form onSubmit={subirApto} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    required
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      const tiposPermitidos = ['image/jpeg', 'image/png', 'application/pdf'];
+                      if (!tiposPermitidos.includes(file.type)) {
+                        setAptoError('Solo se permiten archivos JPG, PNG y PDF');
+                        e.target.value = null;
+                        return;
+                      }
+                      setAptoFile(file);
+                    }}
+                    style={{ fontSize: '13px', color: 'var(--color-texto)' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={aptoSubiendo}
+                    style={{
+                      padding: '7px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                      background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))',
+                      color: '#fff', fontWeight: '600', fontSize: '13px',
+                    }}
+                  >
+                    {aptoSubiendo ? 'Enviando...' : 'Enviar certificado'}
+                  </button>
+                </form>
+                {aptoError && <p style={{ color: '#dc2626', fontSize: '13px', marginTop: '8px' }}>{aptoError}</p>}
+                {aptoExito && <p style={{ color: '#16a34a', fontSize: '13px', marginTop: '8px' }}>{aptoExito}</p>}
+              </div>
+            )}
           </div>}
 
           {/* ── Información del Registro ──────────────────── */}
