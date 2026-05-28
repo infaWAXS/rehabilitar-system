@@ -27,6 +27,12 @@ export function requestPasswordRecovery(email) {
   });
 }
 
+export function validateRecoveryToken(token) {
+  return apiRequest(`/auth/recovery/validate?token=${encodeURIComponent(token)}`, {
+    method: 'GET',
+  });
+}
+
 export function resetPassword(token, new_password, confirm_password) {
   return apiRequest('/auth/recovery/reset', {
     method: 'POST',

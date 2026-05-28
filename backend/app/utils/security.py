@@ -32,7 +32,7 @@ SECRET_KEY = "mi_clave_super_secreta"
 
 ALGORITHM = "HS256"
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 1
 
 
 def create_access_token(data: dict):
@@ -63,7 +63,8 @@ def verify_token(token: str):
         payload = jwt.decode(
             token,
             SECRET_KEY,
-            algorithms=[ALGORITHM]
+            algorithms=[ALGORITHM],
+            options={"verify_exp": True}
         )
 
         email = payload.get("sub")

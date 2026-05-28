@@ -268,7 +268,7 @@ def request_password_recovery(email: str, db: Session):
             detail="El correo no está registrado en el sistema"
         )
     
-    # Generar token con expiración de 1 hora
+    # Generar token con expiración de 30 minutos
     recovery_token = create_access_token(
         data={"sub": user.email, "type": "recovery"}
     )

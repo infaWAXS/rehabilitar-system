@@ -1,6 +1,6 @@
 # Responsable: Agustin - endpoints de registro e inicio de sesion.
 # Francis: recuperacion de contrasena, logout, staff.
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -62,6 +62,20 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 @router.post("/recovery/request")
 def request_password_reset(request: PasswordRecoveryRequest, db: Session = Depends(get_db)):
     return request_password_recovery(request.email, db)
+
+
+# Endpoint para validar token de recuperación de contraseña
+@router.get("/recovery/validate")
+def validate_recovery_token(token: str = Query(...)):
+    email = verify_token(token)
+    
+    if not email:
+        raise HTTPException(
+            status_code=401,
+            detail="Token inválido o expirado"
+        )
+    
+    return {"valid": True, "email": email}
 
 
 # Endpoint para restablecer contraseña con token

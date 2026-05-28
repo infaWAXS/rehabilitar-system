@@ -5,10 +5,10 @@
 // E2: contraseña < 6 caracteres → informa que la contraseña debe tener al menos 6 caracteres
 // E3: contraseñas no coinciden → informa "Las contraseñas no coinciden."
 // E4: token inválido o ausente en URL → informa que el enlace es inválido o ha expirado
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import LayoutPublico from '../../layouts/LayoutPublico';
-import { resetPassword } from '../../services/authService';
+import { resetPassword, validateRecoveryToken } from '../../services/authService';
 
 const s = {
   campo: { marginBottom: '16px' },
@@ -50,6 +50,31 @@ function RestablecerContrasena() {
   const [form, setForm] = useState({ nueva: '', confirmar: '' });
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [validando, setValidando] = useState(true);
+  const [tokenValido, setTokenValido] = useState(false);
+
+  // Valida el token cuando carga la página
+  useEffect(() => {
+    if (!tokenURL) {
+      setValidando(false);
+      return;
+    }
+
+    const validarToken = async () => {
+      try {
+        await validateRecoveryToken(tokenURL);
+        setTokenValido(true);
+        setError('');
+      } catch (err) {
+        setTokenValido(false);
+        setError(err.message || 'El enlace de restablecimiento es inválido o ha expirado.');
+      } finally {
+        setValidando(false);
+      }
+    };
+
+    validarToken();
+  }, [tokenURL]);
 
   const cambio = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -82,6 +107,28 @@ function RestablecerContrasena() {
       <LayoutPublico>
         <div style={s.tokenFaltante}>
           El enlace de restablecimiento es inválido o ha expirado.
+          Solicitá uno nuevo desde <a href="/recuperar-contrasena">Recuperar contraseña</a>.
+        </div>
+      </LayoutPublico>
+    );
+  }
+
+  if (validando) {
+    return (
+      <LayoutPublico>
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          Validando enlace de recuperación...
+        </div>
+      </LayoutPublico>
+    );
+  }
+
+  if (!tokenValido) {
+    return (
+      <LayoutPublico>
+        <div style={s.tokenFaltante}>
+          {error || 'El enlace de restablecimiento es inválido o ha expirado.'}
+          <br /><br />
           Solicitá uno nuevo desde <a href="/recuperar-contrasena">Recuperar contraseña</a>.
         </div>
       </LayoutPublico>
