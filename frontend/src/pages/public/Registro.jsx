@@ -94,8 +94,13 @@ function Registro() {
             // E3: sube apto físico → medical_certificate_status = "pending"
             await uploadMedicalCertificateWithToken(loginData.access_token, aptoFile);
           }
-        } catch {
-          // Si falla la subida, el usuario puede subirlo desde su perfil
+        } catch (err) {
+          const msg = err.message || '';
+          if (msg.includes('Solo se permiten archivos')) {
+            setError('Solo se permiten archivos PNG, JPG y PDF');
+          } else {
+            setError('Error al subir el certificado médico');
+          }
         }
       }
 
@@ -160,8 +165,18 @@ function Registro() {
             <input
               style={{ ...s.input, padding: '7px 14px' }}
               type="file"
-              accept="image/*,application/pdf"
-              onChange={(e) => setAptoFile(e.target.files[0] || null)}
+              accept=".jpg,.jpeg,.png,application/pdf"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const tiposPermitidos = ['image/jpeg', 'image/png', 'application/pdf'];
+                if (!tiposPermitidos.includes(file.type)) {
+                  setError('Solo se permiten archivos JPG, PNG y PDF');
+                  e.target.value = null;
+                  return;
+                }
+                setAptoFile(file);
+              }}
             />
           </div>
         </div>

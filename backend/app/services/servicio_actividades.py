@@ -327,6 +327,26 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
     for campo, valor in cambios.items():
         setattr(actividad, campo, valor)
 
+    # Si cambia la fecha o el horario, sincronizar reservation_date en reservas activas
+    if "specific_date" in cambios or "time_slot" in cambios:
+        nueva_fecha = valores_propuestos["specific_date"]
+        nuevo_slot = valores_propuestos["time_slot"]
+        if nueva_fecha and nuevo_slot:
+            try:
+                hh, mm = nuevo_slot.split(":")
+                nueva_reservation_date = datetime(
+                    nueva_fecha.year, nueva_fecha.month, nueva_fecha.day,
+                    int(hh), int(mm),
+                )
+                reservas_activas = db.query(Reservation).filter(
+                    Reservation.activity_id == activity_id,
+                    Reservation.status.in_(["confirmed", "pending"]),
+                ).all()
+                for r in reservas_activas:
+                    r.reservation_date = nueva_reservation_date
+            except (ValueError, AttributeError):
+                pass  # Si el formato es inválido no bloqueamos la edición
+
     db.commit()
     db.refresh(actividad)
     return actividad

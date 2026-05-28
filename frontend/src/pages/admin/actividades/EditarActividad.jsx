@@ -402,11 +402,18 @@ function EditarActividad() {
 
   const esIndividual = form?.activity_type === 'individual';
 
-  const ocupada = useOcupaciones(
-
-    actividadesActivas.filter((actividad) => actividad.id !== Number(id))
-
+  // Excluye la actividad actual y las actividades hermanas (mismo día-semana pero distinta
+  // specific_date) para que no bloqueen falsamente la sala/horario al editar una repetición.
+  const actividadesParaColision = useMemo(
+    () => actividadesActivas.filter((a) => {
+      if (a.id === Number(id)) return false;
+      if (form?.specific_date && a.specific_date && a.specific_date !== form.specific_date) return false;
+      return true;
+    }),
+    [actividadesActivas, id, form?.specific_date]
   );
+
+  const ocupada = useOcupaciones(actividadesParaColision);
 
 
 

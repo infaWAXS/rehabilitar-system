@@ -93,10 +93,12 @@ function Login() {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('deshabilitada')) {
         setError('cuenta_deshabilitada');
-      } else if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('404')) {
+      } else if (msg.toLowerCase().includes('email invalido')) {
         setError('El correo no está registrado en el sistema.');
+      } else if (msg.toLowerCase().includes('contraseña invalida')) {
+        setError('La contraseña es incorrecta.');
       } else {
-        setError('Correo o contraseña incorrectos.');
+        setError('Ocurrió un error al iniciar sesión.');
       }
     } finally {
       setCargando(false);

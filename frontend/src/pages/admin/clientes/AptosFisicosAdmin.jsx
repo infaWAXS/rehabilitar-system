@@ -34,6 +34,27 @@ const s = {
   mensaje: { fontSize: '14px', color: 'var(--color-texto-suave)', fontStyle: 'italic', padding: '40px 0', textAlign: 'center' },
   error: { color: '#dc2626', fontSize: '13px', marginTop: '4px' },
   exito: { color: '#16a34a', fontSize: '13px', marginTop: '4px' },
+  modalOverlay: {
+    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+    justifyContent: 'center', alignItems: 'center', zIndex: 1000,
+  },
+  modal: {
+    backgroundColor: '#fff', borderRadius: '16px', padding: '24px',
+    width: '90%', maxWidth: '900px', maxHeight: '90vh', overflow: 'auto',
+    display: 'flex', flexDirection: 'column', gap: '20px',
+  },
+  modalTitulo: { fontSize: '28px', fontWeight: 'bold' },
+  pdfViewer: { width: '100%', height: '70vh', border: 'none', borderRadius: '12px' },
+  imagenCertificado: { width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '12px' },
+  btnCerrar: {
+    alignSelf: 'flex-end', padding: '12px 20px', border: 'none',
+    borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold',
+  },
+  btnVerPdf: {
+    padding: '14px 20px', backgroundColor: '#2563eb', color: '#fff',
+    textDecoration: 'none', borderRadius: '10px', fontWeight: 'bold', textAlign: 'center',
+  },
 };
 
 function AptosFisicosAdmin() {
@@ -41,6 +62,7 @@ function AptosFisicosAdmin() {
   const [cargando, setCargando] = useState(true);
   const [mensajes, setMensajes] = useState({});  // { [userId]: { tipo: 'ok'|'err', texto } }
   const [procesando, setProcesando] = useState({});
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
   const cargar = async () => {
     setCargando(true);
@@ -79,6 +101,7 @@ function AptosFisicosAdmin() {
   };
 
   const getCertificadoUrl = (path) => {
+    console.log('path del certificado:', path);
     if (!path) return null;
     return `${API_BASE_URL}/${path}`;
   };
@@ -111,36 +134,60 @@ function AptosFisicosAdmin() {
             )}
           </div>
           <div style={s.acciones}>
-            {/* Ver certificado en nueva pestaña */}
-            {cliente.medical_certificate_path && (
-              <a
-                href={getCertificadoUrl(cliente.medical_certificate_path)}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={s.btnVer}
-              >
-                Ver certificado
-              </a>
-            )}
-            {/* E1: aprobar */}
-            <button
-              style={s.btnAprobar}
-              disabled={procesando[cliente.id]}
-              onClick={() => manejarAccion(cliente.id, 'aprobar')}
-            >
-              Aprobar
-            </button>
-            {/* E2: rechazar */}
-            <button
-              style={s.btnRechazar}
-              disabled={procesando[cliente.id]}
-              onClick={() => manejarAccion(cliente.id, 'rechazar')}
-            >
-              Rechazar
+            <button style={s.btnVer} onClick={() => setClienteSeleccionado(cliente)}>
+              Ver detalle
             </button>
           </div>
         </div>
       ))}
+
+      {/* Modal de detalle del certificado */}
+      {clienteSeleccionado && (
+        <div style={s.modalOverlay}>
+          <div style={s.modal}>
+            <p style={s.modalTitulo}>
+              {clienteSeleccionado.name} {clienteSeleccionado.lastname}
+            </p>
+
+            {clienteSeleccionado.medical_certificate_path?.toLowerCase().endsWith('.pdf') ? (
+              <a
+                href={getCertificadoUrl(clienteSeleccionado.medical_certificate_path)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={s.btnVerPdf}
+              >
+                Abrir PDF
+              </a>
+            ) : (
+              <img
+                src={getCertificadoUrl(clienteSeleccionado.medical_certificate_path)}
+                alt="Certificado"
+                style={s.imagenCertificado}
+              />
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                style={s.btnAprobar}
+                disabled={procesando[clienteSeleccionado.id]}
+                onClick={() => { manejarAccion(clienteSeleccionado.id, 'aprobar'); setClienteSeleccionado(null); }}
+              >
+                Aprobar
+              </button>
+              <button
+                style={s.btnRechazar}
+                disabled={procesando[clienteSeleccionado.id]}
+                onClick={() => { manejarAccion(clienteSeleccionado.id, 'rechazar'); setClienteSeleccionado(null); }}
+              >
+                Rechazar
+              </button>
+              <button style={s.btnCerrar} onClick={() => setClienteSeleccionado(null)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutPrivado>
   );
 }

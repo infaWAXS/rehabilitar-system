@@ -223,20 +223,32 @@ export default function VerPerfil() {
             {aptoError && <div style={s.alerta('error')}>{aptoError}</div>}
             {aptoExito && <div style={s.alerta('ok')}>{aptoExito}</div>}
 
-            <form onSubmit={subirApto} style={s.aptoBox}>
-              <label style={s.label}>
-                {usuario.medical_certificate_status === 'none' ? 'Subir apto físico' : 'Actualizar apto físico'}
-              </label>
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                style={s.aptoInput}
-                onChange={(e) => setAptoFile(e.target.files[0] || null)}
-              />
-              <button type="submit" style={s.aptoBoton} disabled={aptoSubiendo}>
-                {aptoSubiendo ? 'Subiendo...' : 'Enviar'}
-              </button>
-            </form>
+            {usuario.medical_certificate_status !== 'pending' && usuario.medical_certificate_status !== 'approved' && (
+              <form onSubmit={subirApto} style={s.aptoBox}>
+                <label style={s.label}>
+                  {usuario.medical_certificate_status === 'none' ? 'Subir apto físico' : 'Actualizar apto físico'}
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  style={s.aptoInput}
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const tiposPermitidos = ['image/jpeg', 'image/png', 'application/pdf'];
+                    if (!tiposPermitidos.includes(file.type)) {
+                      setAptoError('Solo se permiten archivos JPG, PNG y PDF');
+                      e.target.value = null;
+                      return;
+                    }
+                    setAptoFile(file);
+                  }}
+                />
+                <button type="submit" style={s.aptoBoton} disabled={aptoSubiendo}>
+                  {aptoSubiendo ? 'Subiendo...' : 'Enviar'}
+                </button>
+              </form>
+            )}
           </div>
 
           {/* ── Información del Registro ──────────────────── */}
