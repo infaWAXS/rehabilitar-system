@@ -1,6 +1,7 @@
 # # Responsable legacy: Francis y Agustin - integracion inicial del backend.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from database.connection import engine, Base, get_db
 from app.models.user import User
 from app.models.reservation import Reservation
@@ -21,6 +22,7 @@ from app.routes.rutas_pagos import router as payment_router
 from database.seed_mock import seed as seed_mock_users
 
 app = FastAPI()
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Permitir peticiones desde el frontend en desarrollo
 app.add_middleware(

@@ -1,6 +1,6 @@
 # # Responsable legacy: Francis y Agustin - gestion de usuarios.
 from app.exceptions.http_exceptions import forbidden_exception
-from fastapi import APIRouter, Depends, File, UploadFile, Body
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Body
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import shutil
@@ -164,8 +164,23 @@ def upload_medical_certificate(
     token: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     current_user = get_current_user(token, db)
+    
+    allowed_types = [
+    "image/png",
+    "image/jpeg",
+    "application/pdf"
+    ]
 
-    file_path = (f"uploads/certificates/"f"{current_user.id}_{file.filename}")
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se permiten archivos PNG, JPG y PDF"
+        )
+    
+
+    safe_filename = file.filename.replace(" ", "_")
+
+    file_path = f"uploads/certificates/{current_user.id}_{safe_filename}"
 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)

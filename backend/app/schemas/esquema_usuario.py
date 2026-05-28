@@ -68,6 +68,8 @@ class UserResponse(BaseModel):
     telefono: Optional[str] = None
 
     medical_certificate_status: Optional[str] = None
+    
+    medical_certificate_path: Optional[str] = None
 
     tiene_clases_activas: Optional[bool] = None
 

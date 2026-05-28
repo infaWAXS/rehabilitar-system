@@ -87,7 +87,10 @@ def login_user(request: UserLogin, db: Session):
     ).first()
 
     if not existing_user:
-        raise user_not_found_exception()
+        raise  HTTPException(
+        status_code=401,
+        detail="Email invalido"
+    )
     
 
     if existing_user.account_status.lower() == "disabled":
@@ -111,7 +114,11 @@ def login_user(request: UserLogin, db: Session):
 
         db.commit()
         
-        raise unauthorized_exception()
+        
+        raise  HTTPException(
+        status_code=401,
+        detail="Contraseña invalida"
+        )
     
     
     existing_user.failed_login_attempts = 0
