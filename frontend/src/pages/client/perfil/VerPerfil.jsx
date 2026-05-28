@@ -197,9 +197,21 @@ function VerPerfil() {
               <form onSubmit={subirApto} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <input
                   type="file"
-                  accept="image/*,application/pdf"
+                  accept=".jpg,.jpeg,.png,application/pdf"
                   required
-                  onChange={(e) => setAptoFile(e.target.files[0] || null)}
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    const tiposPermitidos = ['image/jpeg', 'image/png', 'application/pdf'];
+                    if (!tiposPermitidos.includes(file.type)) {
+                      setAptoError('Solo se permiten archivos JPG, PNG y PDF');
+                      e.target.value = null;
+                      return;
+                    }
+                    
+                    setAptoFile(file);
+                  }}
                   style={{ fontSize: '13px', color: 'var(--color-texto)' }}
                 />
                 <button
