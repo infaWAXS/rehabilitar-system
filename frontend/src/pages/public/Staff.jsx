@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { getStaff, getStaffSpecializations } from '../../services/usersService';
+import { getToken, getUserName, getRole, logout, clearUserData } from '../../services/authService';
 
 const LABELS_ROL = {
   professor:    'Profesor',
@@ -53,6 +54,71 @@ const s = {
     fontSize: '14px',
     fontWeight: '600',
     textDecoration: 'none',
+  },
+  userBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '7px 14px 7px 8px',
+    background: 'var(--color-primario-suave, #e8f5f5)',
+    border: '1px solid var(--color-borde)',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: 'var(--color-primario-oscuro, #0d7377)',
+  },
+  userAvatar: {
+    width: '30px',
+    height: '30px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, var(--color-primario), var(--color-secundario))',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#fff',
+    fontSize: '13px',
+    fontWeight: '700',
+    flexShrink: 0,
+  },
+  dropdownWrapper: {
+    position: 'relative',
+  },
+  dropdown: {
+    position: 'absolute',
+    top: 'calc(100% + 6px)',
+    right: 0,
+    background: '#fff',
+    border: '1px solid var(--color-borde)',
+    borderRadius: '10px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+    minWidth: '200px',
+    zIndex: 200,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    display: 'block',
+    padding: '11px 16px',
+    fontSize: '14px',
+    color: 'var(--color-texto)',
+    textDecoration: 'none',
+  },
+  dropdownDivider: {
+    height: '1px',
+    background: 'var(--color-borde)',
+    margin: '4px 0',
+  },
+  dropdownLogout: {
+    display: 'block',
+    width: '100%',
+    padding: '11px 16px',
+    fontSize: '14px',
+    border: 'none',
+    background: 'transparent',
+    color: '#dc2626',
+    fontWeight: '600',
+    cursor: 'pointer',
+    textAlign: 'left',
   },
   contenido: { maxWidth: '1100px', margin: '0 auto', padding: '40px 24px' },
   titulo: { fontSize: '32px', fontWeight: '800', marginBottom: '8px' },
@@ -185,12 +251,31 @@ const s = {
 };
 
 function Staff() {
+  const navigate = useNavigate();
   const [busqueda, setBusqueda] = useState('');
   const [especializacion, setEspecializacion] = useState('');
   const [especializaciones, setEspecializaciones] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [buscado, setBuscado] = useState(false);
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const token = getToken();
+  const nombre = getUserName();
+  const inicial = nombre ? nombre[0].toUpperCase() : '?';
+  const estaLogueado = !!token;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (err) {
+      console.error('Error en logout:', err);
+    }
+    clearUserData();
+    setMenuAbierto(false);
+    navigate('/');
+  };
 
   // Cargar staff completo y especializaciones al montar
   useEffect(() => {
@@ -203,6 +288,17 @@ function Staff() {
     }).catch(() => {
       setEmpleados([]);
     }).finally(() => setCargando(false));
+  }, []);
+
+  // Cerrar dropdown cuando hace click afuera
+  useEffect(() => {
+    function cerrarAlClickAfuera(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setMenuAbierto(false);
+      }
+    }
+    document.addEventListener('click', cerrarAlClickAfuera);
+    return () => document.removeEventListener('click', cerrarAlClickAfuera);
   }, []);
 
   const aplicar = async (e) => {
@@ -247,7 +343,33 @@ function Staff() {
           <Link to="/staff" style={s.navLink}>Staff</Link>
         </nav>
         <div style={s.topActions}>
-          <Link to="/login" style={s.btnGhost}>Ingresar</Link>
+          {!estaLogueado && (
+            <Link to="/login" style={s.btnGhost}>Ingresar</Link>
+          )}
+
+          {estaLogueado && (
+            <div style={s.dropdownWrapper} ref={dropdownRef}>
+              <button style={s.userBtn} onClick={() => setMenuAbierto(v => !v)}>
+                <span style={s.userAvatar}>{inicial}</span>
+                {nombre}
+              </button>
+
+              {menuAbierto && (
+                <div style={s.dropdown}>
+                  <Link to="/perfil" style={s.dropdownItem} onClick={() => setMenuAbierto(false)}>
+                    Mi Perfil
+                  </Link>
+                  <div style={s.dropdownDivider} />
+                  <button 
+                    onClick={handleLogout}
+                    style={s.dropdownLogout}
+                  >
+                    Cerrar sesión
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
