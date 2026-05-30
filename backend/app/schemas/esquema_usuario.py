@@ -85,6 +85,8 @@ class UserResponse(BaseModel):
     medical_certificate_path: Optional[str] = None
 
     tiene_clases_activas: Optional[bool] = None
+    
+    birth_date: Optional[date] = None
 
     class Config:
         from_attributes = True
@@ -122,6 +124,8 @@ class UpdateUserRequest(BaseModel):
     telefono: Optional[str] = None
 
     specialization: Optional[str] = None
+    
+    birth_date: Optional[date] = None
 
 
 #Esquema para solicitar recuperación de contraseña.

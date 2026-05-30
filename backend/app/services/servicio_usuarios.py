@@ -171,7 +171,7 @@ def change_password(current_user: User, new_password: str, confirm_password: str
     
     
 # Actualiza datos personales del usuario actual - Agustin
-def update_user_info(current_user: User, name: str, lastname: str, direccion: str, telefono: str, db: Session):
+def update_user_info(current_user: User, name: str, lastname: str, direccion: str, telefono: str, db: Session, birth_date=None):
     if name is not None:
         current_user.name = name
 
@@ -184,10 +184,11 @@ def update_user_info(current_user: User, name: str, lastname: str, direccion: st
     if telefono is not None:
         current_user.telefono = telefono
 
+    if birth_date is not None:
+        current_user.birth_date = birth_date
+
     db.commit()
-
     db.refresh(current_user)
-
     return current_user
 
 

@@ -136,6 +136,14 @@ function VerPerfil() {
                 </div>
               </div>
             </div>
+            {usuario.birth_date && (
+              <div style={s.fila}>
+                <div style={s.campo}>
+                  <label style={s.label}>Fecha de nacimiento</label>
+                  <p style={s.valor}>{usuario.birth_date.split('-').reverse().join('/')}</p>
+                </div>
+              </div>
+            )}
             {(usuario.direccion || usuario.telefono) && (
               <div style={s.fila}>
                 {usuario.direccion && (

@@ -50,7 +50,7 @@ const s = {
 
 function EditarPerfil() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ nombre: '', apellido: '', direccion: '', telefono: '' });
+  const [form, setForm] = useState({ nombre: '', apellido: '', direccion: '', telefono: '', fecha_nacimiento: '' });
   const [fieldErrors, setFieldErrors] = useState({ nombre: '', apellido: '' });
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -59,7 +59,7 @@ function EditarPerfil() {
 
   useEffect(() => {
     getCurrentUser()
-      .then((u) => setForm({ nombre: u.name || '', apellido: u.lastname || '', direccion: u.direccion || '', telefono: u.telefono || '' }))
+      .then((u) => setForm({ nombre: u.name || '', apellido: u.lastname || '', direccion: u.direccion || '', telefono: u.telefono || '', fecha_nacimiento: u.birth_date || '' }))
       .catch(() => setError('No se pudieron cargar los datos del perfil.'))
       .finally(() => setCargando(false));
   }, []);
@@ -74,6 +74,15 @@ function EditarPerfil() {
     const errs = {};
     if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido.';
     if (!form.apellido.trim()) errs.apellido = 'El apellido es requerido.';
+    if (!form.fecha_nacimiento) {
+      errs.fecha_nacimiento = 'La fecha de nacimiento es requerida.';
+    } else {
+      const hoy = new Date();
+      const nacimiento = new Date(form.fecha_nacimiento);
+      const edad = hoy.getFullYear() - nacimiento.getFullYear() - 
+        ((hoy.getMonth() * 100 + hoy.getDate()) < (nacimiento.getMonth() * 100 + nacimiento.getDate()) ? 1 : 0);
+      if (edad < 18) errs.fecha_nacimiento = 'Debés ser mayor de 18 años.';
+    }
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
       return;
@@ -88,6 +97,7 @@ function EditarPerfil() {
         lastname: form.apellido,
         direccion: form.direccion || null,
         telefono: form.telefono || null,
+        birth_date: form.fecha_nacimiento || null
       });
       setExito('Perfil actualizado correctamente.');
       setTimeout(() => navigate('/perfil'), 1500);
@@ -128,6 +138,17 @@ function EditarPerfil() {
               {fieldErrors.apellido && <span style={s.errInline}>{fieldErrors.apellido}</span>}
               <input style={s.input} name="apellido" value={form.apellido} onChange={cambio} />
             </div>
+          </div>
+          <div style={s.campo}>
+            <label style={s.label}>Fecha de nacimiento</label>
+            {fieldErrors.fecha_nacimiento && <span style={s.errInline}>{fieldErrors.fecha_nacimiento}</span>}
+            <input
+              style={s.input}
+              type="date"
+              name="fecha_nacimiento"
+              value={form.fecha_nacimiento}
+              onChange={cambio}
+            />
           </div>
           <div style={s.grid}>
             <div style={s.campo}>
