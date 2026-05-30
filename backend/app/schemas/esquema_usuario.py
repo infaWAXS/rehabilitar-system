@@ -7,6 +7,7 @@
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, field_validator
+from datetime import date
 
 
 #Registro de usuario
@@ -20,6 +21,7 @@ class UserCreate(BaseModel):
     telefono: Optional[str] = None
     role: Optional[str] = "client"           # client | admin | receptionist | professor
     specialization: Optional[str] = None     # obligatorio si role == "professor"
+    birth_date: date
 
     #Valida que la contraseña tenga al menos 6 caracteres.
     @field_validator("password")
@@ -31,8 +33,19 @@ class UserCreate(BaseModel):
             raise ValueError(
                 "La contraseña debe tener al menos 6 caracteres"
             )
-
+            
+    @field_validator("birth_date")
+    @classmethod
+    def validate_age(cls, value):
+        today = date.today()
+        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        if age < 18:
+            raise ValueError("Debes ser mayor de 18 años para registrarte")
         return value
+    
+    
+
+        
     
     
     
