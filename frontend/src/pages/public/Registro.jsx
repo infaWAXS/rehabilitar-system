@@ -61,7 +61,11 @@ function Registro() {
     if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido.';
     if (!form.apellido.trim()) errs.apellido = 'El apellido es requerido.';
     if (!form.email.trim()) errs.email = 'El correo es requerido.';
-    if (!form.dni.trim()) errs.dni = 'El DNI es requerido.';
+    if (!form.dni.trim()) {
+      errs.dni = 'El DNI es requerido.';
+    } else if (!/^\d{7,8}$/.test(form.dni.trim())) {
+      errs.dni = 'El DNI debe tener entre 7 y 8 dígitos numéricos.';
+    }
     if (!form.contrasena) errs.contrasena = 'La contraseña es requerida.';
     else if (form.contrasena.length < 6) errs.contrasena = 'La contraseña debe tener al menos 6 caracteres.';
     if (!form.confirmar) errs.confirmar = 'Confirmá la contraseña.';

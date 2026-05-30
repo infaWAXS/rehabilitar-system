@@ -48,15 +48,16 @@ def register_user(user_data, db: Session):
     )
 
     new_user = User(
-        name=user_data.name,
-        lastname=user_data.lastname,
-        email=user_data.email,
-        password=hashed_password,
-        role=role,
-        dni=getattr(user_data, "dni", None),
-        direccion=getattr(user_data, "direccion", None),
-        telefono=getattr(user_data, "telefono", None),
-        specialization=specialization,
+    name=user_data.name,
+    lastname=user_data.lastname,
+    email=user_data.email,
+    password=hashed_password,
+    role=role,
+    dni=getattr(user_data, "dni", None),
+    direccion=getattr(user_data, "direccion", None),
+    telefono=getattr(user_data, "telefono", None),
+    specialization=specialization,
+    birth_date=getattr(user_data, "birth_date", None),
     )
 
     db.add(new_user)

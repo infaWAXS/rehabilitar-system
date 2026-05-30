@@ -33,6 +33,7 @@ class UserCreate(BaseModel):
             raise ValueError(
                 "La contraseña debe tener al menos 6 caracteres"
             )
+        return value
             
     @field_validator("birth_date")
     @classmethod
@@ -41,6 +42,16 @@ class UserCreate(BaseModel):
         age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
         if age < 18:
             raise ValueError("Debes ser mayor de 18 años para registrarte")
+        return value
+    
+    
+    @field_validator("dni")
+    @classmethod
+    def validate_dni(cls, value):
+        if not value.isdigit():
+            raise ValueError("El DNI debe contener solo números")
+        if len(value) < 7 or len(value) > 8:
+            raise ValueError("El DNI debe tener entre 7 y 8 dígitos")
         return value
     
     
