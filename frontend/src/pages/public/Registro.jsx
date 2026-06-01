@@ -58,20 +58,20 @@ function Registro() {
 
     // Validación inline por campo
     const errs = {};
-    if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido.';
-    if (!form.apellido.trim()) errs.apellido = 'El apellido es requerido.';
-    if (!form.email.trim()) errs.email = 'El correo es requerido.';
+    if (!form.nombre.trim()) errs.nombre = 'Este campo es requerido.';
+    if (!form.apellido.trim()) errs.apellido = 'Este campo es requerido.';
+    if (!form.email.trim()) errs.email = 'Este campo es requerido.';
     if (!form.dni.trim()) {
-      errs.dni = 'El DNI es requerido.';
+      errs.dni = 'Este campo es requerido.';
     } else if (!/^\d{7,8}$/.test(form.dni.trim())) {
       errs.dni = 'El DNI debe tener entre 7 y 8 dígitos numéricos.';
     }
-    if (!form.contrasena) errs.contrasena = 'La contraseña es requerida.';
+    if (!form.contrasena) errs.contrasena = 'Este campo es requerido.';
     else if (form.contrasena.length < 6) errs.contrasena = 'La contraseña debe tener al menos 6 caracteres.';
-    if (!form.confirmar) errs.confirmar = 'Confirmá la contraseña.';
+    if (!form.confirmar) errs.confirmar = 'Este campo es requerido.';
     else if (form.contrasena !== form.confirmar) errs.confirmar = 'Las contraseñas no coinciden.';
     if (!form.fecha_nacimiento) {
-      errs.fecha_nacimiento = 'La fecha de nacimiento es requerida.';
+      errs.fecha_nacimiento = 'Este campo es requerido.';
     } else {
       const hoy = new Date();
       const nacimiento = new Date(form.fecha_nacimiento);
