@@ -141,6 +141,14 @@ export default function VerPerfil() {
                 <p style={s.valor}>{usuario.dni || '—'}</p>
               </div>
             </div>
+            {usuario.birth_date && (
+              <div style={s.fila}>
+                <div style={s.campo}>
+                  <label style={s.label}>Fecha de nacimiento</label>
+                  <p style={s.valor}>{usuario.birth_date.split('-').reverse().join('/')}</p>
+                </div>
+              </div>
+            )}
             <div style={s.fila}>
               <div style={s.campo}>
                 <label style={s.label}>Dirección</label>

@@ -17,7 +17,7 @@ Credenciales de acceso:
 │ Profesor (professor)         │ profesor@rehabilitar.com      │ Profesor123  │
 └──────────────────────────────┴───────────────────────────────┴──────────────┘
 """
-
+from datetime import date
 import sys
 import os
 from datetime import date, timedelta
@@ -45,6 +45,7 @@ USUARIOS_MOCK = [
         "password": "Admin123",
         "role": "admin",
         "dni": "11111111",
+        "birth_date": date(1990, 1, 15),
     },
     {
         "name": "Carlos",
@@ -53,6 +54,7 @@ USUARIOS_MOCK = [
         "password": "Cliente123",
         "role": "client",
         "dni": "22222222",
+        "birth_date": date(1995, 6, 20),
     },
     {
         "name": "Laura",
@@ -61,6 +63,7 @@ USUARIOS_MOCK = [
         "password": "Empleado123",
         "role": "receptionist",
         "dni": "33333333",
+        "birth_date": date(1988, 3, 10),
     },
     {
         "name": "Marcos",
@@ -70,6 +73,7 @@ USUARIOS_MOCK = [
         "role": "professor",
         "dni": "44444444",
         "specialization": "Fisioterapia",
+        "birth_date": date(1985, 11, 5),
     },
     {
         "name": "Ana",
@@ -78,6 +82,7 @@ USUARIOS_MOCK = [
         "password": "Abonado123",
         "role": "client",
         "dni": "55555555",
+        "birth_date": date(1992, 8, 12),
     },
 ]
 
@@ -108,6 +113,7 @@ def seed():
                 dni=datos["dni"],
                 account_status="active",
                 specialization=datos.get("specialization"),
+                birth_date=datos["birth_date"],
             )
             db.add(usuario)
             creados.append(datos["email"])

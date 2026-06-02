@@ -63,7 +63,7 @@ def change_user_password(request: ChangePasswordRequest, token: str, db: Session
 @router.put("/update-info")
 def update_my_info(request: UpdateUserRequest, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
-    return update_user_info_service(current_user, request.name, request.lastname, request.direccion, request.telefono, db)
+    return update_user_info_service(current_user, request.name, request.lastname, request.direccion, request.telefono, db, request.birth_date)
 
 
 @router.get("/",response_model=list[UserResponse])
