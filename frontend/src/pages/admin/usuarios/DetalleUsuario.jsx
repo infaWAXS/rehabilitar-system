@@ -102,13 +102,14 @@ function formDesdeDatos(datos) {
     especializacion: datos.specialization || ESPECIALIZACIONES[0],
     direccion: datos.direccion || '',
     telefono: datos.telefono || '',
+    fecha_nacimiento: datos.birth_date ? String(datos.birth_date).split('T')[0] : '',
   };
 }
 
 function DetalleUsuario() {
   const { id } = useParams();
   const [usuario, setUsuario] = useState(null);
-  const [form, setForm] = useState({ nombre: '', apellido: '', especializacion: '', direccion: '', telefono: '' });
+  const [form, setForm] = useState({ nombre: '', apellido: '', especializacion: '', direccion: '', telefono: '', fecha_nacimiento: '' });
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
@@ -149,6 +150,7 @@ function DetalleUsuario() {
         lastname: form.apellido,
         direccion: form.direccion.trim() || null,
         telefono: form.telefono.trim() || null,
+        birth_date: form.fecha_nacimiento || null,
       };
       if (usuario.role === 'professor') {
         payload.specialization = form.especializacion;
@@ -248,6 +250,18 @@ function DetalleUsuario() {
                   <label style={s.label}>Teléfono <span style={s.labelSub}>(opcional)</span></label>
                   <input style={s.input} name="telefono" value={form.telefono} onChange={cambio} placeholder="Ej: 221 123-4567" />
                 </div>
+              </div>
+
+              <div style={s.campo}>
+                <label style={s.label}>Fecha de nacimiento</label>
+                <input
+                  style={s.input}
+                  type="date"
+                  name="fecha_nacimiento"
+                  value={form.fecha_nacimiento}
+                  onChange={cambio}
+                  required
+                />
               </div>
 
               {usuario.role === 'professor' && (
