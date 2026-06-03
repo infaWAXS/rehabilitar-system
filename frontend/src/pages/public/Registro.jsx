@@ -43,7 +43,7 @@ const s = {
 
 function Registro() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ nombre: '', apellido: '', email: '', contrasena: '', confirmar: '', dni: '', direccion: '', telefono: '' });
+  const [form, setForm] = useState({ nombre: '', apellido: '', email: '', contrasena: '', confirmar: '', dni: '', fecha_nacimiento: '', direccion: '', telefono: '' });
   const [aptoFile, setAptoFile] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');

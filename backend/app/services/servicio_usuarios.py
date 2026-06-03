@@ -185,7 +185,7 @@ def update_user_info(current_user: User, name: str, lastname: str, direccion: st
         current_user.telefono = telefono
 
     if birth_date is not None:
-        current_user.birhdate = birth_date
+        current_user.birth_date = birth_date
 
     db.commit()
 
@@ -378,7 +378,7 @@ def search_users(db: Session, search: str = None, role: str = None, status: str 
 #              desvincularlo. Pendiente de implementación hasta que el módulo de
 #              actividades (Angel) esté disponible.
 # Escenario 4: cancelación — comportamiento del frontend, no requiere lógica de backend.
-def modify_employee(employee_id: int, name: str = None, lastname: str = None, email: str = None, specialization: str = None, direccion: str = None, telefono: str = None, db: Session = None):
+def modify_employee(employee_id: int, name: str = None, lastname: str = None, email: str = None, specialization: str = None, direccion: str = None, telefono: str = None, db: Session = None, birth_date = None):
     employee = db.query(User).filter(User.id == employee_id).first()
 
     if not employee:
@@ -417,6 +417,9 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
 
     if telefono is not None:
         employee.telefono = telefono
+
+    if birth_date is not None:
+        employee.birth_date = birth_date
 
     db.commit()
     db.refresh(employee)

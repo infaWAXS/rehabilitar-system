@@ -77,7 +77,7 @@ const s = {
   seccionLabel: { fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' },
 };
 
-const FORM_VACIO = { nombre: '', apellido: '', email: '', contrasena: '', dni: '', especializacion: '' };
+const FORM_VACIO = { nombre: '', apellido: '', email: '', contrasena: '', dni: '', especializacion: '', fecha_nacimiento: '' };
 
 function CrearCuenta() {
   const [rolSeleccionado, setRolSeleccionado] = useState('client');
@@ -105,6 +105,26 @@ function CrearCuenta() {
       setError('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
+    if (!form.dni.trim()) {
+      setError('El DNI es requerido.');
+      return;
+    }
+    if (!/^\d{7,8}$/.test(form.dni.trim())) {
+      setError('El DNI debe tener entre 7 y 8 dígitos numéricos.');
+      return;
+    }
+    if (!form.fecha_nacimiento) {
+      setError('La fecha de nacimiento es requerida.');
+      return;
+    }
+    const hoy = new Date();
+    const nacimiento = new Date(form.fecha_nacimiento);
+    const edad = hoy.getFullYear() - nacimiento.getFullYear() -
+      ((hoy.getMonth() * 100 + hoy.getDate()) < (nacimiento.getMonth() * 100 + nacimiento.getDate()) ? 1 : 0);
+    if (edad < 18) {
+      setError('El usuario debe ser mayor de 18 años.');
+      return;
+    }
     if (rolSeleccionado === 'professor' && !form.especializacion.trim()) {
       setError('Un profesor debe tener una especialidad asignada.');
       return;
@@ -118,7 +138,8 @@ function CrearCuenta() {
         email: form.email,
         password: form.contrasena,
         role: rolSeleccionado,
-        dni: form.dni || undefined,
+        dni: form.dni.trim(),
+        birth_date: form.fecha_nacimiento,
         specialization: rolSeleccionado === 'professor' ? form.especializacion : undefined,
       });
       if (rolSeleccionado === 'client' && aptoFile && createdUser && createdUser.id) {
@@ -209,12 +230,16 @@ function CrearCuenta() {
                 <input style={s.input} type="password" name="contrasena" value={form.contrasena} onChange={cambio} required />
               </div>
 
-              {/* DNI (para todos excepto... se muestra siempre como opcional) */}
-              <div style={s.campo}>
-                <label style={s.label}>
-                  DNI <span style={s.labelSub}>(opcional)</span>
-                </label>
-                <input style={s.input} name="dni" value={form.dni} onChange={cambio} placeholder="Ej: 12345678" />
+              {/* DNI - obligatorio */}
+              <div style={s.grid2}>
+                <div style={s.campo}>
+                  <label style={s.label}>DNI</label>
+                  <input style={s.input} type="text" inputMode="numeric" pattern="[0-9]*" name="dni" value={form.dni} onChange={cambio} placeholder="Ej: 12345678" required />
+                </div>
+                <div style={s.campo}>
+                  <label style={s.label}>Fecha de nacimiento</label>
+                  <input style={s.input} type="date" name="fecha_nacimiento" value={form.fecha_nacimiento} onChange={cambio} required />
+                </div>
               </div>
 
               {/* Apto fisico - solo para clientes */}
