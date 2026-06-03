@@ -103,10 +103,23 @@ function BajaListaEspera() {
       const actMap = Object.fromEntries(actividades.map(a => [a.id, a]));
       setListaEspera(waitlist.map(item => {
         const act = actMap[item.activity_id] || {};
+        let turno = '—';
+        if (act.specific_date) {
+          const fecha = new Date(`${act.specific_date}T00:00:00`);
+          const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+          const dia = dias[fecha.getDay()];
+          const dia_num = fecha.getDate().toString().padStart(2, '0');
+          const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+          const anio = fecha.getFullYear();
+          turno = `${dia} ${dia_num}/${mes}/${anio}`;
+          if (act.time_slot) turno += ` · ${act.time_slot}`;
+        } else {
+          turno = act.schedule || act.time_slot || '—';
+        }
         return {
           ...item,
           nombre: act.name || `Actividad #${item.activity_id}`,
-          turno: act.schedule || act.time_slot || '—',
+          turno,
           posicion: item.position,
           tipo: item.waitlist_type,
         };

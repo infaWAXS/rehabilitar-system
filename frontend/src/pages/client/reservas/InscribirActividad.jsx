@@ -169,10 +169,14 @@ function turnosDeActividad(actividad) {
   if (!actividad) return [];
 
   // Actividad con fecha específica (individual o fija nueva): un solo turno
-  if (actividad.specificDate) {
-    const hora = actividad.timeSlot || '10:00';
+  // Busca ambos: specificDate (camelCase) y specific_date (snake_case del backend)
+  const fechaEspecifica = actividad.specificDate || actividad.specific_date;
+  const tiempoEspecifico = actividad.timeSlot || actividad.time_slot;
+  
+  if (fechaEspecifica) {
+    const hora = tiempoEspecifico || '10:00';
     const [h, m] = hora.split(':').map(Number);
-    const d = new Date(actividad.specificDate + 'T00:00:00');
+    const d = new Date(fechaEspecifica + 'T00:00:00');
     d.setHours(h, m, 0, 0);
     return [{
       value: d.toISOString(),

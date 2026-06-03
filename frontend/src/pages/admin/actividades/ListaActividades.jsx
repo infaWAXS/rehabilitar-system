@@ -65,6 +65,11 @@ const s = {
     background: 'transparent', color: 'var(--color-primario)', fontSize: '12px', fontWeight: '600',
     textDecoration: 'none', display: 'inline-block',
   },
+  botonEspera: {
+    padding: '5px 12px', borderRadius: '6px', border: '1px solid #f59e0b',
+    background: 'transparent', color: '#d97706', fontSize: '12px', fontWeight: '600',
+    textDecoration: 'none', display: 'inline-block',
+  },
   accionesCell: { display: 'flex', gap: '6px', alignItems: 'center' },
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
@@ -81,16 +86,19 @@ const s = {
   modalConfirmar: { padding: '8px 12px', borderRadius: '8px', border: 'none', background: 'var(--color-primario)', color: '#fff', cursor: 'pointer' },
 };
 
-function formatearHorario(actividad) {
-  if (actividad.specific_date && actividad.time_slot) {
-    const fecha = new Date(`${actividad.specific_date}T00:00:00`);
-    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    const dia = dias[fecha.getDay()];
-    return `${dia} · ${actividad.specific_date} · ${actividad.time_slot}`;
-  }
-  if (actividad.specific_date) return actividad.specific_date;
-  if (actividad.time_slot) return actividad.time_slot;
-  return actividad.schedule || '—';
+function formatearTurno(actividad) {
+  return actividad.time_slot || actividad.schedule || '—';
+}
+
+function formatearFecha(actividad) {
+  if (!actividad.specific_date) return '—';
+  const fecha = new Date(`${actividad.specific_date}T00:00:00`);
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const dia = dias[fecha.getDay()];
+  const dia_num = fecha.getDate().toString().padStart(2, '0');
+  const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+  const anio = fecha.getFullYear();
+  return `${dia} ${dia_num}/${mes}/${anio}`;
 }
 
 function formatearProfesor(actividad) {
@@ -175,6 +183,8 @@ function ListaActividades() {
                 <th style={s.th}>Nombre</th>
                 <th style={s.th}>Sala</th>
                 <th style={s.th}>Tipo</th>
+                <th style={s.th}>Especialidad</th>
+                <th style={s.th}>Fecha</th>
                 <th style={s.th}>Horario</th>
                 <th style={s.th}>Profesor</th>
                 <th style={s.th}>Precio</th>
@@ -194,7 +204,9 @@ function ListaActividades() {
                       {TIPO_LABEL[a.activity_type] ?? a.activity_type}
                     </span>
                   </td>
-                  <td style={s.td}>{formatearHorario(a)}</td>
+                  <td style={s.td}>{a.specialization || '—'}</td>
+                  <td style={s.td}>{formatearFecha(a)}</td>
+                  <td style={s.td}>{formatearTurno(a)}</td>
                   <td style={s.td}>{formatearProfesor(a)}</td>
                   <td style={s.td}>${Number(a.price).toLocaleString('es-AR')}</td>
                   <td style={s.td}>{cuposDisponibles[a.id] !== undefined ? `${cuposDisponibles[a.id]} / ${a.capacity}` : a.capacity}</td>
@@ -202,6 +214,9 @@ function ListaActividades() {
                     <div style={s.accionesCell}>
                       <Link to={`${basePath}/${a.id}`} style={s.botonVer}>
                         Ver listado
+                      </Link>
+                      <Link to={`${basePath}/${a.id}/lista-espera`} style={s.botonEspera}>
+                        Lista de espera
                       </Link>
                       {rol === 'admin' && (
                         <>

@@ -664,13 +664,21 @@ function InicioPublico() {
                 <span style={s.actChip(a.activity_type)}>
                   {a.activity_type === 'individual' ? 'Individual' : 'Fija'}
                 </span>
-                {a.schedule && <span style={s.actHorario}>📅 {a.schedule}</span>}
+                {a.specialization && <span style={s.actHorario}>🏥 {a.specialization}</span>}
                 {a.specific_date && (
                   <span style={s.actHorario}>
-                    📅 {new Date(a.specific_date + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                    {a.time_slot && ` · ${a.time_slot}`}
+                    📅 {(() => {
+                      const fecha = new Date(a.specific_date + 'T00:00:00');
+                      const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                      const dia = dias[fecha.getDay()];
+                      const dia_num = fecha.getDate().toString().padStart(2, '0');
+                      const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+                      const anio = fecha.getFullYear();
+                      return `${dia} ·  ${dia_num}/${mes}/${anio}`;
+                    })()}
                   </span>
                 )}
+                {a.time_slot && <span style={s.actHorario}>🕐 {a.time_slot}</span>}
                 {a.professor && <span style={s.actProfesor}>👤 {a.professor}</span>}
                 <span style={s.actHorario}>🪑 {cuposMap[a.id] !== undefined ? cuposMap[a.id] : a.capacity} cupos disponibles</span>
                 <span style={s.actPrecio}>${Number(a.price).toLocaleString('es-AR')}</span>
@@ -808,19 +816,26 @@ function InicioPublico() {
               <span style={s.actModalLabel}>Especialidad</span>
               <span>{actividadDetalle.specialization}</span>
             </div>
-            {actividadDetalle.schedule && (
-              <div style={s.actModalRow}>
-                <span style={s.actModalLabel}>Horario</span>
-                <span>{actividadDetalle.schedule}</span>
-              </div>
-            )}
             {actividadDetalle.specific_date && (
               <div style={s.actModalRow}>
                 <span style={s.actModalLabel}>Fecha</span>
                 <span>
-                  {new Date(actividadDetalle.specific_date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}
-                  {actividadDetalle.time_slot && ` · ${actividadDetalle.time_slot}`}
+                  {(() => {
+                    const fecha = new Date(actividadDetalle.specific_date + 'T00:00:00');
+                    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                    const dia = dias[fecha.getDay()];
+                    const dia_num = fecha.getDate().toString().padStart(2, '0');
+                    const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+                    const anio = fecha.getFullYear();
+                    return `${dia} · ${dia_num}/${mes}/${anio}`;
+                  })()}
                 </span>
+              </div>
+            )}
+            {actividadDetalle.time_slot && (
+              <div style={s.actModalRow}>
+                <span style={s.actModalLabel}>Horario</span>
+                <span>{actividadDetalle.time_slot}</span>
               </div>
             )}
             {actividadDetalle.professor && (

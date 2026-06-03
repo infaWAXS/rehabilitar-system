@@ -167,9 +167,25 @@ export default function MisActividades() {
             <div>
               <div style={s.nombreAct}>{a.name}</div>
               <div style={s.detalle}>
-                {a.activity_type === 'fixed' ? 'Fija' : 'Individual'} &middot; {a.schedule || a.time_slot}
+                {a.activity_type === 'fixed' ? 'Fija' : 'Individual'}
               </div>
-              <div style={s.detalle}>{a.specialization}</div>
+              {a.specialization && <div style={s.detalle}>{a.specialization}</div>}
+              {a.specific_date ? (
+                <div style={s.detalle}>
+                  {(() => {
+                    const fecha = new Date(`${a.specific_date}T00:00:00`);
+                    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                    const dia = dias[fecha.getDay()];
+                    const dia_num = fecha.getDate().toString().padStart(2, '0');
+                    const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+                    const anio = fecha.getFullYear();
+                    const fechaStr = `${dia} ${dia_num}/${mes}/${anio}`;
+                    return a.time_slot ? `${fechaStr} · ${a.time_slot}` : fechaStr;
+                  })()}
+                </div>
+              ) : (
+                a.schedule && <div style={s.detalle}>{a.schedule}</div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button

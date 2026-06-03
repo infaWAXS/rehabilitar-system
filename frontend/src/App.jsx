@@ -95,6 +95,7 @@ function App() {
 
         {/* Recepcionista */}
         <Route path="/recepcionista/actividades" element={<ListaActividades />} />
+        <Route path="/recepcionista/actividades/:id/lista-espera" element={<VerListaEsperaAdmin />} />
         <Route path="/recepcionista/actividades/:id" element={<DetalleActividad />} />
         <Route path="/recepcionista/clientes" element={<ListaClientes />} />
         <Route path="/recepcionista/clientes/:id" element={<GestionCuentaAdmin />} />

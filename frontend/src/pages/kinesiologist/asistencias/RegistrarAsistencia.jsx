@@ -225,8 +225,21 @@ export default function RegistrarAsistencia() {
             <div style={s.actividadNombre}>{actividad.name}</div>
             <div style={s.actividadDetalle}>
               {actividad.activity_type === 'fixed' ? 'Fija' : 'Individual'}
-              {actividad.schedule ? ` Â· ${actividad.schedule}` : ''}
-              {actividad.specialization ? ` Â· ${actividad.specialization}` : ''}
+              {actividad.specialization ? ` · ${actividad.specialization}` : ''}
+              {actividad.specific_date ? (
+                (() => {
+                  const fecha = new Date(`${actividad.specific_date}T00:00:00`);
+                  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                  const dia = dias[fecha.getDay()];
+                  const dia_num = fecha.getDate().toString().padStart(2, '0');
+                  const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+                  const anio = fecha.getFullYear();
+                  const fechaStr = ` · ${dia} ${dia_num}/${mes}/${anio}`;
+                  return actividad.time_slot ? `${fechaStr} · ${actividad.time_slot}` : fechaStr;
+                })()
+              ) : (
+                actividad.schedule ? ` · ${actividad.schedule}` : ''
+              )}
             </div>
           </div>
         ) : null}
