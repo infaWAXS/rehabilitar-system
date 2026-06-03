@@ -460,4 +460,35 @@ def get_staff_specializations(db: Session) -> list:
     return [r[0] for r in rows if r[0]]
 
 
+def get_user_with_plan_specialization(user: User, db: Session):
+    """
+    Enriquece el usuario con la especialidad de su plan activo.
+    Retorna un dict con los datos del usuario más plan_specialization.
+    """
+    from app.utils.subscriptions import get_active_user_plan
+    
+    user_plan = get_active_user_plan(user.id, db)
+    plan_specialization = user_plan.specialization if user_plan else None
+    
+    # Convertir a dict y agregar plan_specialization
+    user_dict = {
+        "id": user.id,
+        "name": user.name,
+        "lastname": user.lastname,
+        "email": user.email,
+        "role": user.role,
+        "specialization": user.specialization,
+        "account_status": user.account_status,
+        "dni": user.dni,
+        "direccion": user.direccion,
+        "telefono": user.telefono,
+        "medical_certificate_status": user.medical_certificate_status,
+        "medical_certificate_path": user.medical_certificate_path,
+        "tiene_clases_activas": None,
+        "birth_date": user.birth_date,
+        "plan_specialization": plan_specialization,
+    }
+    return user_dict
+
+
 

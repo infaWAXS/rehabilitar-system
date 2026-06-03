@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
-import { reserveFixed, reserveIndividual, getMyReservations } from '../../../services/reservationsService';
+import { reserveFixed, reserveIndividual, getMyReservations, getInscriptionOptions } from '../../../services/reservationsService';
 import { addToWaitlist } from '../../../services/waitlistService';
 import { getActivities, getActivityAvailability } from '../../../services/activitiesService';
 import { getMyPlan } from '../../../services/paymentsService';
@@ -221,7 +221,6 @@ function InscribirActividad() {
   const [cargandoActividades, setCargandoActividades] = useState(true);
   const [actividadId, setActividadId] = useState('');
   const [fecha, setFecha] = useState('');
-  const [esMayor65, setEsMayor65] = useState(false);
   const [esAbonado, setEsAbonado] = useState(false);
   const [credits, setCredits] = useState(0);
   const [pendingDiscount, setPendingDiscount] = useState(0);
@@ -232,6 +231,7 @@ function InscribirActividad() {
   const [cuposDisponibles, setCuposDisponibles] = useState(null);
   const [testScenario, setTestScenario] = useState('success');
   const [filtro, setFiltro] = useState('');
+  const [inscriptionOptions, setInscriptionOptions] = useState(null);
 
   // Detectar si el cliente es abonado desde el backend
   useEffect(() => {
@@ -275,6 +275,14 @@ function InscribirActividad() {
       .finally(() => setCargandoActividades(false));
   }, []); // eslint-disable-line
 
+  // Obtener opciones de inscripción (descuentos por edad, disponibilidad de suscripción, etc.)
+  useEffect(() => {
+    if (!actividadId) return;
+    getInscriptionOptions(Number(actividadId))
+      .then((data) => setInscriptionOptions(data))
+      .catch(() => setInscriptionOptions(null));
+  }, [actividadId]);
+
   // Obtener cupos reales del backend cuando cambia la actividad o el turno seleccionado.
   // Para actividades fijas se pasa la fecha del turno para obtener cupos de ESA clase específica.
   useEffect(() => {
@@ -312,7 +320,7 @@ function InscribirActividad() {
   const hayCupos = cuposDisponibles !== null ? cuposDisponibles > 0 : (actividad ? actividad.capacity > 0 : false);
   const cuposMostrar = cuposDisponibles ?? actividad?.capacity ?? 0;
   const precioBase = actividad?.price || 0;
-  const descuento = esMayor65 && tipoReserva === 'fixed' ? precioBase * 0.2 : 0;
+  const descuento = inscriptionOptions?.has_age_discount && tipoReserva === 'fixed' ? precioBase * 0.2 : 0;
   const precioConDescuento = precioBase - descuento;
   const descuentoCancelacion = (metodo === 'full_payment' || metodo === 'partial_payment') && pendingDiscount > 0
     ? Math.round(precioConDescuento * pendingDiscount / 100) : 0;
@@ -334,7 +342,7 @@ function InscribirActividad() {
 
     setError('');
     if (!hayCupos) setMetodo('waitlist');
-    else if (esAbonado && tipoReserva === 'fixed') setMetodo('subscription');
+    else if (inscriptionOptions?.can_use_subscription) setMetodo('subscription');
     else if (credits > 0) setMetodo('credit');
     else setMetodo('full_payment');
     setPaso(1);
@@ -509,12 +517,8 @@ function InscribirActividad() {
                     <div style={{ ...s.infoBox('green'), marginBottom: '8px', fontSize: '13px' }}>
                       Tenés un <strong>{pendingDiscount}% de descuento</strong> acumulado por cancelación. Se aplicará automáticamente al abonar total o seña.
                     </div>
-                  )}                  {(tipoReserva === 'fixed' || tipoReserva === 'individual') && (
-                    <label style={{ ...s.checkRow, opacity: !hayCupos ? 0.45 : 1 }}>
-                      <input type="checkbox" checked={esMayor65} onChange={(e) => setEsMayor65(e.target.checked)} disabled={!hayCupos} />
-                      Soy mayor de 65 años (descuento 20%)
-                      {!hayCupos && <span style={{ fontSize: '11px', marginLeft: '4px' }}>(no aplica sin cupos)</span>}
-                    </label>
+                  )}                  {inscriptionOptions?.has_age_discount && hayCupos && (
+                    <div style={{ ...s.infoBox('green'), marginBottom: '8px' }}>Tenés descuento por ser mayor de 65 años (20% off)</div>
                   )}
 
                     {actividad && (
@@ -548,27 +552,34 @@ function InscribirActividad() {
               {!hayCupos ? (
                 <>
                   <div style={s.infoBox('yellow')}>Sin cupos disponibles. Solo podes anotarte en la lista de espera.</div>
+                  {inscriptionOptions?.has_age_discount && (
+                    <div style={s.infoBox('green')}>Tienes descuento por mayor de 65 años</div>
+                  )}
                   <div style={s.metodosGrid}>
                     <button style={s.metodoBtn(metodo === 'waitlist')} onClick={() => setMetodo('waitlist')}>
                       Esperar en la lista
-                      <div style={s.metodoBtnSub}>{esAbonado && tipoReserva === 'fixed' ? 'Lista prioritaria (abonado)' : 'Lista general'}</div>
+                      <div style={s.metodoBtnSub}>{inscriptionOptions?.can_use_subscription ? 'Lista prioritaria (abonado)' : 'Lista general'}</div>
                     </button>
                   </div>
                 </>
               ) : (
-                <div style={s.metodosGrid}>
-                  {esAbonado && tipoReserva === 'fixed' && (
-                    <button style={s.metodoBtn(metodo === 'subscription')} onClick={() => setMetodo('subscription')}>
-                      Confirmar por suscripcion activa
-                      <div style={s.metodoBtnSub}>Sin costo adicional</div>
-                    </button>
+                <>
+                  {inscriptionOptions?.has_age_discount && (
+                    <div style={s.infoBox('green')}>Tienes descuento por mayor de 65 años</div>
                   )}
-                  {esAbonado && (
-                    <button
-                      style={credits > 0 ? s.metodoBtn(metodo === 'credit') : s.metodoBtnDeshabilitado}
-                      onClick={() => credits > 0 && setMetodo('credit')}
-                      disabled={credits <= 0}
-                    >
+                  <div style={s.metodosGrid}>
+                    {inscriptionOptions?.can_use_subscription && (
+                      <button style={s.metodoBtn(metodo === 'subscription')} onClick={() => setMetodo('subscription')}>
+                        Confirmar por suscripcion activa
+                        <div style={s.metodoBtnSub}>Sin costo adicional (especialidad: {inscriptionOptions?.plan_specialization})</div>
+                      </button>
+                    )}
+                    {esAbonado && (
+                      <button
+                        style={credits > 0 ? s.metodoBtn(metodo === 'credit') : s.metodoBtnDeshabilitado}
+                        onClick={() => credits > 0 && setMetodo('credit')}
+                        disabled={credits <= 0}
+                      >
                       Usar crédito
                       <div style={s.metodoBtnSub}>
                         {credits > 0 ? `Se descuenta 1 crédito (tenés ${credits})` : 'No tenés créditos disponibles'}
@@ -588,6 +599,7 @@ function InscribirActividad() {
                     </div>
                   </button>
                 </div>
+                </>
               )}
 
               <div style={s.botones}>

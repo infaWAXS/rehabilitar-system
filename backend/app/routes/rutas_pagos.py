@@ -28,7 +28,7 @@ def checkout_mercadopago(
     db: Session = Depends(get_db),
 ):
     """Simula el proceso de pago con Mercado Pago."""
-    return simulate_mercadopago_payment(body.plan_id, body.test_scenario, current_user.id, db)
+    return simulate_mercadopago_payment(body.plan_id, body.specialization, body.test_scenario, current_user.id, db)
 
 
 # HU: Consultar si el usuario logueado es abonado
@@ -49,6 +49,7 @@ def get_my_plan(
             "id": user_plan.plan.id,
             "name": user_plan.plan.name,
             "coverage_type": user_plan.plan.coverage_type,
+            "specialization": user_plan.specialization,
             "end_date": str(user_plan.end_date),
         },
     }

@@ -36,6 +36,7 @@ from app.utils.security import hash_password
 import app.models.reservation  # noqa
 import app.models.waitlist      # noqa
 import app.models.activity      # noqa
+import app.models.attendance    # noqa
 
 USUARIOS_MOCK = [
     {
@@ -76,6 +77,36 @@ USUARIOS_MOCK = [
         "birth_date": date(1985, 11, 5),
     },
     {
+        "name": "Sofia",
+        "lastname": "Kinesiologia",
+        "email": "profe2@rehabilitar.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "44444445",
+        "specialization": "Kinesiologia deportiva",
+        "birth_date": date(1990, 4, 15),
+    },
+    {
+        "name": "Carlos",
+        "lastname": "Pilates",
+        "email": "profe3@rehabilitar.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "44444446",
+        "specialization": "Pilates terapeutico",
+        "birth_date": date(1983, 7, 22),
+    },
+    {
+        "name": "Maria",
+        "lastname": "Neurologia",
+        "email": "profe4@rehabilitar.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "44444447",
+        "specialization": "Kinesiologia neurologica",
+        "birth_date": date(1987, 2, 8),
+    },
+    {
         "name": "Ana",
         "lastname": "Abonada",
         "email": "abonado@rehabilitar.com",
@@ -89,7 +120,23 @@ USUARIOS_MOCK = [
 
 def seed():
     Base.metadata.create_all(bind=engine)
+    
+    # Migración manual: agregar columna specialization a user_plans si no existe
     db = SessionLocal()
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        user_plans_columns = [col['name'] for col in inspector.get_columns('user_plans')]
+        if 'specialization' not in user_plans_columns:
+            print("[seed_mock] Agregando columna 'specialization' a tabla user_plans...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE user_plans ADD COLUMN specialization VARCHAR(120) NOT NULL DEFAULT 'Sin especificar'"))
+                conn.commit()
+            print("[seed_mock] Columna 'specialization' agregada exitosamente.")
+    except Exception as e:
+        print(f"[seed_mock] Error durante migración manual: {e}")
+    finally:
+        db.close()
     creados = []
     omitidos = []
 
@@ -159,32 +206,11 @@ def seed():
     # ── Seed de planes ────────────────────────────────────────────────────────
     PLANES = [
         {
-            "name": "Plan Mensual Básico",
-            "description": "Acceso a 2 clases fijas por semana.",
-            "price": 15000,
+            "name": "Plan Mensual",
+            "description": "Acceso a todas las clases fijas semanales de una especialidad.",
+            "price": 20000,
             "duration_days": 30,
-            "coverage_type": "2 clases/semana",
-        },
-        {
-            "name": "Plan Mensual Completo",
-            "description": "Acceso ilimitado a todas las actividades del mes.",
-            "price": 25000,
-            "duration_days": 30,
-            "coverage_type": "Acceso ilimitado",
-        },
-        {
-            "name": "Plan Trimestral",
-            "description": "Acceso ilimitado por 3 meses con descuento.",
-            "price": 65000,
-            "duration_days": 90,
-            "coverage_type": "Acceso ilimitado",
-        },
-        {
-            "name": "Plan Semestral",
-            "description": "Acceso ilimitado por 6 meses, el plan de mayor ahorro.",
-            "price": 110000,
-            "duration_days": 180,
-            "coverage_type": "Acceso ilimitado",
+            "coverage_type": "Todas las clases de la especialidad elegida",
         },
     ]
 
@@ -215,23 +241,37 @@ def seed():
     db = SessionLocal()
     try:
         usuario_abonado = db.query(User).filter(User.email == "abonado@rehabilitar.com").first()
-        plan_completo = db.query(Plan).filter(Plan.name == "Plan Mensual Completo").first()
-        if usuario_abonado and plan_completo:
-            ya_tiene_plan = db.query(UserPlan).filter(
-                UserPlan.user_id == usuario_abonado.id,
-                UserPlan.status == "active",
-            ).first()
+        plan_mensual = db.query(Plan).filter(Plan.name == "Plan Mensual").first()
+        if usuario_abonado and plan_mensual:
+            try:
+                ya_tiene_plan = db.query(UserPlan).filter(
+                    UserPlan.user_id == usuario_abonado.id,
+                    UserPlan.status == "active",
+                ).first()
+            except Exception as e:
+                # Si hay error (ej: columna no existe), eliminar los planes viejos e intentar de nuevo
+                print(f"[seed_mock] Error consultando UserPlan (probablemente falta la columna specialization): {e}")
+                print("[seed_mock] Intentando eliminar UserPlans viejos...")
+                try:
+                    db.query(UserPlan).delete()
+                    db.commit()
+                    print("[seed_mock] UserPlans viejos eliminados.")
+                except:
+                    db.rollback()
+                ya_tiene_plan = None
+            
             if not ya_tiene_plan:
                 hoy = date.today()
                 db.add(UserPlan(
                     user_id=usuario_abonado.id,
-                    plan_id=plan_completo.id,
+                    plan_id=plan_mensual.id,
+                    specialization="Fisioterapia",  # especialidad elegida por el usuario
                     start_date=hoy,
-                    end_date=hoy + timedelta(days=plan_completo.duration_days),
+                    end_date=hoy + timedelta(days=plan_mensual.duration_days),
                     status="active",
                 ))
                 db.commit()
-                print("[seed_mock] UserPlan abonado@rehabilitar.com → Plan Mensual Completo creado.")
+                print("[seed_mock] UserPlan abonado@rehabilitar.com → Plan Mensual (Fisioterapia) creado.")
             else:
                 print("[seed_mock] UserPlan abonado@rehabilitar.com: ya existía, sin cambios.")
     finally:
@@ -245,3 +285,4 @@ if __name__ == "__main__":
     print(f"  cliente@rehabilitar.com  /  Cliente123")
     print(f"  empleado@rehabilitar.com /  Empleado123")
     print(f"  kinesio@rehabilitar.com  /  Kinesio123")
+    print(f"  abonado@rehabilitar.com  /  Abonado123")

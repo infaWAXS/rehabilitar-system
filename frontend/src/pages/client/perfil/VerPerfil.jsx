@@ -177,23 +177,18 @@ export default function VerPerfil() {
                     <p style={s.valor}>{planInfo.plan.name}</p>
                   </div>
                   <div style={s.campo}>
-                    <label style={s.label}>Cobertura</label>
-                    <p style={s.valor}>{planInfo.plan.coverage_type}</p>
+                    <label style={s.label}>Especialidad</label>
+                    <p style={s.valor}>{planInfo.plan.specialization || '—'}</p>
                   </div>
                 </div>
                 <div style={s.fila}>
                   <div style={s.campo}>
-                    <label style={s.label}>Vencimiento</label>
-                    <p style={s.valor}>{formatearFecha(planInfo.plan.end_date)}</p>
+                    <label style={s.label}>Cobertura</label>
+                    <p style={s.valor}>{planInfo.plan.coverage_type}</p>
                   </div>
                   <div style={s.campo}>
-                    <label style={s.label}>Créditos disponibles</label>
-                    <p style={s.valor}>
-                      <strong>{planInfo.credits ?? 0}</strong>
-                      {(planInfo.credits ?? 0) === 0 && (
-                        <span style={{ fontSize: '12px', color: 'var(--color-texto-suave)', marginLeft: '8px' }}></span>
-                      )}
-                    </p>
+                    <label style={s.label}>Vencimiento</label>
+                    <p style={s.valor}>{formatearFecha(planInfo.plan.end_date)}</p>
                   </div>
                 </div>
                 {(planInfo.pending_discount_percent ?? 0) > 0 && (

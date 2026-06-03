@@ -237,7 +237,7 @@ def obtener_disponibilidad_actividad(activity_id: int, db: Session, date: str = 
 
 
 def crear_actividad(datos, db: Session) -> list:
-    """Crea una o varias actividades (batch para fijas con repeticiones).
+    """Crea una o varias actividades (batch para fijas con repeticiones o lista de fechas).
     Devuelve siempre una lista de Activity."""
     from datetime import timedelta
     sala = db.query(Room).filter(Room.id == datos.room_id).first()
@@ -250,21 +250,29 @@ def crear_actividad(datos, db: Session) -> list:
             detail=f"Los cupos ({datos.capacity}) no pueden superar la capacidad de la sala ({sala.capacity})",
         )
 
-    repetitions = max(1, datos.repetitions or 1) if datos.activity_type == "fixed" else 1
+    # Determinar lista de fechas a crear
+    if datos.activity_type == "fixed":
+        if datos.dates:
+            # Nuevo modelo: lista explícita de fechas (mes + día de semana desde frontend)
+            fechas_a_crear = datos.dates
+        elif datos.specific_date:
+            # Modelo legacy: fecha de inicio + repeticiones semanales
+            repetitions = max(1, datos.repetitions or 1)
+            fechas_a_crear = [datos.specific_date + timedelta(weeks=i) for i in range(repetitions)]
+        else:
+            raise HTTPException(status_code=400, detail="Las actividades fijas requieren fechas (dates) o una fecha de inicio (specific_date).")
+    else:
+        fechas_a_crear = [datos.specific_date] if datos.specific_date else [None]
 
-    if datos.activity_type == "fixed" and not datos.specific_date:
-        raise HTTPException(status_code=400, detail="Las actividades fijas requieren una fecha de inicio (specific_date).")
-
-    base_data = datos.model_dump(exclude={"repetitions"})
+    base_data = datos.model_dump(exclude={"repetitions", "dates"})
     creadas = []
 
-    for i in range(repetitions):
+    for fecha in fechas_a_crear:
         data_i = dict(base_data)
-        if datos.activity_type == "fixed" and datos.specific_date:
-            data_i["specific_date"] = datos.specific_date + timedelta(weeks=i)
-            # schedule como texto legible para display (ej. "Lunes · 09:00–10:00")
+        if datos.activity_type == "fixed" and fecha:
+            data_i["specific_date"] = fecha
             dia_nombre = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][
-                data_i["specific_date"].weekday()
+                fecha.weekday()
             ]
             hora_fin = f"{int(datos.time_slot.split(':')[0]) + 1:02d}:00" if datos.time_slot else ""
             data_i["schedule"] = f"{dia_nombre} · {datos.time_slot}–{hora_fin}" if hora_fin else dia_nombre
@@ -274,7 +282,7 @@ def crear_actividad(datos, db: Session) -> list:
         _validar_disponibilidad_sala(act, db)
         _validar_disponibilidad_profesor(act, db)
         db.add(act)
-        db.flush()  # asigna id sin commit para la siguiente validacion
+        db.flush()
         creadas.append(act)
 
     db.commit()

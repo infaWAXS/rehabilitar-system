@@ -18,7 +18,7 @@ def get_active_plans(db: Session):
 
 # ── Simulación Mercado Pago ───────────────────────────────────────────────────
 
-def simulate_mercadopago_payment(plan_id: int, test_scenario: str, user_id: int, db: Session):
+def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenario: str, user_id: int, db: Session):
     """
     Simula el flujo de pago con Mercado Pago.
     test_scenario:
@@ -36,6 +36,7 @@ def simulate_mercadopago_payment(plan_id: int, test_scenario: str, user_id: int,
         user_plan = UserPlan(
             user_id=user_id,
             plan_id=plan.id,
+            specialization=specialization,
             start_date=hoy,
             end_date=hoy + timedelta(days=plan.duration_days),
             status="active",
@@ -45,7 +46,7 @@ def simulate_mercadopago_payment(plan_id: int, test_scenario: str, user_id: int,
 
         return {
             "success": True,
-            "message": f"Pago aprobado. Te suscribiste al plan '{plan.name}'.",
+            "message": f"Pago aprobado. Te suscribiste al plan '{plan.name}' en {specialization}.",
             "transaction_id": str(uuid.uuid4()),
             "status": "approved",
         }

@@ -15,6 +15,7 @@ class UserPlan(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     plan_id = Column(Integer, ForeignKey("plans.id"), nullable=False)
+    specialization = Column(String(120), nullable=False)  # especialidad que el usuario eligió
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     status = Column(String(20), nullable=False, default="active")  # "active" | "expired" | "cancelled"

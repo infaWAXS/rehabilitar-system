@@ -82,14 +82,14 @@ const s = {
 };
 
 function formatearHorario(actividad) {
-  if (actividad.activity_type === 'individual') {
-    if (actividad.specific_date && actividad.time_slot) {
-      return `${actividad.specific_date} · ${actividad.time_slot}`;
-    }
-    if (actividad.specific_date) return actividad.specific_date;
-    if (actividad.time_slot) return actividad.time_slot;
-    return '—';
+  if (actividad.specific_date && actividad.time_slot) {
+    const fecha = new Date(`${actividad.specific_date}T00:00:00`);
+    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const dia = dias[fecha.getDay()];
+    return `${dia} · ${actividad.specific_date} · ${actividad.time_slot}`;
   }
+  if (actividad.specific_date) return actividad.specific_date;
+  if (actividad.time_slot) return actividad.time_slot;
   return actividad.schedule || '—';
 }
 

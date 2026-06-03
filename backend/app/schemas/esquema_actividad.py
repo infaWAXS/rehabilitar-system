@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional
+from typing import Optional, List
 from decimal import Decimal
 from datetime import date
 
@@ -18,6 +18,7 @@ class ActivityCreate(BaseModel):
     description: Optional[str] = None
     requirements: Optional[str] = None
     repetitions: Optional[int] = 1        # actividades fijas: cuántas semanas consecutivas crear
+    dates: Optional[List[date]] = None    # lista explícita de fechas (nuevo modelo mes+dia)
 
     @field_validator("activity_type")
     @classmethod

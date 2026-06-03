@@ -95,6 +95,8 @@ class UserResponse(BaseModel):
     tiene_clases_activas: Optional[bool] = None
 
     birth_date: Optional[date] = None
+    
+    plan_specialization: Optional[str] = None  # especialidad del plan del usuario (si tiene plan activo)
 
     class Config:
         from_attributes = True
