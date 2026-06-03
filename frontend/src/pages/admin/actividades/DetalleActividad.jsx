@@ -135,15 +135,23 @@ function DetalleActividad() {
               <span style={s.valor}>{actividad.specialization || '—'}</span>
             </div>
             <div style={s.campo}>
-              <span style={s.label}>Horario</span>
-              <span style={s.valor}>{actividad.schedule || actividad.specific_date || '—'}</span>
+              <span style={s.label}>Fecha</span>
+              <span style={s.valor}>
+                {actividad.specific_date ? (() => {
+                  const fecha = new Date(`${actividad.specific_date}T00:00:00`);
+                  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                  const dia = dias[fecha.getDay()];
+                  const dia_num = fecha.getDate().toString().padStart(2, '0');
+                  const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+                  const anio = fecha.getFullYear();
+                  return `${dia} ${dia_num}/${mes}/${anio}`;
+                })() : (actividad.schedule || '—')}
+              </span>
             </div>
-            {actividad.time_slot && (
-              <div style={s.campo}>
-                <span style={s.label}>Hora</span>
-                <span style={s.valor}>{actividad.time_slot}</span>
-              </div>
-            )}
+            <div style={s.campo}>
+              <span style={s.label}>Horario</span>
+              <span style={s.valor}>{actividad.time_slot || '—'}</span>
+            </div>
             <div style={s.campo}>
               <span style={s.label}>Profesor</span>
               <span style={s.valor}>{actividad.professor || 'Sin asignar'}</span>

@@ -289,3 +289,51 @@ def confirm_reservation(reservation_id: int, db: Session):
     db.refresh(reservation)
     
     return reservation
+
+
+def check_subscription_availability(user_id: int, activity_id: int, db: Session):
+    """
+    Verifica si el usuario puede inscribirse a una actividad usando su suscripción activa.
+    Retorna:
+    {
+        "can_use_subscription": bool,
+        "has_age_discount": bool,  # >65 años
+        "plan_specialization": str,  # especialidad del plan del usuario
+        "activity_specialization": str,  # especialidad de la actividad
+    }
+    """
+    from datetime import date as date_cls
+    from app.utils.subscriptions import get_active_user_plan
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise user_not_found_exception()
+    
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+    
+    # Verificar edad del usuario (>65 años)
+    today = date_cls.today()
+    if user.birth_date:
+        age = today.year - user.birth_date.year - ((today.month, today.day) < (user.birth_date.month, user.birth_date.day))
+        has_age_discount = age > 65
+    else:
+        has_age_discount = False
+    
+    # Verificar si tiene plan activo
+    user_plan = get_active_user_plan(user_id, db)
+    can_use_subscription = False
+    plan_specialization = None
+    
+    if user_plan and activity.activity_type == "fixed":
+        plan_specialization = user_plan.specialization
+        # Solo puede usar suscripción si es de la misma especialidad y es una clase fija
+        can_use_subscription = (plan_specialization == activity.specialization)
+    
+    return {
+        "can_use_subscription": can_use_subscription,
+        "has_age_discount": has_age_discount,
+        "plan_specialization": plan_specialization,
+        "activity_specialization": activity.specialization,
+    }

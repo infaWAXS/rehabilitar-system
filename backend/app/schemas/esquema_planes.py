@@ -24,6 +24,7 @@ class PlanRespuesta(BaseModel):
 
 class PagoMercadoPagoRequest(BaseModel):
     plan_id: int
+    specialization: str  # especialidad que el usuario elige para el plan
     test_scenario: str  # "success" | "insufficient_funds" | "connection_error"
 
 

@@ -13,6 +13,11 @@ export function reserveFixed(data) {
   });
 }
 
+// HU: Obtener opciones de inscripción a una actividad (descuentos por edad, disponibilidad de suscripción, etc.)
+export function getInscriptionOptions(activityId) {
+  return apiRequest(`/reservations/activity/${activityId}/inscription-options`);
+}
+
 // HU: Inscribirse a actividad individual
 export function reserveIndividual(data) {
   return apiRequest('/reservations/individual', {

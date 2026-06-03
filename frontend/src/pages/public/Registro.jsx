@@ -59,14 +59,27 @@ function Registro() {
 
     // Validación inline por campo
     const errs = {};
-    if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido.';
-    if (!form.apellido.trim()) errs.apellido = 'El apellido es requerido.';
-    if (!form.email.trim()) errs.email = 'El correo es requerido.';
-    if (!form.dni.trim()) errs.dni = 'El DNI es requerido.';
-    if (!form.contrasena) errs.contrasena = 'La contraseña es requerida.';
+    if (!form.nombre.trim()) errs.nombre = 'Este campo es requerido.';
+    if (!form.apellido.trim()) errs.apellido = 'Este campo es requerido.';
+    if (!form.email.trim()) errs.email = 'Este campo es requerido.';
+    if (!form.dni.trim()) {
+      errs.dni = 'Este campo es requerido.';
+    } else if (!/^\d{7,8}$/.test(form.dni.trim())) {
+      errs.dni = 'El DNI debe tener entre 7 y 8 dígitos numéricos.';
+    }
+    if (!form.contrasena) errs.contrasena = 'Este campo es requerido.';
     else if (form.contrasena.length < 6) errs.contrasena = 'La contraseña debe tener al menos 6 caracteres.';
-    if (!form.confirmar) errs.confirmar = 'Confirmá la contraseña.';
+    if (!form.confirmar) errs.confirmar = 'Este campo es requerido.';
     else if (form.contrasena !== form.confirmar) errs.confirmar = 'Las contraseñas no coinciden.';
+    if (!form.fecha_nacimiento) {
+      errs.fecha_nacimiento = 'Este campo es requerido.';
+    } else {
+      const hoy = new Date();
+      const nacimiento = new Date(form.fecha_nacimiento);
+      const edad = hoy.getFullYear() - nacimiento.getFullYear() - 
+      ((hoy.getMonth(), hoy.getDate()) < (nacimiento.getMonth(), nacimiento.getDate()) ? 1 : 0);
+      if (edad < 18) errs.fecha_nacimiento = 'Debés ser mayor de 18 años para registrarte.';
+    }
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
       return;
@@ -82,6 +95,7 @@ function Registro() {
         email: form.email,
         password: form.contrasena,
         dni: form.dni.trim(),
+        birth_date: form.fecha_nacimiento,
         direccion: form.direccion.trim() || null,
         telefono: form.telefono.trim() || null,
       });
@@ -150,6 +164,17 @@ function Registro() {
           <label style={s.label}>Confirmar contraseña</label>
           {fieldErrors.confirmar && <span style={s.errInline}>{fieldErrors.confirmar}</span>}
           <input style={s.input} type="password" name="confirmar" value={form.confirmar} onChange={cambio} />
+        </div>
+        <div style={s.campo}>
+          <label style={s.label}>Fecha de nacimiento</label>
+          {fieldErrors.fecha_nacimiento && <span style={s.errInline}>{fieldErrors.fecha_nacimiento}</span>}
+          <input
+            style={s.input}
+            type="date"
+            name="fecha_nacimiento"
+            value={form.fecha_nacimiento}
+            onChange={cambio}
+          />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <div style={s.campo}>

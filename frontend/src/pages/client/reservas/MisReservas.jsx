@@ -172,10 +172,19 @@ export default function MisReservas() {
 
   function formatearHorario(r) {
     if (r.activity_type === 'fixed') return r.schedule || '—';
-    const parts = [];
-    if (r.specific_date) parts.push(r.specific_date);
-    if (r.time_slot) parts.push(r.time_slot);
-    return parts.join(' · ') || '—';
+    // Para individual: mostrar fecha (Lunes XX/XX/XXXX) y turno en líneas separadas
+    const partes = [];
+    if (r.specific_date) {
+      const fecha = new Date(`${r.specific_date}T00:00:00`);
+      const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      const dia = dias[fecha.getDay()];
+      const dia_num = fecha.getDate().toString().padStart(2, '0');
+      const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+      const anio = fecha.getFullYear();
+      partes.push(`${dia} ${dia_num}/${mes}/${anio}`);
+    }
+    if (r.time_slot) partes.push(r.time_slot);
+    return partes.join(' · ') || '—';
   }
 
   // Una reserva se puede cancelar si no está cancelada y la clase no comenzó aún

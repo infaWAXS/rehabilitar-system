@@ -16,10 +16,28 @@ from app.services.servicio_reservas import (
     cancel_reservation,
     cancel_reservation_with_policy,
     update_reservation_payment_status,
-    confirm_reservation
+    confirm_reservation,
+    check_subscription_availability,
 )
 
 router = APIRouter(prefix="/reservations", tags=["Reservas"])
+
+
+# Verificar opciones de inscripción disponibles (HU: Inscribirse a actividad)
+@router.get("/activity/{activity_id}/inscription-options")
+def get_inscription_options(
+    activity_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna las opciones de inscripción disponibles para una actividad.
+    - can_use_subscription: si el usuario puede usar su suscripción activa
+    - has_age_discount: si el usuario tiene >65 años (descuento automático)
+    - plan_specialization: especialidad del plan del usuario
+    - activity_specialization: especialidad de la actividad
+    """
+    return check_subscription_availability(current_user.id, activity_id, db)
 
 
 # Crear una nueva reserva

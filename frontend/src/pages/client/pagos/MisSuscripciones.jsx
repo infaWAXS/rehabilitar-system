@@ -5,6 +5,14 @@ import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getPlans, getMyPlan, mercadoPagoCheckout } from '../../../services/paymentsService';
 
+const ESPECIALIZACIONES = [
+  'Kinesiologia deportiva', 'Fisioterapia', 'Kinesiologia neurologica',
+  'Rehabilitacion cardiovascular', 'Kinesiologia traumatologica', 'Pilates terapeutico',
+  'Kinesiologia pediatrica', 'Osteopatia', 'Acupuntura', 'Masoterapia',
+  'Kinesiologia respiratoria', 'Rehabilitacion post-quirurgica',
+  'Kinesiologia gerontologica', 'Electroterapia',
+];
+
 const DURACION = (dias) => {
   if (dias === 30)  return '1 mes';
   if (dias === 90)  return '3 meses';
@@ -92,6 +100,9 @@ export default function MisSuscripciones() {
   const [cargando, setCargando]     = useState(true);
   const [errorCarga, setErrorCarga] = useState('');
   const [miPlan, setMiPlan]         = useState(null); // { id, name, coverage_type, end_date } o null
+  
+  // Especialidades
+  const [especialidadSeleccionada, setEspecialidadSeleccionada] = useState(ESPECIALIZACIONES[0]);
 
   // Modal
   const [planSeleccionado, setPlanSeleccionado] = useState(null);
@@ -118,6 +129,7 @@ export default function MisSuscripciones() {
   function abrirModal(plan) {
     setResultado(null);
     setEscenario('success');
+    setEspecialidadSeleccionada(ESPECIALIZACIONES[0]);
     setPlanSeleccionado(plan);
   }
 
@@ -128,11 +140,11 @@ export default function MisSuscripciones() {
   }
 
   async function handlePagar() {
-    if (!planSeleccionado) return;
+    if (!planSeleccionado || !especialidadSeleccionada) return;
     setPagando(true);
     setResultado(null);
     try {
-      const res = await mercadoPagoCheckout(planSeleccionado.id, escenario);
+      const res = await mercadoPagoCheckout(planSeleccionado.id, especialidadSeleccionada, escenario);
       setResultado({ tipo: res.success ? 'success' : 'warn', mensaje: res.message });
       if (res.success) cargarMiPlan(); // actualizar badge de plan activo
     } catch (err) {
@@ -210,6 +222,18 @@ export default function MisSuscripciones() {
 
             {!resultado && (
               <>
+                <label style={s.label}>Especialidad</label>
+                <select
+                  style={s.select}
+                  value={especialidadSeleccionada}
+                  onChange={(e) => setEspecialidadSeleccionada(e.target.value)}
+                  disabled={pagando}
+                >
+                  {ESPECIALIZACIONES.map((esp) => (
+                    <option key={esp} value={esp}>{esp}</option>
+                  ))}
+                </select>
+
                 <label style={s.label}>Escenario de prueba</label>
                 <select
                   style={s.select}

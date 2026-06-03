@@ -14,7 +14,7 @@ import { obtenerFeriadoArgentino } from '../../../utils/feriados';
 
 
 
-// ?????? Constantes ???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+// Constantes 
 
 
 
@@ -52,9 +52,9 @@ const ESPECIALIZACIONES = [
 
 
 
-const DIAS = ['Lunes', 'Martes', 'Mi??rcoles', 'Jueves', 'Viernes'];
+const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
 
-const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Mi??rcoles', 'Jueves', 'Viernes', 'S??bado'];
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 
 
@@ -562,33 +562,36 @@ function EditarActividad() {
 
 
   const handleChange = (e) => {
-
     const { name, value } = e.target;
-
-    if (name === 'specialization') {
-
-      setForm((prev) => ({ ...prev, specialization: value, professor: '' }));
-
-    } else if (name === 'activity_type') {
-
-      setForm((prev) => ({
-
-        ...prev,
-
-        activity_type: value,
-
-        specific_date: '',
-
-      }));
-
-      setHoraInicio('');
-
-    } else {
-
-      setForm((prev) => ({ ...prev, [name]: value }));
-
+    let newValue = value;
+    
+    // Validación especial para precio: solo números y un punto
+    if (name === 'price') {
+      newValue = value.replace(/[^0-9.]/g, ''); // solo números y punto
+      const parts = newValue.split('.');
+      if (parts.length > 2) newValue = parts[0] + '.' + parts.slice(1).join(''); // solo un punto
+    }
+    
+    // Validación especial para cupos: solo números positivos, no supera máximo
+    if (name === 'capacity') {
+      newValue = value.replace(/[^0-9]/g, ''); // solo números
+      if (salaSeleccionada && newValue && Number(newValue) > salaSeleccionada.capacity) {
+        newValue = String(salaSeleccionada.capacity);
+      }
     }
 
+    if (name === 'specialization') {
+      setForm((prev) => ({ ...prev, specialization: newValue, professor: '' }));
+    } else if (name === 'activity_type') {
+      setForm((prev) => ({
+        ...prev,
+        activity_type: newValue,
+        specific_date: '',
+      }));
+      setHoraInicio('');
+    } else {
+      setForm((prev) => ({ ...prev, [name]: newValue }));
+    }
   };
 
 
@@ -601,13 +604,13 @@ function EditarActividad() {
 
 
 
-    if (!form.room_id) return setError('Seleccion?? una sala.');
+    if (!form.room_id) return setError('Seleccioná una sala.');
 
-    if (!form.specialization) return setError('Seleccion?? una especialidad.');
+    if (!form.specialization) return setError('Seleccioná una especialidad.');
 
-    if (!horaInicio) return setError('Seleccion?? un horario.');
+    if (!horaInicio) return setError('Seleccioná un horario.');
 
-    if (!form.specific_date) return setError('Seleccion?? la fecha.');
+    if (!form.specific_date) return setError('Seleccioná la fecha.');
 
     if (feriadoSeleccionado.esFeriado) {
 
@@ -737,7 +740,7 @@ function EditarActividad() {
 
                 onChange={handleChange}
 
-                placeholder="Ej: Yoga Terap??utico, Pilates Grupal"
+                placeholder="Ej: Yoga Terapéutico, Pilates Grupal"
 
                 required
 
@@ -755,7 +758,7 @@ function EditarActividad() {
 
               <select style={s.select} name="specialization" value={form.specialization} onChange={handleChange} required>
 
-                <option value="">??? Seleccionar especialidad ???</option>
+                <option value=""> Seleccionar especialidad </option>
 
                 {ESPECIALIZACIONES.map((e) => (
 
@@ -781,9 +784,9 @@ function EditarActividad() {
 
                   {salas.length > 0 && salasDisponibles.length === 0
 
-                    ? '??? No hay salas disponibles ???'
+                    ? ' No hay salas disponibles '
 
-                    : '??? Seleccionar sala ???'}
+                    : ' Seleccionar sala '}
 
                 </option>
 
@@ -869,9 +872,9 @@ function EditarActividad() {
 
                   {horasDisponibles.length === 0
 
-                    ? '??? No hay horarios disponibles ???'
+                    ? ' No hay horarios disponibles '
 
-                    : '??? Seleccionar turno ???'}
+                    : ' Seleccionar turno '}
 
                 </option>
 
@@ -925,17 +928,16 @@ function EditarActividad() {
 
                   {!form.specialization
 
-                    ? '??? Seleccion?? primero una especialidad ???'
+                    ? ' Seleccioná primero una especialidad '
 
                     : profesoresDisponibles.length === 0
 
-                    ? '??? No hay profesores disponibles ???'
+                    ? ' No hay profesores disponibles '
 
                     : form.activity_type === 'individual'
 
-                    ? '??? Sin asignar ???'
-
-                    : '??? Seleccionar profesor ???'}
+                    ? ' Sin asignar '
+                    : ' Seleccionar profesor'}
 
                 </option>
 
@@ -965,17 +967,13 @@ function EditarActividad() {
 
                 style={s.input}
 
-                type="number"
+                type="text"
 
                 name="price"
 
                 value={form.price}
 
                 onChange={handleChange}
-
-                min="0"
-
-                step="0.01"
 
                 placeholder="0.00"
 
@@ -997,15 +995,13 @@ function EditarActividad() {
 
                 style={s.input}
 
-                type="number"
+                type="text"
 
                 name="capacity"
 
                 value={form.capacity}
 
                 onChange={handleChange}
-
-                min="1"
 
                 placeholder="Ej: 8"
 
@@ -1039,7 +1035,7 @@ function EditarActividad() {
 
                 onChange={handleChange}
 
-                placeholder="Descripci??n de la actividad, beneficios, etc."
+                placeholder="Descripcion de la actividad, beneficios, etc."
 
               />
 
@@ -1063,7 +1059,7 @@ function EditarActividad() {
 
                 onChange={handleChange}
 
-                placeholder="Ej: Ropa c??moda, certificado m??dico"
+                placeholder="Ej: Ropa cómoda, certificado médico"
 
               />
 
@@ -1079,7 +1075,7 @@ function EditarActividad() {
 
             <button type="submit" style={s.botonPrimario} disabled={guardando}>
 
-              {guardando ? 'Guardando???' : 'Guardar cambios'}
+              {guardando ? 'Guardando…' : 'Guardar cambios'}
 
             </button>
 

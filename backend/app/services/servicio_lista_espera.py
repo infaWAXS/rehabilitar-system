@@ -14,19 +14,23 @@ from app.utils.subscriptions import is_abonado
 def add_to_waitlist(user_id: int, activity_id: int, db: Session):
     """
     Añade un usuario a la lista de espera de una actividad.
-    Cola determinada por condición de abonado:
-      - "priority": el usuario tiene al menos una reserva fija activa (abonado).
-      - "general":  todos los demás.
+    Cola determinada por tipo de actividad:
+      - Si es "individual": siempre cola "general" (sin importar si es abonado)
+      - Si es "fixed": "priority" si es abonado, "general" si no
     Cada cola mantiene su propia secuencia de posiciones.
-    TODO: cuando exista el modelo Activity, verificar tipo de actividad;
-          si es "individual", usar siempre cola "general" sin importar si es abonado.
     """
     from app.models.reservation import Reservation
+    from app.models.activity import Activity
 
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
         raise user_not_found_exception()
+
+    # Obtener la actividad para verificar su tipo
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
     # Verificar si el usuario ya está en cualquier cola de esta actividad
     existing = db.query(Waitlist).filter(
@@ -41,8 +45,13 @@ def add_to_waitlist(user_id: int, activity_id: int, db: Session):
             detail="El usuario ya está en la lista de espera de esta actividad"
         )
 
-    # Determinar cola: abonado (UserPlan activo) -> "priority", resto -> "general"
-    tipo_cola = "priority" if is_abonado(user_id, db) else "general"
+    # Determinar cola según tipo de actividad
+    if activity.activity_type == "individual":
+        # Actividades individuales: siempre cola general
+        tipo_cola = "general"
+    else:
+        # Actividades fijas: priority si es abonado, general si no
+        tipo_cola = "priority" if is_abonado(user_id, db) else "general"
 
     # Posición dentro de su propia cola (independiente de la otra)
     max_position = db.query(func.max(Waitlist.position)).filter(
@@ -165,9 +174,17 @@ def get_activity_waitlist(activity_id: int, db: Session):
     """HU: Listar lista de espera.
     Escenario 1: retorna primero la cola 'priority' (abonados) ordenada por posicion,
                  luego la cola 'general' ordenada por posicion. Datos de contacto incluidos.
+                 PERO: si es actividad "individual", solo retorna cola "general" (no existe cola prioritaria).
     Escenario 2: retorna lista vacia si no hay inscriptos en ninguna cola.
     Las posiciones de cada cola son independientes entre si.
     """
+    from app.models.activity import Activity
+    
+    # Obtener la actividad para verificar su tipo
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        return []
+    
     def _build_entry(entrada, cliente):
         return {
             "id": entrada.id,
@@ -182,24 +199,38 @@ def get_activity_waitlist(activity_id: int, db: Session):
             "es_abonado": entrada.waitlist_type == "priority",
         }
 
-    cola_priority = db.query(Waitlist).filter(
-        Waitlist.activity_id == activity_id,
-        Waitlist.waitlist_type == "priority",
-        Waitlist.status == "waiting"
-    ).order_by(Waitlist.position).all()
-
-    cola_general = db.query(Waitlist).filter(
-        Waitlist.activity_id == activity_id,
-        Waitlist.waitlist_type == "general",
-        Waitlist.status == "waiting"
-    ).order_by(Waitlist.position).all()
-
     resultado = []
-    for entrada in cola_priority + cola_general:
-        cliente = db.query(User).filter(User.id == entrada.user_id).first()
-        if not cliente:
-            continue
-        resultado.append(_build_entry(entrada, cliente))
+    
+    # Para actividades individuales, solo mostrar cola general
+    if activity.activity_type == "individual":
+        cola_general = db.query(Waitlist).filter(
+            Waitlist.activity_id == activity_id,
+            Waitlist.waitlist_type == "general",
+            Waitlist.status == "waiting"
+        ).order_by(Waitlist.position).all()
+        
+        for entrada in cola_general:
+            cliente = db.query(User).filter(User.id == entrada.user_id).first()
+            if cliente:
+                resultado.append(_build_entry(entrada, cliente))
+    else:
+        # Para actividades fijas, mostrar ambas colas (priority primero)
+        cola_priority = db.query(Waitlist).filter(
+            Waitlist.activity_id == activity_id,
+            Waitlist.waitlist_type == "priority",
+            Waitlist.status == "waiting"
+        ).order_by(Waitlist.position).all()
+
+        cola_general = db.query(Waitlist).filter(
+            Waitlist.activity_id == activity_id,
+            Waitlist.waitlist_type == "general",
+            Waitlist.status == "waiting"
+        ).order_by(Waitlist.position).all()
+
+        for entrada in cola_priority + cola_general:
+            cliente = db.query(User).filter(User.id == entrada.user_id).first()
+            if cliente:
+                resultado.append(_build_entry(entrada, cliente))
 
     return resultado
 

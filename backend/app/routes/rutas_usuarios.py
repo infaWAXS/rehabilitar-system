@@ -29,8 +29,12 @@ router = APIRouter(
 
 #El usuario actualmente autenticado - AGUSTIN
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+def get_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.servicio_usuarios import get_user_with_plan_specialization
+    return get_user_with_plan_specialization(current_user, db)
 
 
 
@@ -63,7 +67,7 @@ def change_user_password(request: ChangePasswordRequest, token: str, db: Session
 @router.put("/update-info")
 def update_my_info(request: UpdateUserRequest, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
-    return update_user_info_service(current_user, request.name, request.lastname, request.direccion, request.telefono, db)
+    return update_user_info_service(current_user, request.name, request.lastname, request.direccion, request.telefono, db, request.birth_date)
 
 
 @router.get("/",response_model=list[UserResponse])

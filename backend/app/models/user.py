@@ -1,5 +1,5 @@
 # Responsable legacy: Francis + Agustin - modulo de usuarios y autenticacion.
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database.connection import Base
@@ -27,6 +27,7 @@ class User(Base):
     credits = Column(Integer, nullable=False, default=0, server_default='0')
     pending_discount_percent = Column(Integer, nullable=False, default=0, server_default='0')
     created_at = Column(DateTime, server_default=func.now())
+    birth_date = Column(Date, nullable=False)
 
     attendances = relationship("Attendance", back_populates="user")
     user_plans = relationship("UserPlan", back_populates="user")
