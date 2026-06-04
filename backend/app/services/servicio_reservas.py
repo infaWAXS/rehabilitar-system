@@ -182,7 +182,7 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
       no_refund        → no abonado + ≤ 24 h
     """
     from datetime import datetime, date as date_cls
-    from app.utils.subscriptions import is_abonado
+    from app.utils.subscriptions import is_abonado, get_active_user_plan
 
     reservation = get_reservation_by_id(reservation_id, db)
 
@@ -203,6 +203,9 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
 
     abonado = is_abonado(user_id, db)
     user = db.query(User).filter(User.id == user_id).first()
+    if abonado:
+        plan = get_active_user_plan(user_id, db)
+        activity = db.query(Activity).filter(Activity.id == reservation.activity_id).first()
 
     # Contar cancelaciones previas del mes actual (para abonados en franja 24-48 h)
     today = date_cls.today()
@@ -214,11 +217,15 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
     ).count()
 
     # ── Reglas de negocio ──────────────────────────────────────────────────────
-    if abonado:
+    if abonado and plan.specialization == activity.specialization:
         if hours_until > 48:
-            result = "credit"
-            message = "Turno cancelado. Se te otorgó un crédito para tu próxima clase."
-            user.credits += 1
+            if user.credits < 3:
+                result = "credit"
+                message = "Turno cancelado. Se te otorgó un crédito para tu próxima clase."
+                user.credits += 1
+            else:
+                result = "no_benefit"
+                message = "Turno cancelado. No se otorgó crédito: ya tenés 3 créditos acumulados."
         elif hours_until >= 24:
             if prev_cancellations == 0:
                 result = "discount_30"

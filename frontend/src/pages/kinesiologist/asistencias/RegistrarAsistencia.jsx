@@ -118,7 +118,7 @@ export default function RegistrarAsistencia() {
   const [cargandoLista, setCargandoLista] = useState(true);
   const [errorLista, setErrorLista] = useState('');
 
-  // EdiciÃ³n inline de comentario
+  // Edición inline de comentario
   const [editandoId, setEditandoId] = useState(null);
   const [comentarioEdit, setComentarioEdit] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -214,7 +214,7 @@ export default function RegistrarAsistencia() {
       <div style={s.contenedor}>
         <div style={s.cabecera}>
           <h1 style={s.titulo}>Asistencias</h1>
-          <p style={s.subtitulo}>RegistrÃ¡ asistencias y gestionÃ¡ comentarios.</p>
+          <p style={s.subtitulo}>Registrá asistencias y gestioná comentarios.</p>
         </div>
 
         {/* Banner de actividad */}
@@ -244,7 +244,7 @@ export default function RegistrarAsistencia() {
           </div>
         ) : null}
 
-        {/* â”€â”€ SecciÃ³n: Registrar nueva asistencia â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Sección: Registrar nueva asistencia ─────────── */}
         <h2 style={s.seccionTitulo}>Registrar nueva asistencia</h2>
 
         {errorForm && <div style={s.alerta('error')}>{errorForm}</div>}
@@ -272,7 +272,7 @@ export default function RegistrarAsistencia() {
             <textarea
               id="comment"
               style={s.textarea}
-              placeholder="Ej: Buen desempeÃ±o"
+              placeholder="Ej: Buen desempeño"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               disabled={enviando}
@@ -299,7 +299,7 @@ export default function RegistrarAsistencia() {
 
         <div style={s.divisor} />
 
-        {/* â”€â”€ SecciÃ³n: Asistencias registradas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Sección: Asistencias registradas ─────────── */}
         <h2 style={s.seccionTitulo}>
           Asistencias registradas
           {!cargandoLista && ` (${asistencias.length})`}
@@ -310,7 +310,7 @@ export default function RegistrarAsistencia() {
         {cargandoLista ? (
           <div style={s.vacio}>Cargando asistencias...</div>
         ) : asistencias.length === 0 ? (
-          <div style={s.vacio}>AÃºn no hay asistencias registradas para esta actividad.</div>
+          <div style={s.vacio}>Aún no hay asistencias registradas para esta actividad.</div>
         ) : (
           <table style={s.tabla}>
             <thead>
@@ -348,7 +348,7 @@ export default function RegistrarAsistencia() {
                       />
                     ) : (
                       <span style={{ color: a.comment ? 'inherit' : 'var(--color-texto-suave)' }}>
-                        {a.comment || 'â€”'}
+                        {a.comment || '—'}
                       </span>
                     )}
                   </td>
