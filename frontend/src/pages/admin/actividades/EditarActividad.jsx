@@ -62,7 +62,7 @@ const HORAS = Array.from({ length: 8 }, (_, i) => {
 
   const h = 9 + i;
 
-  return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 ??? ${String(h + 1).padStart(2, '0')}:00` };
+  return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 - ${String(h + 1).padStart(2, '0')}:00` };
 
 });
 
@@ -694,7 +694,7 @@ function EditarActividad() {
 
           ? <div style={s.error}>{error}</div>
 
-          : <div style={s.cargando}>Cargando???</div>}
+          : <div style={s.cargando}>Cargando</div>}
 
       </LayoutPrivado>
 

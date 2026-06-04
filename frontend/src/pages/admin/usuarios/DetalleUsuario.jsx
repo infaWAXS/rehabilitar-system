@@ -78,6 +78,7 @@ const s = {
     background: '#ccc', color: '#fff', fontWeight: '700', fontSize: '14px', cursor: 'not-allowed',
   },
   error: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '16px' },
+  errorCampo: { color: '#dc2626', fontSize: '12px', marginTop: '4px' },
   exito: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '10px 14px', color: '#15803d', fontSize: '13px', marginBottom: '16px' },
   divider: { borderTop: '1px solid var(--color-borde)', margin: '20px 0' },
   seccionLabel: { fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' },
@@ -116,6 +117,7 @@ function DetalleUsuario() {
   const [exito, setExito] = useState('');
   const [mostrarAlertaClases, setMostrarAlertaClases] = useState(false);
   const [mostrarModalConfirmacion, setMostrarModalConfirmacion] = useState(false);
+  const [erroresCampos, setErroresCampos] = useState({});
 
   useEffect(() => {
     getUserById(id)
@@ -131,6 +133,9 @@ function DetalleUsuario() {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     setExito('');
+    if (erroresCampos[name]) {
+      setErroresCampos((prev) => ({ ...prev, [name]: '' }));
+    }
     if (name === 'especializacion' && usuario?.role === 'professor') {
       setMostrarAlertaClases(value !== usuario.specialization && !!usuario.tiene_clases_activas);
     }
@@ -140,6 +145,7 @@ function DetalleUsuario() {
     if (usuario) setForm(formDesdeDatos(usuario));
     setError('');
     setExito('');
+    setErroresCampos({});
   };
 
   const realizarGuardado = async () => {
@@ -173,14 +179,18 @@ function DetalleUsuario() {
     setError('');
     setExito('');
 
-    if (!form.nombre.trim() || !form.apellido.trim()) {
-      setError('El nombre y apellido no pueden estar vacios.');
-      return;
-    }
+    const nuevosErrores = {};
+    if (!form.nombre.trim()) nuevosErrores.nombre = 'Campo requerido';
+    if (!form.apellido.trim()) nuevosErrores.apellido = 'Campo requerido';
+    if (!form.fecha_nacimiento) nuevosErrores.fecha_nacimiento = 'Campo requerido';
     if (usuario.role === 'professor' && !form.especializacion.trim()) {
-      setError('Un profesor debe tener una especializacion asignada.');
+      nuevosErrores.especializacion = 'Campo requerido';
+    }
+    if (Object.keys(nuevosErrores).length > 0) {
+      setErroresCampos(nuevosErrores);
       return;
     }
+    setErroresCampos({});
 
     // E3: si el profesor cambia su especialidad, pedir confirmación antes de guardar
     if (usuario.role === 'professor' && form.especializacion !== usuario.specialization) {
@@ -208,7 +218,7 @@ function DetalleUsuario() {
             {error && <div style={s.error}>{error}</div>}
             {exito && <div style={s.exito}>{exito}</div>}
 
-            <form onSubmit={guardar}>
+            <form onSubmit={guardar} noValidate>
               {/* Info de solo lectura */}
               <p style={s.seccionLabel}>Informacion de cuenta</p>
               <div style={s.grid2}>
@@ -233,11 +243,13 @@ function DetalleUsuario() {
               <div style={s.grid2}>
                 <div style={s.campo}>
                   <label style={s.label}>Nombre</label>
-                  <input style={s.input} name="nombre" value={form.nombre} onChange={cambio} required />
+                  <input style={s.input} name="nombre" value={form.nombre} onChange={cambio} />
+                  {erroresCampos.nombre && <span style={s.errorCampo}>{erroresCampos.nombre}</span>}
                 </div>
                 <div style={s.campo}>
                   <label style={s.label}>Apellido</label>
-                  <input style={s.input} name="apellido" value={form.apellido} onChange={cambio} required />
+                  <input style={s.input} name="apellido" value={form.apellido} onChange={cambio} />
+                  {erroresCampos.apellido && <span style={s.errorCampo}>{erroresCampos.apellido}</span>}
                 </div>
               </div>
 
@@ -260,8 +272,8 @@ function DetalleUsuario() {
                   name="fecha_nacimiento"
                   value={form.fecha_nacimiento}
                   onChange={cambio}
-                  required
                 />
+                {erroresCampos.fecha_nacimiento && <span style={s.errorCampo}>{erroresCampos.fecha_nacimiento}</span>}
               </div>
 
               {usuario.role === 'professor' && (
@@ -272,12 +284,12 @@ function DetalleUsuario() {
                     name="especializacion"
                     value={form.especializacion}
                     onChange={cambio}
-                    required
                   >
                     {ESPECIALIZACIONES.map((e) => (
                       <option key={e} value={e}>{e}</option>
                     ))}
                   </select>
+                  {erroresCampos.especializacion && <span style={s.errorCampo}>{erroresCampos.especializacion}</span>}
                 </div>
               )}
 
