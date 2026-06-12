@@ -3,6 +3,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
 from datetime import datetime
+from threading import Thread
 import re
 
 from app.models.activity import Activity
@@ -11,6 +12,8 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
 from app.utils.subscriptions import is_abonado
+from app.utils.notifications import notify_activity_cancellation
+from database.connection import SessionLocal
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
@@ -403,6 +406,19 @@ def cancelar_actividad(activity_id: int, db: Session) -> None:
 
     actividad.status = "cancelled"
     db.commit()
+
+    # Enviar notificaciones de cancelación en segundo plano para no frenar la UI
+    def _notificar_cancelacion_async(activity_id: int) -> None:
+        db_notif = SessionLocal()
+        try:
+            notify_activity_cancellation(activity_id, db_notif)
+        except Exception:
+            # No interrumpir la operación por fallos en notificaciones
+            pass
+        finally:
+            db_notif.close()
+
+    Thread(target=_notificar_cancelacion_async, args=(actividad.id,), daemon=True).start()
 
 
 def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity:
