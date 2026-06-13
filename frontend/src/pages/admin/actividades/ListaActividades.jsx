@@ -76,12 +76,8 @@ const s = {
     zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
   modal: {
-<<<<<<< HEAD
     background: '#fff', borderRadius: '12px', padding: '20px', maxWidth: '420px', width: '100%',
     boxShadow: '0 12px 36px rgba(0,0,0,0.18)',
-=======
-    background: '#fff', borderRadius: '12px', padding: '20px', maxWidth: '420px', width: '100%', boxShadow: '0 12px 36px rgba(0,0,0,0.18)'
->>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
   },
   modalTitulo: { fontSize: '16px', fontWeight: '700', marginBottom: '8px' },
   modalTexto: { fontSize: '14px', color: 'var(--color-texto-suave)', marginBottom: '12px' },
@@ -113,10 +109,7 @@ function ListaActividades() {
   const [actividades, setActividades] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-<<<<<<< HEAD
   const [cuposDisponibles, setCuposDisponibles] = useState({});
-=======
->>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState(null); // { id, name }
   const rol = getRole();
@@ -126,7 +119,6 @@ function ListaActividades() {
     setCargando(true);
     setError('');
     getActivities({ status: 'active' })
-<<<<<<< HEAD
       .then(async (data) => {
         const lista = (Array.isArray(data) ? data : []).filter(actividadSigueVigente);
         setActividades(lista);
@@ -136,11 +128,6 @@ function ListaActividades() {
           if (res.status === 'fulfilled') mapa[lista[i].id] = res.value.available_spots;
         });
         setCuposDisponibles(mapa);
-=======
-      .then((data) => {
-        const lista = Array.isArray(data) ? data : [];
-        setActividades(lista.filter(actividadSigueVigente));
->>>>>>> f84c9d7 (Arreglo el filtro de actividades)
       })
       .catch(() => setError('No se pudieron cargar las actividades.'))
       .finally(() => setCargando(false));
@@ -161,7 +148,7 @@ function ListaActividades() {
       setConfirmVisible(false);
       setConfirmTarget(null);
       cargar();
-    } catch (err) {
+    } catch {
       setError('No se pudo cancelar la actividad.');
       setConfirmVisible(false);
       setConfirmTarget(null);
@@ -249,17 +236,10 @@ function ListaActividades() {
           </table>
         )}
       </div>
-<<<<<<< HEAD
 
       {confirmVisible && (
         <div style={s.overlay} onClick={cancelarModal}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-=======
-      {/* Modal de confirmacion */}
-      {confirmVisible && (
-        <div style={s.overlay} onClick={cancelarModal}>
-          <div style={s.modal} onClick={e => e.stopPropagation()}>
->>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
             <div style={s.modalTitulo}>Confirmar cancelación</div>
             <div style={s.modalTexto}>{`¿Cancelar la actividad "${confirmTarget?.name}"?`}</div>
             <div style={s.modalBotones}>

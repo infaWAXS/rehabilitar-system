@@ -37,7 +37,6 @@ const FORM_INICIAL = {
   capacity: '',
   description: '',
   requirements: '',
-<<<<<<< HEAD
   mes: '',          // YYYY-MM — solo fija
   diaSemana: '',    // Lunes|Martes|…  — solo fija
   specific_date: '', // solo individual
@@ -79,14 +78,6 @@ function generarFechasDelMes(mesStr, diaSemanaStr) {
 
 // ── Helpers de colisión (espejo del backend) ───────────────────────────────────
 
-=======
-  specific_date: '',
-};
-
-// ── Helpers de colisión (espejo del backend) ───────────────────────────────────
-
-/** Extrae minutos desde "HH:MM" o del primer match en un string */
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
 function parseMinutes(texto) {
   if (!texto) return null;
   const m = texto.match(/(\d{1,2}):(\d{2})/);
@@ -94,10 +85,6 @@ function parseMinutes(texto) {
   return parseInt(m[1]) * 60 + parseInt(m[2]);
 }
 
-<<<<<<< HEAD
-=======
-/** Devuelve [inicio, fin] en minutos de una actividad existente */
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
 function rangoDeActividad(act) {
   if (act.activity_type === 'individual') {
     const inicio = parseMinutes(act.time_slot);
@@ -114,7 +101,6 @@ function rangoDeActividad(act) {
   return inicio !== null ? [inicio, inicio + 60] : [null, null];
 }
 
-<<<<<<< HEAD
 function diasDeActividad(act) {
   // Tanto individual como fijas nuevas tienen specific_date
   if (act.specific_date) {
@@ -127,45 +113,18 @@ function diasDeActividad(act) {
   return new Set(DIAS.filter((d) => sch.includes(d.toLowerCase())));
 }
 
-=======
-/** Días de la semana que ocupa una actividad existente */
-function diasDeActividad(act) {
-  if (act.activity_type === 'individual') {
-    if (!act.specific_date) return new Set();
-    const d = new Date(`${act.specific_date}T00:00:00`);
-    return new Set([DIAS_SEMANA[d.getDay()]]);
-  }
-  const s = (act.schedule || '').toLowerCase();
-  return new Set(DIAS.filter((d) => s.includes(d.toLowerCase())));
-}
-
-/** true si el rango [inicioA, inicioA+60) solapa con [inicioB, finB) */
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
 function solapaHorario(inicioA, inicioB, finB) {
   return inicioA < finB && inicioB < inicioA + 60;
 }
 
-<<<<<<< HEAD
 // ── Hook: ocupaciones por sala ─────────────────────────────────────────────────
 
-=======
-// ── Hook: ocupa qué slot cada sala ────────────────────────────────────────────
-
-/**
- * Devuelve una función: ocupada(roomId, dia, horaInicio) → boolean
- * Construida a partir de las actividades activas existentes.
- */
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
 function useOcupaciones(actividadesActivas) {
   return useMemo(() => {
     return function ocupada(roomId, dia, horaInicio) {
       if (!roomId || !dia || !horaInicio) return false;
       const inicio = parseMinutes(horaInicio);
       if (inicio === null) return false;
-<<<<<<< HEAD
-=======
-
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
       return actividadesActivas.some((act) => {
         if (act.room_id !== Number(roomId)) return false;
         const dias = diasDeActividad(act);
@@ -182,8 +141,11 @@ function useOcupaciones(actividadesActivas) {
 
 const s = {
   card: {
-    background: 'var(--color-fondo-card)', borderRadius: '12px',
-    padding: '32px', boxShadow: 'var(--sombra)', maxWidth: '720px',
+    background: 'var(--color-fondo-card)',
+    borderRadius: '12px',
+    padding: '32px',
+    boxShadow: 'var(--sombra)',
+    maxWidth: '720px',
   },
   titulo: { fontSize: '20px', fontWeight: '700', color: 'var(--color-texto)', marginBottom: '24px' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' },
@@ -205,6 +167,7 @@ const s = {
     fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto)',
     width: '100%', cursor: 'pointer',
   },
+  // Selector de días
   diasRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
   diaBtn: (activo) => ({
     padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
@@ -245,15 +208,7 @@ function CrearActividad() {
 
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
-  const feriadoSeleccionado = useMemo(
-    () => obtenerFeriadoArgentino(form.specific_date),
-    [form.specific_date]
-  );
 
-  const ocupada = useOcupaciones(actividadesActivas);
-  const esIndividual = form.activity_type === 'individual';
-
-<<<<<<< HEAD
   const fechasGeneradas = useMemo(
     () => generarFechasDelMes(form.mes, form.diaSemana),
     [form.mes, form.diaSemana]
@@ -271,8 +226,6 @@ function CrearActividad() {
   const ocupada = useOcupaciones(actividadesActivas);
   const esIndividual = form.activity_type === 'individual';
 
-=======
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
   // Carga inicial: salas + actividades activas
   useEffect(() => {
     Promise.all([
@@ -296,59 +249,24 @@ function CrearActividad() {
       })
       .catch(() => setProfesores([]));
   }, [form.specialization]);
-  
 
-<<<<<<< HEAD
   // ── Derivaciones: opciones disponibles ───────────────────────────────────
   const profesoresDisponibles = useMemo(() => {
     if (!horaInicio || !representativeDate) return profesores;
     const diaFormulario = DIAS_SEMANA[new Date(`${representativeDate}T00:00:00`).getDay()];
-=======
-  // ── Derivaciones: qué opciones están disponibles ───────────────────────────
-  const profesoresDisponibles = useMemo(() => {
-    if (!horaInicio) return profesores; // sin hora, no filtramos todavía
-
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
     return profesores.filter((prof) => {
       const nombreCompleto = `${prof.name} ${prof.lastname}`;
       return !actividadesActivas.some((act) => {
         if (!act.professor) return false;
         if (act.professor.trim().toLowerCase() !== nombreCompleto.trim().toLowerCase()) return false;
-<<<<<<< HEAD
         const diasAct = diasDeActividad(act);
         if (!diasAct.has(diaFormulario)) return false;
-=======
-
-        // Verificar solapamiento de días
-        let diasAct;
-        if (act.activity_type === 'individual') {
-          if (!act.specific_date) return false;
-          diasAct = new Set([DIAS_SEMANA[new Date(`${act.specific_date}T00:00:00`).getDay()]]);
-        } else {
-          const s = (act.schedule || '').toLowerCase();
-          diasAct = new Set(DIAS.filter((d) => s.includes(d.toLowerCase())));
-        }
-
-        let diasPropuesta;
-        if (esIndividual) {
-          if (!form.specific_date) return false;
-          diasPropuesta = new Set([DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()]]);
-        } else {
-          diasPropuesta = new Set(diasSeleccionados);
-        }
-
-        const hayDiaComun = [...diasPropuesta].some((d) => diasAct.has(d));
-        if (!hayDiaComun) return false;
-
-        // Verificar solapamiento de horario
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
         const [inicioExist, finExist] = rangoDeActividad(act);
         if (inicioExist === null) return false;
         const inicioProp = parseMinutes(horaInicio);
         return inicioProp < finExist && inicioExist < inicioProp + 60;
       });
     });
-<<<<<<< HEAD
   }, [profesores, actividadesActivas, horaInicio, representativeDate]);
 
   const salasDisponibles = useMemo(() => {
@@ -364,95 +282,18 @@ function CrearActividad() {
   }, [form.room_id, representativeDate, ocupada]);
 
   // ── Side-effects de limpieza ─────────────────────────────────────────────
-=======
-  }, [profesores, actividadesActivas, horaInicio, esIndividual, form.specific_date, diasSeleccionados]);
-
-  
-  const salasDisponibles = useMemo(() => {
-    if (esIndividual) {
-      if (!form.specific_date || !horaInicio) return salas; // sin filtro todavía
-      const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
-      return salas.filter((sala) => !ocupada(sala.id, dia, horaInicio));
-    }
-    // Clase fija: si ya hay días y hora elegidos, filtra salas que tengan ese slot libre
-    if (diasSeleccionados.length === 0 || !horaInicio) return salas;
-    return salas.filter((sala) =>
-      diasSeleccionados.every((dia) => !ocupada(sala.id, dia, horaInicio))
-    );
-  }, [salas, esIndividual, form.specific_date, horaInicio, diasSeleccionados, ocupada]);
-
-  /**
-   * Días disponibles: filtra los días que, para la sala elegida y la hora elegida,
-   * ya están ocupados. Solo aplica a clase fija.
-   */
-  const diasDisponibles = useMemo(() => {
-    if (esIndividual || !form.room_id || !horaInicio) return DIAS;
-    return DIAS.filter((dia) => !ocupada(form.room_id, dia, horaInicio));
-  }, [esIndividual, form.room_id, horaInicio, ocupada]);
-
-  /**
-   * Horarios disponibles: filtra los turnos que ya están ocupados para
-   * la sala + días/fecha elegidos.
-   */
-  const horasDisponibles = useMemo(() => {
-    if (!form.room_id) return HORAS;
-
-    if (esIndividual) {
-      if (!form.specific_date) return HORAS;
-      const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
-      return HORAS.filter((h) => !ocupada(form.room_id, dia, h.valor));
-    }
-
-    if (diasSeleccionados.length === 0) return HORAS;
-    // Solo muestra horarios libres en TODOS los días seleccionados
-    return HORAS.filter((h) =>
-      diasSeleccionados.every((dia) => !ocupada(form.room_id, dia, h.valor))
-    );
-  }, [form.room_id, esIndividual, form.specific_date, diasSeleccionados, ocupada]);
-
-  // ── Side-effects de limpieza al cambiar tipo de clase ─────────────────────
-
- const handleChange = (e) => {
-  const { name, value } = e.target;
-  setForm((prev) => {
-    const next = { ...prev, [name]: value };
-    if (name === 'specialization') next.professor = '';
-    if (name === 'activity_type') {
-      next.specific_date = '';
-      setDiasSeleccionados([]);
-      setHoraInicio('');
-    }
-    if (name === 'specific_date' && value) {
-      const dia = new Date(`${value}T00:00:00`).getDay();
-      if (dia === 0 || dia === 6) {
-        setError('Las actividades individuales no se pueden programar en fin de semana.');
-        return { ...prev, [name]: '' }; // limpia la fecha inválida
-      }
-      setError('');
-    }
-    return next;
-  });
-};
-
-  // Si la sala elegida ya no está disponible tras cambiar días/hora, la limpiamos
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
   useEffect(() => {
     if (form.room_id && !salasDisponibles.find((s) => s.id === Number(form.room_id))) {
       setForm((prev) => ({ ...prev, room_id: '' }));
     }
   }, [salasDisponibles, form.room_id]);
 
-<<<<<<< HEAD
-=======
-  // Si el horario elegido ya no está disponible, lo limpiamos
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
   useEffect(() => {
     if (horaInicio && !horasDisponibles.find((h) => h.valor === horaInicio)) {
       setHoraInicio('');
     }
   }, [horasDisponibles, horaInicio]);
 
-<<<<<<< HEAD
   useEffect(() => {}, []);  // placeholder (diasDisponibles removed)
 
   const handleChange = (e) => {
@@ -493,24 +334,6 @@ function CrearActividad() {
       }
       return next;
     });
-=======
-  // Si días seleccionados ya no están disponibles, los quitamos
-  useEffect(() => {
-    setDiasSeleccionados((prev) => prev.filter((d) => diasDisponibles.includes(d)));
-  }, [diasDisponibles]);
-
-  const toggleDia = (dia) => {
-    setDiasSeleccionados((prev) =>
-      prev.includes(dia) ? prev.filter((d) => d !== dia) : [...prev, dia]
-    );
-  };
-
-  const buildSchedule = () => {
-    if (diasSeleccionados.length === 0 || !horaInicio) return '';
-    const ordenados = DIAS.filter((d) => diasSeleccionados.includes(d));
-    const horaFin = `${String(parseInt(horaInicio) + 1).padStart(2, '0')}:00`;
-    return `${ordenados.join(', ')} · ${horaInicio}–${horaFin}`;
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
   };
 
   const handleSubmit = async (e) => {
@@ -520,7 +343,6 @@ function CrearActividad() {
     if (!form.room_id) return setError('Seleccioná una sala.');
     if (!form.specialization) return setError('Seleccioná una especialidad.');
     if (!horaInicio) return setError('Seleccioná un horario.');
-<<<<<<< HEAD
     if (esIndividual) {
       if (!form.specific_date) return setError('Seleccioná la fecha del turno.');
       const feriado = obtenerFeriadoArgentino(form.specific_date);
@@ -529,11 +351,6 @@ function CrearActividad() {
       if (!form.mes) return setError('Seleccioná el mes.');
       if (!form.diaSemana) return setError('Seleccioná el día de la semana.');
       if (fechasValidas.length === 0) return setError('No hay clases disponibles ese mes (todas las fechas son feriados).');
-=======
-    if (esIndividual && !form.specific_date) return setError('Seleccioná la fecha del turno.');
-    if (esIndividual && feriadoSeleccionado.esFeriado) {
-      return setError(`La fecha seleccionada es feriado (${feriadoSeleccionado.nombre}). Elegí otra fecha.`);
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
     }
     if (Number(form.capacity) <= 0) return setError('Los cupos deben ser mayor a 0.');
     if (Number(form.price) < 0) return setError('El precio no puede ser negativo.');
@@ -584,8 +401,12 @@ function CrearActividad() {
             <div style={{ ...s.grupo, ...s.gridFull }}>
               <label style={s.label}>Nombre de la actividad *</label>
               <input
-                style={s.input} name="name" value={form.name}
-                onChange={handleChange} placeholder="Ej: Yoga Terapéutico, Pilates Grupal" required
+                style={s.input}
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                placeholder="Ej: Yoga Terapéutico, Pilates Grupal"
+                required
               />
             </div>
 
@@ -594,13 +415,9 @@ function CrearActividad() {
               <label style={s.label}>Especialidad *</label>
               <select style={s.select} name="specialization" value={form.specialization} onChange={handleChange} required>
                 <option value="">— Seleccionar especialidad —</option>
-<<<<<<< HEAD
                 {ESPECIALIZACIONES.map((e) => (
                   <option key={e} value={e}>{e}</option>
                 ))}
-=======
-                {ESPECIALIZACIONES.map((e) => <option key={e} value={e}>{e}</option>)}
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
               </select>
             </div>
 
@@ -617,15 +434,11 @@ function CrearActividad() {
             <div style={s.grupo}>
               <label style={s.label}>Sala *</label>
               <select style={s.select} name="room_id" value={form.room_id} onChange={handleChange} required>
-<<<<<<< HEAD
                 <option value="">
                   {salas.length > 0 && salasDisponibles.length === 0
                     ? '— No hay salas disponibles —'
                     : '— Seleccionar sala —'}
                 </option>
-=======
-                <option value="">— Seleccionar sala —</option>
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
                 {salasDisponibles.map((sala) => (
                   <option key={sala.id} value={sala.id}>
                     {sala.name} (cap. {sala.capacity})
@@ -634,32 +447,22 @@ function CrearActividad() {
               </select>
             </div>
 
-<<<<<<< HEAD
             {/* Fecha del turno — solo individual */}
-=======
-            {/* Fecha específica — solo clase individual */}
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
             {esIndividual && (
               <div style={s.grupo}>
                 <label style={s.label}>Fecha del turno *</label>
                 <input
-<<<<<<< HEAD
                   style={s.input}
                   type="date"
                   name="specific_date"
                   value={form.specific_date}
                   onChange={handleChange}
-=======
-                  style={s.input} type="date" name="specific_date"
-                  value={form.specific_date} onChange={handleChange}
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
                   min={new Date().toISOString().split('T')[0]}
                   required
                 />
               </div>
             )}
 
-<<<<<<< HEAD
             {/* Mes y día de semana — solo fija */}
             {!esIndividual && (
               <>
@@ -687,7 +490,6 @@ function CrearActividad() {
             {/* Preview clases del mes — solo fija */}
             {!esIndividual && fechasGeneradas.length > 0 && (
               <div style={{ ...s.grupo, ...s.gridFull }}>
-<<<<<<< HEAD
                 <label style={s.label}>
                   Clases a crear&nbsp;
                   <span style={{ fontWeight: 400, color: 'var(--color-texto)' }}>
@@ -713,50 +515,12 @@ function CrearActividad() {
                       {f.esFeriado && ' — feriado'}
                     </span>
                   ))}
-=======
-                <label style={s.label}>Días *</label>
-                <div style={s.diasRow}>
-                  {diasDisponibles.length === 0 ? (
-                    <span style={s.hint}>— No hay días disponibles —</span>
-                  ) : (
-                    diasDisponibles.map((dia) => (
-                      <button
-                        key={dia} type="button"
-                        style={s.diaBtn(diasSeleccionados.includes(dia))}
-                        onClick={() => toggleDia(dia)}
-                      >
-                        {dia}
-                      </button>
-                    ))
-                  )}
->>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
                 </div>
                 {fechasValidas.length === 0 && (
                   <span style={{ fontSize: '12px', color: '#dc2626', marginTop: '4px' }}>
                     Todas las fechas son feriados. Elegí otro mes o día.
                   </span>
                 )}
-=======
-            {/* Selector de días — solo clase fija */}
-            {!esIndividual && (
-              <div style={{ ...s.grupo, ...s.gridFull }}>
-                <label style={s.label}>Días *</label>
-                <div style={s.diasRow}>
-                  {diasDisponibles.length === 0 ? (
-                    <span style={s.hint}>— No hay días disponibles —</span>
-                  ) : (
-                    diasDisponibles.map((dia) => (
-                      <button
-                        key={dia} type="button"
-                        style={s.diaBtn(diasSeleccionados.includes(dia))}
-                        onClick={() => toggleDia(dia)}
-                      >
-                        {dia}
-                      </button>
-                    ))
-                  )}
-                </div>
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
               </div>
             )}
 
@@ -764,26 +528,17 @@ function CrearActividad() {
             <div style={s.grupo}>
               <label style={s.label}>Horario *</label>
               <select style={s.select} value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)}>
-<<<<<<< HEAD
                 <option value="">
                   {horasDisponibles.length === 0
                     ? '— No hay horarios disponibles —'
                     : '— Seleccionar turno —'}
                 </option>
-=======
-                <option value="">— Seleccionar turno —</option>
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
                 {horasDisponibles.map((h) => (
                   <option key={h.valor} value={h.valor}>{h.label}</option>
                 ))}
               </select>
-<<<<<<< HEAD
               {!esIndividual && form.diaSemana && horaInicio && (
                 <span style={s.hint}>Horario: {horaInicio} – {`${String(parseInt(horaInicio) + 1).padStart(2, '0')}:00`}</span>
-=======
-              {!esIndividual && diasSeleccionados.length > 0 && horaInicio && (
-                <span style={s.hint}>Horario: {buildSchedule()}</span>
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
               )}
             </div>
 
@@ -793,21 +548,19 @@ function CrearActividad() {
                 Profesor {esIndividual ? '(opcional)' : '*'}
               </label>
               <select
-                style={s.select} name="professor" value={form.professor}
-                onChange={handleChange} disabled={!form.specialization}
+                style={s.select}
+                name="professor"
+                value={form.professor}
+                onChange={handleChange}
+                disabled={!form.specialization}
               >
                 <option value="">
                   {!form.specialization
                     ? '— Seleccioná primero una especialidad —'
-<<<<<<< HEAD
                     : profesoresDisponibles.length === 0
                     ? '— No hay profesores disponibles —'
                     : esIndividual
                     ? '— Sin asignar (el profesor se puede asignar después) —'
-=======
-                    : esIndividual
-                    ? '— Sin asignar —'
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
                     : '— Seleccionar profesor —'}
                 </option>
                 {profesoresDisponibles.map((p) => (
@@ -822,7 +575,6 @@ function CrearActividad() {
             <div style={s.grupo}>
               <label style={s.label}>Precio ($) *</label>
               <input
-<<<<<<< HEAD
                 style={s.input}
                 type="text"
                 name="price"
@@ -830,10 +582,6 @@ function CrearActividad() {
                 onChange={handleChange}
                 placeholder="0.00"
                 required
-=======
-                style={s.input} type="number" name="price" value={form.price}
-                onChange={handleChange} min="0" step="0.01" placeholder="0.00" required
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
               />
             </div>
 
@@ -841,7 +589,6 @@ function CrearActividad() {
             <div style={s.grupo}>
               <label style={s.label}>Cupos ofrecidos *</label>
               <input
-<<<<<<< HEAD
                 style={s.input}
                 type="text"
                 name="capacity"
@@ -849,10 +596,6 @@ function CrearActividad() {
                 onChange={handleChange}
                 placeholder="Ej: 8"
                 required
-=======
-                style={s.input} type="number" name="capacity" value={form.capacity}
-                onChange={handleChange} min="1" placeholder="Ej: 8" required
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
               />
               {salaSeleccionada && (
                 <span style={s.hint}>Máximo: {salaSeleccionada.capacity} (capacidad de la sala)</span>
@@ -863,8 +606,11 @@ function CrearActividad() {
             <div style={{ ...s.grupo, ...s.gridFull }}>
               <label style={s.label}>Descripción</label>
               <textarea
-                style={s.textarea} name="description" value={form.description}
-                onChange={handleChange} placeholder="Descripción de la actividad, beneficios, etc."
+                style={s.textarea}
+                name="description"
+                value={form.description}
+                onChange={handleChange}
+                placeholder="Descripción de la actividad, beneficios, etc."
               />
             </div>
 
@@ -872,8 +618,11 @@ function CrearActividad() {
             <div style={{ ...s.grupo, ...s.gridFull }}>
               <label style={s.label}>Requisitos</label>
               <input
-                style={s.input} name="requirements" value={form.requirements}
-                onChange={handleChange} placeholder="Ej: Ropa cómoda, certificado médico"
+                style={s.input}
+                name="requirements"
+                value={form.requirements}
+                onChange={handleChange}
+                placeholder="Ej: Ropa cómoda, certificado médico"
               />
             </div>
 
@@ -884,8 +633,10 @@ function CrearActividad() {
               {guardando ? 'Guardando…' : 'Crear actividad'}
             </button>
             <button
-              type="button" style={s.botonSecundario}
-              onClick={() => navigate('/admin/actividades')} disabled={guardando}
+              type="button"
+              style={s.botonSecundario}
+              onClick={() => navigate('/admin/actividades')}
+              disabled={guardando}
             >
               Cancelar
             </button>

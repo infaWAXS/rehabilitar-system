@@ -93,11 +93,7 @@ function aplicarFiltros(actividades, filtros, cuposMap = {}) {
     if (filtros.profesor && a.professor !== filtros.profesor) return false;
     if (filtros.precioMin !== '' && Number(a.price) < Number(filtros.precioMin)) return false;
     if (filtros.precioMax !== '' && Number(a.price) > Number(filtros.precioMax)) return false;
-<<<<<<< HEAD
     if (filtros.soloCupos && Number(cuposMap[a.id] ?? a.capacity ?? 0) <= 0) return false;
-=======
-    if (filtros.soloCupos && Number(a.available_spots ?? 0) <= 0) return false;
->>>>>>> f84c9d7 (Arreglo el filtro de actividades)
     return true;
   });
 }

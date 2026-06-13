@@ -11,6 +11,7 @@ from app.models.activity import Activity
 from app.models.attendance import Attendance
 from app.models.plan import Plan
 from app.models.user_plan import UserPlan
+from app.models.notification import Notification
 
 from app.routes.rutas_autenticacion import router as auth_router
 from app.routes.rutas_usuarios import router as user_router
@@ -21,6 +22,7 @@ from app.routes.rutas_reservas import router as reservation_router
 from app.routes.rutas_lista_espera import router as waitlist_router
 from app.routes.rutas_asistencias import router as attendance_router
 from app.routes.rutas_pagos import router as payment_router
+from app.routes.rutas_notificaciones import router as notification_router
 from database.seed_mock import seed as seed_mock_users
 
 app = FastAPI()
@@ -59,6 +61,7 @@ app.include_router(reservation_router)
 app.include_router(waitlist_router)
 app.include_router(attendance_router)
 app.include_router(payment_router)
+app.include_router(notification_router)
 
 @app.get("/")
 def home():

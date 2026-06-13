@@ -2,6 +2,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
+from datetime import datetime
+from threading import Thread
 import re
 
 from app.models.activity import Activity
@@ -9,7 +11,9 @@ from app.models.room import Room
 from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
-
+from app.utils.subscriptions import is_abonado
+from app.utils.notifications import notify_activity_cancellation
+from database.connection import SessionLocal
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
@@ -19,51 +23,7 @@ def _extraer_dias(schedule: Optional[str]) -> set[str]:
         return set()
     schedule_lower = schedule.lower()
     return {dia for dia in DIAS_SEMANA if dia.lower() in schedule_lower}
-def _solapa_en_profesor(propuesta: Activity, existente: Activity) -> bool:
-    """True si el mismo profesor tiene solapamiento horario en cualquier sala."""
-    if not propuesta.professor or not existente.professor:
-        return False
-    if propuesta.professor.strip().lower() != existente.professor.strip().lower():
-        return False
 
-    dias_propuesta = _dias_actividad(propuesta)
-    dias_existente = _dias_actividad(existente)
-    if not dias_propuesta or not dias_existente or dias_propuesta.isdisjoint(dias_existente):
-        return False
-
-    inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
-    inicio_existente, fin_existente = _rango_horario(existente)
-    if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
-        return False
-
-    return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
-
-
-def _validar_disponibilidad_profesor(
-    actividad_propuesta: Activity,
-    db: Session,
-    excluir_activity_id: Optional[int] = None,
-) -> None:
-    if not actividad_propuesta.professor or actividad_propuesta.status != "active":
-        return
-
-    actividades_existentes = (
-        db.query(Activity)
-        .filter(
-            Activity.professor == actividad_propuesta.professor,
-            Activity.status == "active",
-        )
-        .all()
-    )
-
-    for existente in actividades_existentes:
-        if excluir_activity_id is not None and existente.id == excluir_activity_id:
-            continue
-        if _solapa_en_profesor(actividad_propuesta, existente):
-            raise HTTPException(
-                status_code=409,
-                detail=f"El profesor {actividad_propuesta.professor} ya tiene una actividad asignada en ese horario.",
-            )
 
 def _dia_desde_fecha(specific_date) -> Optional[str]:
     if not specific_date:
@@ -110,6 +70,17 @@ def _solapa_en_sala(propuesta: Activity, existente: Activity) -> bool:
     if propuesta.room_id != existente.room_id:
         return False
 
+    # Actividades con fecha específica: solo conflicto si son la MISMA fecha
+    if propuesta.specific_date and existente.specific_date:
+        if propuesta.specific_date != existente.specific_date:
+            return False  # fechas distintas, no hay solapamiento posible
+        inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
+        inicio_existente, fin_existente = _rango_horario(existente)
+        if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
+            return False
+        return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
+
+    # Al menos una es legacy (schedule): comparar por día de semana
     dias_propuesta = _dias_actividad(propuesta)
     dias_existente = _dias_actividad(existente)
     if not dias_propuesta or not dias_existente or dias_propuesta.isdisjoint(dias_existente):
@@ -150,6 +121,63 @@ def _validar_disponibilidad_sala(
             )
 
 
+def _solapa_en_profesor(propuesta: Activity, existente: Activity) -> bool:
+    """True si el mismo profesor tiene solapamiento horario en cualquier sala."""
+    if not propuesta.professor or not existente.professor:
+        return False
+    if propuesta.professor.strip().lower() != existente.professor.strip().lower():
+        return False
+
+    # Actividades con fecha específica: solo conflicto si son la MISMA fecha
+    if propuesta.specific_date and existente.specific_date:
+        if propuesta.specific_date != existente.specific_date:
+            return False
+        inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
+        inicio_existente, fin_existente = _rango_horario(existente)
+        if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
+            return False
+        return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
+
+    dias_propuesta = _dias_actividad(propuesta)
+    dias_existente = _dias_actividad(existente)
+    if not dias_propuesta or not dias_existente or dias_propuesta.isdisjoint(dias_existente):
+        return False
+
+    inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
+    inicio_existente, fin_existente = _rango_horario(existente)
+    if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
+        return False
+
+    return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
+
+
+def _validar_disponibilidad_profesor(
+    actividad_propuesta: Activity,
+    db: Session,
+    excluir_activity_id: Optional[int] = None,
+) -> None:
+    if not actividad_propuesta.professor or actividad_propuesta.status != "active":
+        return
+
+    actividades_existentes = (
+        db.query(Activity)
+        .filter(
+            Activity.professor == actividad_propuesta.professor,
+            Activity.status == "active",
+        )
+        .all()
+    )
+
+    for existente in actividades_existentes:
+        if excluir_activity_id is not None and existente.id == excluir_activity_id:
+            continue
+        if _solapa_en_profesor(actividad_propuesta, existente):
+            raise HTTPException(
+                status_code=409,
+                detail=f"El profesor {actividad_propuesta.professor} ya tiene una actividad asignada en ese horario.",
+            )
+
+
 def listar_actividades(
     room_id: Optional[int] = None,
     activity_type: Optional[str] = None,
@@ -175,29 +203,6 @@ def obtener_actividad(activity_id: int, db: Session) -> Activity:
     return actividad
 
 
-def obtener_disponibilidad_actividad(activity_id: int, db: Session) -> dict:
-    """Devuelve capacidad total, reservas activas y cupos disponibles de una actividad."""
-    actividad = obtener_actividad(activity_id, db)
-
-    reserved_count = (
-        db.query(func.count(Reservation.id))
-        .filter(
-            Reservation.activity_id == activity_id,
-            Reservation.status != "cancelled",
-        )
-        .scalar()
-    ) or 0
-
-    available_spots = max(int(actividad.capacity) - int(reserved_count), 0)
-    return {
-        "activity_id": actividad.id,
-        "capacity": int(actividad.capacity),
-        "reserved_count": int(reserved_count),
-        "available_spots": int(available_spots),
-    }
-
-
-<<<<<<< HEAD
 def obtener_disponibilidad_actividad(activity_id: int, db: Session, date: str = None) -> dict:
     """Devuelve capacidad total, reservas activas y cupos disponibles de una actividad.
     Para actividades fijas, filtra por la fecha específica del turno (ISO 8601 YYYY-MM-DD o datetime).
@@ -224,20 +229,6 @@ def obtener_disponibilidad_actividad(activity_id: int, db: Session, date: str = 
             pass  # fecha invalida -> conteo general
 
     reserved_count = query.scalar() or 0
-=======
-def obtener_disponibilidad_actividad(activity_id: int, db: Session) -> dict:
-    """Devuelve capacidad total, reservas activas y cupos disponibles de una actividad."""
-    actividad = obtener_actividad(activity_id, db)
-
-    reserved_count = (
-        db.query(func.count(Reservation.id))
-        .filter(
-            Reservation.activity_id == activity_id,
-            Reservation.status != "cancelled",
-        )
-        .scalar()
-    ) or 0
->>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
 
     available_spots = max(int(actividad.capacity) - int(reserved_count), 0)
     return {
@@ -248,15 +239,10 @@ def obtener_disponibilidad_actividad(activity_id: int, db: Session) -> dict:
     }
 
 
-<<<<<<< HEAD
 def crear_actividad(datos, db: Session) -> list:
     """Crea una o varias actividades (batch para fijas con repeticiones o lista de fechas).
     Devuelve siempre una lista de Activity."""
     from datetime import timedelta
-=======
-def crear_actividad(datos, db: Session) -> Activity:
-    """Crea una actividad validando que los cupos no superen la capacidad de la sala y que la sala esté disponible."""
->>>>>>> 824a1f5 (Agrego la cantidad de cupos disponibles en Ver Actividades)
     sala = db.query(Room).filter(Room.id == datos.room_id).first()
     if not sala:
         raise HTTPException(status_code=404, detail="Sala no encontrada")
@@ -267,7 +253,6 @@ def crear_actividad(datos, db: Session) -> Activity:
             detail=f"Los cupos ({datos.capacity}) no pueden superar la capacidad de la sala ({sala.capacity})",
         )
 
-<<<<<<< HEAD
     # Determinar lista de fechas a crear
     if datos.activity_type == "fixed":
         if datos.dates:
@@ -303,13 +288,6 @@ def crear_actividad(datos, db: Session) -> Activity:
         db.flush()
         creadas.append(act)
 
-=======
-    actividad = Activity(**datos.model_dump())
-    actividad.status = "active"
-    _validar_disponibilidad_sala(actividad, db)
-    _validar_disponibilidad_profesor(actividad, db)
-    db.add(actividad)
->>>>>>> 910b3a2 (Corrijo la creación y modificación de actividades)
     db.commit()
     for act in creadas:
         db.refresh(act)
@@ -356,6 +334,7 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
 
     _validar_disponibilidad_sala(actividad_propuesta, db, excluir_activity_id=actividad.id)
     _validar_disponibilidad_profesor(actividad_propuesta, db, excluir_activity_id=actividad.id)
+
     for campo, valor in cambios.items():
         setattr(actividad, campo, valor)
 
@@ -389,6 +368,41 @@ def cancelar_actividad(activity_id: int, db: Session) -> None:
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    ahora = datetime.now()
+
+    if actividad.activity_type == "individual":
+        if actividad.specific_date and actividad.time_slot:
+            try:
+                hh, mm = actividad.time_slot.split(":")
+                inicio_dt = datetime(
+                    actividad.specific_date.year,
+                    actividad.specific_date.month,
+                    actividad.specific_date.day,
+                    int(hh), int(mm),
+                )
+                if inicio_dt <= ahora:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No se puede cancelar: la actividad ya comenzó.",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+    else:
+        dias = _dias_actividad(actividad)
+        if dias:
+            dia_hoy = DIAS_SEMANA[ahora.weekday()]
+            if dia_hoy in dias:
+                inicio, fin = _rango_horario(actividad)
+                if inicio is not None:
+                    ahora_min = ahora.hour * 60 + ahora.minute
+                    if inicio <= ahora_min < fin:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="No se puede cancelar: la actividad ya comenzó.",
+                        )
 
     actividad.status = "cancelled"
     db.commit()
@@ -493,4 +507,3 @@ def listar_clientes_actividad(activity_id: int, db: Session) -> List[ClientCondi
             )
         )
     return resultado
-    

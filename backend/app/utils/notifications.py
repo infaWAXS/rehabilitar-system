@@ -15,6 +15,7 @@ from datetime import datetime
 
 from app.models.activity import Activity
 from app.models.user import User
+from app.services.servicio_notificaciones import crear_notificacion
 
 logger = logging.getLogger(__name__)
 
@@ -189,17 +190,18 @@ def notify_activity_cancellation(activity_id: int, db: Session) -> None:
         .all()
     )
 
-    # Enviar a cada cliente sin duplicar emails
+    # Enviar a cada cliente sin duplicar avisos (email + notificación in-app)
     sent_emails: set[str] = set()
+    notified_user_ids: set[int] = set()
+    title_clientes = f"Actividad cancelada: {actividad.name or 'Actividad'}"
     for r in reservas:
         try:
             usuario = db.query(User).filter(User.id == r.user_id).first()
-            if not usuario or not getattr(usuario, "email", None):
-                logger.info("Usuario %s sin email; saltando notificación por email.", r.user_id)
+            if not usuario:
                 continue
 
-            if usuario.email in sent_emails:
-                logger.info("Usuario %s ya notificado (email duplicado): %s", usuario.id, usuario.email)
+            if usuario.id in notified_user_ids:
+                logger.info("Usuario %s ya notificado sobre cancelación de actividad %s", usuario.id, activity_id)
                 continue
 
             body = (
@@ -208,8 +210,20 @@ def notify_activity_cancellation(activity_id: int, db: Session) -> None:
                 "Si necesitás más información o querés reprogramar, por favor contactá a la administración.\n\n"
                 "Saludos cordiales."
             )
-            _send_email(usuario.email, subject_clientes, body)
-            sent_emails.add(usuario.email)
+
+            if getattr(usuario, "email", None):
+                _send_email(usuario.email, subject_clientes, body)
+                sent_emails.add(usuario.email)
+            else:
+                logger.info("Usuario %s sin email; se omite el envío por correo.", r.user_id)
+
+            crear_notificacion(
+                usuario.id,
+                title_clientes,
+                f"La actividad '{actividad.name}' programada para {when} fue cancelada.",
+                db,
+            )
+            notified_user_ids.add(usuario.id)
         except Exception:
             logger.exception("Error notificando usuario %s sobre cancelación de actividad %s", r.user_id, activity_id)
 
@@ -230,6 +244,17 @@ def notify_activity_cancellation(activity_id: int, db: Session) -> None:
         if not candidatos_profesor:
             logger.info("Profesor '%s' no encontrado/sin email; no se pudo enviar notificación automática.", prof_name)
         else:
+            # Notificación in-app para el profesor resuelto (o el primer candidato como fallback)
+            destinatario_app = profesor_usuario or candidatos_profesor[0]
+            if destinatario_app and destinatario_app.id not in notified_user_ids:
+                crear_notificacion(
+                    destinatario_app.id,
+                    f"Actividad cancelada: {actividad.name or 'Actividad'}",
+                    f"Te informamos que la actividad '{actividad.name}' programada para {when} fue cancelada.",
+                    db,
+                )
+                notified_user_ids.add(destinatario_app.id)
+
             enviados_profesor = set()
             for candidato in candidatos_profesor:
                 if not candidato or not getattr(candidato, "email", None):
