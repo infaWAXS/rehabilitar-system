@@ -1,18 +1,46 @@
 # Servicio de notificaciones internas del sistema (in-app)
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
 from app.models.notification import Notification
+from app.models.user import User
 
 
-def crear_notificacion(user_id: int, title: str, body: str, db: Session) -> Notification:
-    """Crea una notificación in-app para un usuario."""
+def crear_notificacion(user_id: int, title: str, body: str, db: Session) -> Optional[Notification]:
+    """Crea una notificación in-app para un usuario, salvo que las haya deshabilitado."""
+    usuario = db.query(User).filter(User.id == user_id).first()
+    if usuario and not usuario.notifications_enabled:
+        return None
+
     notificacion = Notification(user_id=user_id, title=title, body=body)
     db.add(notificacion)
     db.commit()
     db.refresh(notificacion)
     return notificacion
+
+
+def obtener_preferencia(user_id: int, db: Session) -> bool:
+    """Devuelve si el usuario tiene habilitadas las notificaciones del sistema (in-app)."""
+    usuario = db.query(User).filter(User.id == user_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return usuario.notifications_enabled
+
+
+def actualizar_preferencia(user_id: int, enabled: bool, db: Session) -> bool:
+    """Habilita o deshabilita las notificaciones del sistema (in-app) para un usuario.
+
+    El envío de emails no se ve afectado por esta preferencia.
+    """
+    usuario = db.query(User).filter(User.id == user_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    usuario.notifications_enabled = enabled
+    db.commit()
+    db.refresh(usuario)
+    return usuario.notifications_enabled
 
 
 def listar_notificaciones(user_id: int, db: Session) -> List[Notification]:

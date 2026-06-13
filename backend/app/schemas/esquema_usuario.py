@@ -96,6 +96,8 @@ class UserResponse(BaseModel):
     
     plan_specialization: Optional[str] = None  # especialidad del plan del usuario (si tiene plan activo)
 
+    notifications_enabled: Optional[bool] = None
+
     class Config:
         from_attributes = True
     

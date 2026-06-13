@@ -173,6 +173,13 @@ def notify_activity_cancellation(activity_id: int, db: Session) -> None:
                 int(actividad.time_slot.split(":")[0]),
                 int(actividad.time_slot.split(":")[1]) if ":" in actividad.time_slot else 0,
             ).strftime("%Y-%m-%d %H:%M")
+        elif actividad.schedule and actividad.specific_date:
+            fecha_str = actividad.specific_date.strftime("%Y-%m-%d")
+            if " · " in actividad.schedule:
+                dia_nombre, resto = actividad.schedule.split(" · ", 1)
+                when = f"{dia_nombre} {fecha_str} · {resto}"
+            else:
+                when = f"{actividad.schedule} {fecha_str}"
         else:
             when = actividad.schedule or "(horario no disponible)"
     except Exception:

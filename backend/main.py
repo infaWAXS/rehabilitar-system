@@ -47,6 +47,9 @@ def _migrate(engine):
         if "credits" not in cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN credits INTEGER NOT NULL DEFAULT 0"))
             conn.commit()
+        if "notifications_enabled" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN notifications_enabled BOOLEAN NOT NULL DEFAULT 1"))
+            conn.commit()
 
 _migrate(engine)
 

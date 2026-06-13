@@ -173,6 +173,19 @@ const s = {
     fontSize: '13px',
     cursor: 'pointer',
   },
+  notifPrefRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    padding: '10px 12px',
+    borderBottom: '1px solid rgba(0,0,0,0.08)',
+    fontSize: '12px',
+    color: 'var(--color-texto-suave)',
+    position: 'sticky',
+    top: 0,
+    background: '#fff',
+  },
   dropdown: {
     position: 'absolute',
     top: 'calc(100% + 6px)',
@@ -536,6 +549,7 @@ function InicioPublico() {
   const [cuposMap, setCuposMap] = useState({});
   const [notifications, setNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(true);
   const dropdownRef = useRef(null);
   const notifRef = useRef(null);
 
@@ -608,6 +622,36 @@ function InicioPublico() {
 
     return () => { mounted = false; };
   }, [estaLogueado, puedeVerNotificaciones]);
+
+  // Cargar preferencia de notificaciones del sistema (solo clientes y profesores)
+  useEffect(() => {
+    if (!estaLogueado || !puedeVerNotificaciones) {
+      return;
+    }
+
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await apiClient.get('/notifications/preferences');
+        if (!mounted) return;
+        setNotifEnabled(res.data?.enabled ?? true);
+      } catch (_) {
+        // mantener valor por defecto
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [estaLogueado, puedeVerNotificaciones]);
+
+  const toggleNotifEnabled = async () => {
+    const siguiente = !notifEnabled;
+    setNotifEnabled(siguiente);
+    try {
+      await apiClient.put('/notifications/preferences', { enabled: siguiente });
+    } catch (_) {
+      setNotifEnabled(!siguiente);
+    }
+  };
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
@@ -812,6 +856,12 @@ function InicioPublico() {
 
                   {notifOpen && (
                     <div style={s.notifPanel}>
+                      <div style={s.notifPrefRow}>
+                        <span>Notificaciones del sistema</span>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={notifEnabled} onChange={toggleNotifEnabled} />
+                        </label>
+                      </div>
                       {notifications.length === 0 && (
                         <div style={s.notifItem}>No hay notificaciones.</div>
                       )}

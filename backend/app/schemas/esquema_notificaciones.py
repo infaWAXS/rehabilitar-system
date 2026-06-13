@@ -13,3 +13,13 @@ class NotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class NotificationPreferenceRequest(BaseModel):
+    """Esquema para actualizar la preferencia de notificaciones del sistema (in-app)."""
+    enabled: bool
+
+
+class NotificationPreferenceResponse(BaseModel):
+    """Esquema de respuesta de la preferencia de notificaciones del sistema (in-app)."""
+    enabled: bool

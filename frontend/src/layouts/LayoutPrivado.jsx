@@ -156,6 +156,19 @@ const s = {
     borderBottom: '1px solid rgba(0,0,0,0.04)',
     fontSize: '13px',
   },
+  notifPrefRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    padding: '10px 12px',
+    borderBottom: '1px solid rgba(0,0,0,0.08)',
+    fontSize: '12px',
+    color: 'var(--color-texto-suave)',
+    position: 'sticky',
+    top: 0,
+    background: 'var(--color-fondo-card)',
+  },
   contenido: {
     flex: 1,
     padding: '32px',
@@ -257,6 +270,7 @@ function LayoutPrivado({ children, titulo = '' }) {
   const [estadoCuenta, setEstadoCuenta] = useState('active');
   const [notifications, setNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(true);
   const notifRef = useRef();
 
   useEffect(() => {
@@ -282,6 +296,30 @@ function LayoutPrivado({ children, titulo = '' }) {
     })();
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await apiClient.get('/notifications/preferences');
+        if (!mounted) return;
+        setNotifEnabled(res.data?.enabled ?? true);
+      } catch (e) {
+        // mantener valor por defecto
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const toggleNotifEnabled = async () => {
+    const siguiente = !notifEnabled;
+    setNotifEnabled(siguiente);
+    try {
+      await apiClient.put('/notifications/preferences', { enabled: siguiente });
+    } catch (e) {
+      setNotifEnabled(!siguiente);
+    }
+  };
 
   useEffect(() => {
     function onClickOutside(e) {
@@ -365,6 +403,12 @@ function LayoutPrivado({ children, titulo = '' }) {
                     </button>
                     {notifOpen && (
                       <div style={s.notifPanel}>
+                        <div style={s.notifPrefRow}>
+                          <span>Notificaciones del sistema</span>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={notifEnabled} onChange={toggleNotifEnabled} />
+                          </label>
+                        </div>
                         {notifications.length === 0 && (
                           <div style={s.notifItem}>No hay notificaciones.</div>
                         )}
