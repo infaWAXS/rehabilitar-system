@@ -552,6 +552,7 @@ function InicioPublico() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(true);
   const dropdownRef = useRef(null);
+  const notifRef = useRef(null);
 
   const token   = getToken();
   const role    = getRole();   // 'admin' | 'client' | 'professor' | 'receptionist' | null
@@ -560,6 +561,7 @@ function InicioPublico() {
 
   const estaLogueado = !!token;
   const esAdmin      = role === 'admin';
+  const puedeVerNotificaciones = role === 'client' || role === 'professor';
   const tieneSidebar = estaLogueado && role !== 'client';
   const itemsSidebar = esAdmin ? MENU_ADMIN : (MENUS_ROL[role] || []);
 
@@ -657,6 +659,9 @@ function InicioPublico() {
     const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setMenuAbierto(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
