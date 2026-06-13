@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 // Responsable: Angel
-=======
-// Responsable: Francis
->>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
 import { useState, useEffect, useMemo } from 'react';
 import { getStaff } from '../../services/usersService';
 
@@ -29,13 +25,6 @@ const ESPECIALIZACIONES = [
   'Kinesiologia gerontologica',
   'Electroterapia',
 ];
-<<<<<<< HEAD
-=======
-const HORAS = Array.from({ length: 8 }, (_, i) => {
-  const h = 9 + i;
-  return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 – ${String(h + 1).padStart(2, '0')}:00` };
-});
->>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
 
 const DIAS_COMPLETOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -84,11 +73,7 @@ const FILTROS_INICIAL = {
   soloCupos: false,
 };
 
-<<<<<<< HEAD
 function aplicarFiltros(actividades, filtros, cuposMap = {}) {
-=======
-function aplicarFiltros(actividades, filtros) {
->>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
   const textoBusqueda = filtros.busqueda.trim().toLowerCase();
 
   return actividades.filter(a => {
@@ -108,11 +93,7 @@ function aplicarFiltros(actividades, filtros) {
     if (filtros.profesor && a.professor !== filtros.profesor) return false;
     if (filtros.precioMin !== '' && Number(a.price) < Number(filtros.precioMin)) return false;
     if (filtros.precioMax !== '' && Number(a.price) > Number(filtros.precioMax)) return false;
-<<<<<<< HEAD
     if (filtros.soloCupos && Number(cuposMap[a.id] ?? a.capacity ?? 0) <= 0) return false;
-=======
-    if (filtros.soloCupos && Number(a.available_spots ?? 0) <= 0) return false;
->>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
     return true;
   });
 }
@@ -235,11 +216,7 @@ const s = {
 };
 
 /* ── Componente ─────────────────────────────────────────── */
-<<<<<<< HEAD
 export default function FiltroActividades({ actividades = [], cuposMap = {}, onChange }) {
-=======
-export default function FiltroActividades({ actividades = [], onChange }) {
->>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
   const [filtros, setFiltros] = useState(FILTROS_INICIAL);
   const [profesores, setProfesores] = useState([]);
 
@@ -271,23 +248,14 @@ export default function FiltroActividades({ actividades = [], onChange }) {
 
   // Notificar resultado filtrado al padre
   useEffect(() => {
-<<<<<<< HEAD
     onChange?.(aplicarFiltros(actividades, filtros, cuposMap));
   }, [filtros, actividades, cuposMap, onChange]);
-=======
-    onChange?.(aplicarFiltros(actividades, filtros));
-  }, [filtros, actividades, onChange]);
->>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
 
   const setFiltro = (campo) => (e) =>
     setFiltros(f => ({ ...f, [campo]: e.target.value }));
 
   const hayFiltros = Object.entries(filtros).some(([, v]) => v !== '' && v !== false);
-<<<<<<< HEAD
   const totalFiltrado = useMemo(() => aplicarFiltros(actividades, filtros, cuposMap).length, [filtros, actividades, cuposMap]);
-=======
-  const totalFiltrado = useMemo(() => aplicarFiltros(actividades, filtros).length, [filtros, actividades]);
->>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
 
   return (
     <div style={s.wrapper}>

@@ -11,30 +11,16 @@ export function getActivities(params = {}) {
   return apiRequest(`/activities${query}`);
 }
 
-/** Obtiene las opciones disponibles para los filtros de actividades */
-export function getActivityFilterOptions(params = {}) {
-  const query = Object.keys(params).length
-    ? '?' + new URLSearchParams(params).toString()
-    : '';
-  return apiRequest(`/activities/options${query}`);
-}
-
 /** Obtiene el detalle de una actividad por ID */
 export function getActivityById(activityId) {
   return apiRequest(`/activities/${activityId}`);
 }
 
-<<<<<<< HEAD
 /** Obtiene disponibilidad (cupos) de una actividad.
  *  Para actividades fijas pasar `date` (ISO string) para obtener cupos del turno específico. */
 export function getActivityAvailability(activityId, date = null) {
   const qs = date ? `?date=${encodeURIComponent(date)}` : '';
   return apiRequest(`/activities/${activityId}/availability${qs}`);
-=======
-/** Obtiene la disponibilidad de cupos de una actividad */
-export function getActivityAvailability(activityId) {
-  return apiRequest(`/activities/${activityId}/availability`);
->>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
 }
 
 /** Crea una actividad (solo admin) */
@@ -72,4 +58,3 @@ export function resignActivity(activityId) {
 export function getActivityClients(activityId) {
   return apiRequest(`/activities/${activityId}/clients`);
 }
-
