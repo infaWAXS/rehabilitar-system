@@ -55,7 +55,6 @@ class UserCreate(BaseModel):
             raise ValueError("El DNI debe tener entre 7 y 8 dígitos")
         return value
     
-    
 #Inicio de sesion de usuario
 class UserLogin(BaseModel):
     email: EmailStr

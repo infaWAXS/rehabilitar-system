@@ -3,16 +3,19 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getToken, getRole, getUserName, clearUserData, logout } from '../../services/authService';
 import { getActivities, getActivityById, getActivityAvailability } from '../../services/activitiesService';
+<<<<<<< HEAD
 import { getMyReservations } from '../../services/reservationsService';
 import apiClient from '../../services/apiClient';
+=======
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
 import FiltroActividades from './FiltroActividades';
 
-/* ── Menús por rol (no-admin) ──────────────────────────── */
+/* ── Constantes ─────────────────────────────────────────── */
 const MENUS_ROL = {
   client: [
-    { label: 'Mis Reservas',        ruta: '/cliente/reservas' },
-    { label: 'Mi Cuenta',           ruta: '/cliente/cuenta' },
-    { label: 'Mi Perfil',           ruta: '/perfil' },
+    { label: 'Mis Reservas', ruta: '/cliente/reservas' },
+    { label: 'Mi Cuenta',    ruta: '/cliente/cuenta' },
+    { label: 'Mi Perfil',    ruta: '/perfil' },
   ],
   professor: [
     { label: 'Actividades', ruta: '/profesor/actividades' },
@@ -25,7 +28,6 @@ const MENUS_ROL = {
   ],
 };
 
-/* ── Menú del sidebar de admin ─────────────────────────── */
 const MENU_ADMIN = [
   { label: 'Usuarios',      ruta: '/admin/usuarios' },
   { label: 'Clientes',      ruta: '/admin/clientes' },
@@ -33,12 +35,68 @@ const MENU_ADMIN = [
   { label: 'Actividades',   ruta: '/admin/actividades' },
 ];
 
+const NOTICIAS = [
+  {
+    tag: 'CLASES',
+    titulo: 'Nuevos horarios de rehabilitación funcional',
+    texto: 'Ya se encuentran disponibles los nuevos turnos de la tarde para actividades guiadas.',
+  },
+  {
+    tag: 'PAGOS',
+    titulo: 'Suscripciones mensuales con Mercado Pago',
+    texto: 'Los clientes pueden consultar y pagar su plan desde la sección de suscripciones.',
+  },
+  {
+    tag: 'ASISTENCIAS',
+    titulo: 'Registro por DNI simplificado',
+    texto: 'El personal puede registrar asistencia en segundos con validación de identidad.',
+  },
+];
+
+/* ── Helpers ────────────────────────────────────────────── */
+function formatFecha(fechaStr) {
+  return new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-AR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  });
+}
+
+function formatFechaLarga(fechaStr) {
+  return new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-AR', {
+    weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric',
+  });
+}
+
+function parseHoraMinutos(valor) {
+  if (!valor) return null;
+  const match = String(valor).match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function actividadSigueVigente(actividad) {
+  if (actividad.activity_type !== 'individual') return true;
+  if (!actividad.specific_date) return true;
+
+  const fechaActividad = new Date(`${actividad.specific_date}T00:00:00`);
+  const hoy = new Date();
+  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const minutosActividad = parseHoraMinutos(actividad.time_slot);
+  const minutosAhora = hoy.getHours() * 60 + hoy.getMinutes();
+
+  if (fechaActividad < inicioHoy) return false;
+  if (fechaActividad > inicioHoy) return true;
+  if (minutosActividad === null) return true;
+  return minutosActividad >= minutosAhora;
+}
+
+/* ── Estilos ────────────────────────────────────────────── */
 const s = {
   pagina: {
     minHeight: '100vh',
     background: 'linear-gradient(180deg, #F0FBFB 0%, #FFFFFF 100%)',
     color: 'var(--color-texto)',
   },
+  /* Topbar */
   topbar: {
     height: '72px',
     borderBottom: '1px solid var(--color-borde)',
@@ -57,15 +115,9 @@ const s = {
     color: 'var(--color-primario)',
     letterSpacing: '-0.5px',
     textDecoration: 'none',
-    display: 'inline-block',
   },
   brandAr: {
     color: 'var(--color-secundario)',
-  },
-  topActions: {
-    display: 'flex',
-    gap: '10px',
-    alignItems: 'center',
   },
   topNav: {
     display: 'flex',
@@ -79,6 +131,11 @@ const s = {
     fontWeight: '600',
     color: 'var(--color-texto)',
     textDecoration: 'none',
+  },
+  topActions: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
   },
   btnGhost: {
     border: '1px solid var(--color-primario)',
@@ -100,7 +157,7 @@ const s = {
     fontWeight: '700',
     textDecoration: 'none',
   },
-  /* Botón usuario (topbar) */
+  /* User dropdown */
   userBtn: {
     display: 'flex',
     alignItems: 'center',
@@ -127,6 +184,7 @@ const s = {
     fontWeight: '700',
     flexShrink: 0,
   },
+<<<<<<< HEAD
   dropdownWrapper: {
     position: 'relative',
   },
@@ -173,6 +231,9 @@ const s = {
     fontSize: '13px',
     cursor: 'pointer',
   },
+=======
+  dropdownWrapper: { position: 'relative' },
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
   dropdown: {
     position: 'absolute',
     top: 'calc(100% + 6px)',
@@ -225,17 +286,13 @@ const s = {
     flexDirection: 'column',
     paddingTop: '8px',
   },
-  adminNav: {
-    flex: 1,
-    padding: '8px 0',
-  },
+  adminNav: { flex: 1, padding: '8px 0' },
   adminNavItem: {
     display: 'block',
     padding: '12px 24px',
     color: 'rgba(255,255,255,0.75)',
     fontSize: '14px',
     textDecoration: 'none',
-    transition: 'all 0.15s',
     borderLeft: '3px solid transparent',
   },
   adminSidebarFooter: {
@@ -254,10 +311,8 @@ const s = {
     cursor: 'pointer',
     textAlign: 'left',
   },
-  adminContent: {
-    flex: 1,
-    overflowX: 'hidden',
-  },
+  adminContent: { flex: 1, overflowX: 'hidden' },
+  /* Hero */
   hero: {
     maxWidth: '1100px',
     margin: '0 auto',
@@ -279,11 +334,7 @@ const s = {
     color: 'var(--color-texto-suave)',
     marginBottom: '20px',
   },
-  pillRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '8px',
-  },
+  pillRow: { display: 'flex', flexWrap: 'wrap', gap: '8px' },
   pill: {
     background: 'var(--color-primario-suave)',
     color: 'var(--color-primario-oscuro)',
@@ -303,15 +354,8 @@ const s = {
     gap: '10px',
     justifyContent: 'center',
   },
-  cardTitle: {
-    fontSize: '20px',
-    fontWeight: '700',
-    color: 'var(--color-texto)',
-  },
-  cardText: {
-    color: 'var(--color-texto-suave)',
-    fontSize: '14px',
-  },
+  cardTitle: { fontSize: '20px', fontWeight: '700', color: 'var(--color-texto)' },
+  cardText: { color: 'var(--color-texto-suave)', fontSize: '14px' },
   cardLink: {
     marginTop: '8px',
     fontWeight: '700',
@@ -319,16 +363,14 @@ const s = {
     textDecoration: 'none',
     display: 'block',
   },
+  /* Secciones */
   seccion: {
     maxWidth: '1100px',
     margin: '0 auto',
     padding: '10px 24px 48px',
   },
-  seccionTitulo: {
-    fontSize: '26px',
-    fontWeight: '800',
-    marginBottom: '18px',
-  },
+  seccionTitulo: { fontSize: '26px', fontWeight: '800', marginBottom: '18px' },
+  /* Noticias */
   gridNoticias: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
@@ -351,16 +393,9 @@ const s = {
     padding: '4px 8px',
     borderRadius: '999px',
   },
-  noticiaTitulo: {
-    fontWeight: '700',
-    marginBottom: '6px',
-    fontSize: '16px',
-  },
-  noticiaTexto: {
-    color: 'var(--color-texto-suave)',
-    fontSize: '14px',
-    lineHeight: 1.5,
-  },
+  noticiaTitulo: { fontWeight: '700', marginBottom: '6px', fontSize: '16px' },
+  noticiaTexto: { color: 'var(--color-texto-suave)', fontSize: '14px', lineHeight: 1.5 },
+  /* Cards actividades */
   gridActividades: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -394,14 +429,13 @@ const s = {
   actVacio: { color: 'var(--color-texto-suave)', fontSize: '14px' },
   actBotones: { display: 'flex', gap: '8px', marginTop: '8px' },
   actBtnVer: {
-    flex: 1, padding: '8px 0', borderRadius: '7px', border: '1px solid var(--color-primario)',
-    background: 'transparent', color: 'var(--color-primario)', fontSize: '13px', fontWeight: '600',
-    cursor: 'pointer',
+    flex: 1, padding: '8px 0', borderRadius: '7px',
+    border: '1px solid var(--color-primario)', background: 'transparent',
+    color: 'var(--color-primario)', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
   },
   actBtnInscribir: {
     flex: 1, padding: '8px 0', borderRadius: '7px', border: 'none',
-    background: 'var(--color-primario)', color: '#fff', fontSize: '13px', fontWeight: '600',
-    cursor: 'pointer',
+    background: 'var(--color-primario)', color: '#fff', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
   },
   actBtnYaInscripto: {
     flex: 1, padding: '8px 0', borderRadius: '7px', border: '1px solid #86efac',
@@ -424,10 +458,7 @@ const s = {
   },
   actModalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' },
   actModalTitulo: { fontSize: '18px', fontWeight: '800', color: 'var(--color-texto)', margin: 0 },
-  actModalClose: {
-    background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px',
-    color: 'var(--color-texto-suave)', lineHeight: 1, padding: '0 4px',
-  },
+  actModalClose: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: 'var(--color-texto-suave)', lineHeight: 1, padding: '0 4px' },
   actModalRow: { display: 'flex', gap: '8px', fontSize: '14px', color: 'var(--color-texto)' },
   actModalLabel: { fontWeight: '600', minWidth: '110px', color: 'var(--color-texto-suave)', fontSize: '13px' },
   actModalDivider: { height: '1px', background: 'var(--color-borde)', margin: '8px 0' },
@@ -440,6 +471,26 @@ const s = {
     flex: 1, padding: '11px 0', borderRadius: '8px', border: '1px solid var(--color-borde)',
     background: '#fff', color: 'var(--color-texto)', fontWeight: '600', fontSize: '14px', cursor: 'pointer',
   },
+  /* Modal confirmar logout */
+  overlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  modal: {
+    background: '#fff', borderRadius: '12px', padding: '28px 32px',
+    maxWidth: '360px', width: '100%', boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
+  },
+  modalTitulo: { fontSize: '18px', fontWeight: '700', marginBottom: '10px', color: 'var(--color-texto)' },
+  modalTexto: { fontSize: '14px', color: 'var(--color-texto-suave)', marginBottom: '24px', lineHeight: 1.5 },
+  modalBotones: { display: 'flex', gap: '10px', justifyContent: 'flex-end' },
+  modalCancelar: {
+    padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)',
+    background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)',
+  },
+  modalConfirmar: {
+    padding: '9px 18px', borderRadius: '8px', border: 'none',
+    background: '#dc2626', color: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '700',
+  },
   footer: {
     borderTop: '1px solid var(--color-borde)',
     textAlign: 'center',
@@ -447,63 +498,9 @@ const s = {
     color: 'var(--color-texto-suave)',
     fontSize: '13px',
   },
-  /* Modal confirmar logout */
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.35)',
-    zIndex: 1000,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modal: {
-    background: '#fff',
-    borderRadius: '12px',
-    padding: '28px 32px',
-    maxWidth: '360px',
-    width: '100%',
-    boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
-  },
-  modalTitulo: {
-    fontSize: '18px',
-    fontWeight: '700',
-    marginBottom: '10px',
-    color: 'var(--color-texto)',
-  },
-  modalTexto: {
-    fontSize: '14px',
-    color: 'var(--color-texto-suave)',
-    marginBottom: '24px',
-    lineHeight: 1.5,
-  },
-  modalBotones: {
-    display: 'flex',
-    gap: '10px',
-    justifyContent: 'flex-end',
-  },
-  modalCancelar: {
-    padding: '9px 18px',
-    borderRadius: '8px',
-    border: '1px solid var(--color-borde)',
-    background: '#fff',
-    fontSize: '14px',
-    cursor: 'pointer',
-    fontWeight: '600',
-    color: 'var(--color-texto)',
-  },
-  modalConfirmar: {
-    padding: '9px 18px',
-    borderRadius: '8px',
-    border: 'none',
-    background: '#dc2626',
-    color: '#fff',
-    fontSize: '14px',
-    cursor: 'pointer',
-    fontWeight: '700',
-  },
 };
 
+<<<<<<< HEAD
 function parseHoraMinutos(valor) {
   if (!valor) return null;
   const match = String(valor).match(/(\d{1,2}):(\d{2})/);
@@ -536,24 +533,43 @@ function InicioPublico() {
   const [cuposMap, setCuposMap] = useState({});
   const [notifications, setNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
+=======
+/* ── Componente ─────────────────────────────────────────── */
+export default function InicioPublico() {
+  const navigate = useNavigate();
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
   const dropdownRef = useRef(null);
   const notifRef = useRef(null);
 
-  const token   = getToken();
-  const role    = getRole();   // 'admin' | 'client' | 'professor' | 'receptionist' | null
-  const nombre  = getUserName();
-  const inicial = nombre ? nombre[0].toUpperCase() : '?';
+  const [menuAbierto,       setMenuAbierto]       = useState(false);
+  const [confirmarVisible,  setConfirmarVisible]  = useState(false);
+  const [actividades,       setActividades]       = useState([]);
+  const [actividadesFiltradas, setActividadesFiltradas] = useState([]);
+  const [actividadDetalle,  setActividadDetalle]  = useState(null);
+
+  const token  = getToken();
+  const role   = getRole();
+  const nombre = getUserName();
 
   const estaLogueado = !!token;
   const esAdmin      = role === 'admin';
   const puedeVerNotificaciones = role === 'client' || role === 'professor';
   const tieneSidebar = estaLogueado && role !== 'client';
   const itemsSidebar = esAdmin ? MENU_ADMIN : (MENUS_ROL[role] || []);
+  const opcionesMenu = MENUS_ROL[role] || [];
+  const inicial      = nombre ? nombre[0].toUpperCase() : '?';
 
-  // Cargar actividades activas al montar
+  // Cargar actividades activas
   useEffect(() => {
     getActivities({ status: 'active' })
+<<<<<<< HEAD
       .then((data) => setActividades((Array.isArray(data) ? data : []).filter(actividadSigueVigente)))
+=======
+      .then(data => {
+        const lista = Array.isArray(data) ? data : [];
+        setActividades(lista.filter(actividadSigueVigente));
+      })
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
       .catch(() => {});
   }, []);
 
@@ -630,6 +646,7 @@ function InicioPublico() {
     navigate('/');
   };
 
+<<<<<<< HEAD
   const handleInscribirse = (act) => {
     if (!estaLogueado) { navigate('/login'); return; }
     navigate('/cliente/reservas/inscribir', { state: { actividadId: act.id } });
@@ -647,17 +664,62 @@ function InicioPublico() {
     }
   };
 
+=======
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
   const pedirConfirmacion = () => {
     setMenuAbierto(false);
     setConfirmarVisible(true);
   };
 
+<<<<<<< HEAD
   const opcionesMenu = MENUS_ROL[role] || [];
   const noLeidas = notifications.filter((n) => !n.read).length;
+=======
+  const handleInscribirse = (act) => {
+    if (!estaLogueado) { navigate('/login'); return; }
+    navigate('/cliente/reservas/inscribir', { state: { actividadId: act.id } });
+  };
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
 
-  /* ── Contenido principal de la página ─────────────────── */
+  const handleVerActividad = async (actividad) => {
+    try {
+      const [detalle, disponibilidad] = await Promise.all([
+        getActivityById(actividad.id),
+        getActivityAvailability(actividad.id),
+      ]);
+      setActividadDetalle({ ...detalle, ...disponibilidad });
+    } catch {
+      setActividadDetalle(actividad);
+    }
+  };
+
+  /* ── Subcomponentes ───────────────────────────────────── */
+  const CardActividad = ({ a }) => (
+    <div style={s.actCard}>
+      <span style={s.actSala}>Sala {a.room_id}</span>
+      <span style={s.actNombre}>{a.name}</span>
+      <span style={s.actChip(a.activity_type)}>
+        {a.activity_type === 'individual' ? 'Individual' : 'Fija'}
+      </span>
+      {a.schedule    && <span style={s.actHorario}>📅 {a.schedule}</span>}
+      {a.specific_date && (
+        <span style={s.actHorario}>
+          📅 {formatFecha(a.specific_date)}{a.time_slot && ` · ${a.time_slot}`}
+        </span>
+      )}
+      {a.professor   && <span style={s.actProfesor}>👤 {a.professor}</span>}
+      <span style={s.actPrecio}>${Number(a.price).toLocaleString('es-AR')}</span>
+      <div style={s.actBotones}>
+        <button style={s.actBtnVer}       onClick={() => handleVerActividad(a)}>Ver</button>
+        <button style={s.actBtnInscribir} onClick={() => handleInscribirse(a)}>Inscribirse</button>
+      </div>
+    </div>
+  );
+
+  /* ── Contenido principal ──────────────────────────────── */
   const contenido = (
     <>
+      {/* Hero */}
       <section style={s.hero}>
         <div>
           <h1 style={s.heroTitle}>Centro de Kinesiología con seguimiento inteligente</h1>
@@ -666,60 +728,63 @@ function InicioPublico() {
             Los usuarios autenticados acceden a sus funciones según su rol.
           </p>
           <div style={s.pillRow}>
-            <span style={s.pill}>Rehabilitación</span>
-            <span style={s.pill}>Reserva de turnos</span>
-            <span style={s.pill}>Asistencia</span>
-            <span style={s.pill}>Kinesiología deportiva</span>
+            {['Rehabilitación', 'Reserva de turnos', 'Asistencia', 'Kinesiología deportiva'].map(p => (
+              <span key={p} style={s.pill}>{p}</span>
+            ))}
           </div>
         </div>
 
         <div style={s.heroCard}>
-          {!estaLogueado && (
+          {!estaLogueado ? (
             <>
               <div style={s.cardTitle}>¡Bienvenido!</div>
               <p style={s.cardText}>Iniciá sesión o registrate para acceder a todas las funciones.</p>
               <Link to="/login"    style={s.cardLink}>Iniciar sesión →</Link>
               <Link to="/registro" style={s.cardLink}>Registrarse →</Link>
             </>
-          )}
-          {estaLogueado && (
+          ) : (
             <>
               <div style={s.cardTitle}>Hola, {nombre}</div>
               <p style={s.cardText}>Usá el menú arriba a la derecha para navegar.</p>
+<<<<<<< HEAD
               {role === 'client'       && <Link to="/cliente/reservas/inscribir"    style={s.cardLink}>Ver actividades →</Link>}
               {role === 'professor'    && <Link to="/profesor/actividades"     style={s.cardLink}>Mis actividades →</Link>}
               {role === 'receptionist' && <Link to="/recepcionista/actividades" style={s.cardLink}>Ver actividades →</Link>}
               {role === 'admin'        && <Link to="/admin/usuarios"            style={s.cardLink}>Gestión de usuarios →</Link>}
+=======
+              {role === 'client'       && <Link to="/cliente/actividades"  style={s.cardLink}>Ver actividades →</Link>}
+              {role === 'professor'    && <Link to="/profesor/actividades"  style={s.cardLink}>Mis actividades →</Link>}
+              {role === 'receptionist' && <Link to="/admin/actividades"     style={s.cardLink}>Ver actividades →</Link>}
+              {role === 'admin'        && <Link to="/admin/usuarios"        style={s.cardLink}>Gestión de usuarios →</Link>}
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
             </>
           )}
         </div>
       </section>
 
+      {/* Noticias */}
       <section style={s.seccion}>
         <h2 style={s.seccionTitulo}>Novedades del centro</h2>
         <div style={s.gridNoticias}>
-          <article style={s.noticia}>
-            <span style={s.noticiaTag}>CLASES</span>
-            <h3 style={s.noticiaTitulo}>Nuevos horarios de rehabilitación funcional</h3>
-            <p style={s.noticiaTexto}>Ya se encuentran disponibles los nuevos turnos de la tarde para actividades guiadas.</p>
-          </article>
-          <article style={s.noticia}>
-            <span style={s.noticiaTag}>PAGOS</span>
-            <h3 style={s.noticiaTitulo}>Suscripciones mensuales con Mercado Pago</h3>
-            <p style={s.noticiaTexto}>Los clientes pueden consultar y pagar su plan desde la sección de suscripciones.</p>
-          </article>
-          <article style={s.noticia}>
-            <span style={s.noticiaTag}>ASISTENCIAS</span>
-            <h3 style={s.noticiaTitulo}>Registro por DNI simplificado</h3>
-            <p style={s.noticiaTexto}>El personal puede registrar asistencia en segundos con validación de identidad.</p>
-          </article>
+          {NOTICIAS.map(n => (
+            <article key={n.tag} style={s.noticia}>
+              <span style={s.noticiaTag}>{n.tag}</span>
+              <h3 style={s.noticiaTitulo}>{n.titulo}</h3>
+              <p style={s.noticiaTexto}>{n.texto}</p>
+            </article>
+          ))}
         </div>
       </section>
 
+      {/* Actividades */}
       <section style={s.seccion}>
         <h2 style={s.seccionTitulo}>Salas Disponibles</h2>
 
+<<<<<<< HEAD
         <FiltroActividades actividades={actividades} cuposMap={cuposMap} onChange={setActividadesFiltradas} />
+=======
+        <FiltroActividades actividades={actividades} onChange={setActividadesFiltradas} />
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
 
         {actividadesFiltradas.length === 0 ? (
           <p style={s.actVacio}>
@@ -729,6 +794,7 @@ function InicioPublico() {
           </p>
         ) : (
           <div style={s.gridActividades}>
+<<<<<<< HEAD
             {actividadesFiltradas.map((a) => (
               <div key={a.id} style={s.actCard}>
                 <span style={s.actSala}>Sala {a.room_id}</span>
@@ -764,6 +830,9 @@ function InicioPublico() {
                 </div>
               </div>
             ))}
+=======
+            {actividadesFiltradas.map(a => <CardActividad key={a.id} a={a} />)}
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
           </div>
         )}
       </section>
@@ -772,27 +841,27 @@ function InicioPublico() {
     </>
   );
 
+  /* ── Render ───────────────────────────────────────────── */
   return (
     <div style={s.pagina}>
 
-      {/* ── Topbar ─────────────────────────────────────── */}
+      {/* Topbar */}
       <header style={s.topbar}>
         <Link to="/" style={s.brand}>
           Rehabilit<span style={s.brandAr}>AR</span>
         </Link>
 
-        {/* Navegación pública */}
         <nav style={s.topNav}>
           <Link to="/staff" style={s.navLink}>Staff</Link>
         </nav>
 
         <div style={s.topActions}>
-          {/* No autenticado: botones de auth */}
-          {!estaLogueado && (
+          {!estaLogueado ? (
             <>
               <Link to="/login"    style={s.btnGhost}>Ingresar</Link>
               <Link to="/registro" style={s.btnSolid}>Registrarse</Link>
             </>
+<<<<<<< HEAD
           )}
 
           {/* Autenticado: botón usuario con dropdown */}
@@ -807,6 +876,30 @@ function InicioPublico() {
                   >
                     <span role="img" aria-hidden>🔔</span>
                     {noLeidas > 0 && <span style={s.notifBadge}>{noLeidas}</span>}
+=======
+          ) : (
+            <div style={s.dropdownWrapper} ref={dropdownRef}>
+              <button style={s.userBtn} onClick={() => setMenuAbierto(v => !v)}>
+                <span style={s.userAvatar}>{inicial}</span>
+                {nombre}
+              </button>
+
+              {menuAbierto && (
+                <div style={s.dropdown}>
+                  {opcionesMenu.map(item => (
+                    <Link
+                      key={item.ruta}
+                      to={item.ruta}
+                      style={s.dropdownItem}
+                      onClick={() => setMenuAbierto(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                  {opcionesMenu.length > 0 && <div style={s.dropdownDivider} />}
+                  <button onClick={pedirConfirmacion} style={s.dropdownLogout}>
+                    Cerrar sesión
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
                   </button>
 
                   {notifOpen && (
@@ -862,7 +955,7 @@ function InicioPublico() {
         </div>
       </header>
 
-      {/* ── Layout: roles con sidebar (admin/profesor/recepcionista) vs sin sidebar ── */}
+      {/* Layout: con o sin sidebar */}
       {tieneSidebar ? (
         <div style={s.adminWrapper}>
           <aside style={s.adminSidebar}>
@@ -879,15 +972,13 @@ function InicioPublico() {
               </button>
             </div>
           </aside>
-          <div style={s.adminContent}>
-            {contenido}
-          </div>
+          <div style={s.adminContent}>{contenido}</div>
         </div>
       ) : (
         contenido
       )}
 
-      {/* Modal confirmar cierre de sesión */}
+      {/* Modal: confirmar logout */}
       {confirmarVisible && (
         <div style={s.overlay}>
           <div style={s.modal}>
@@ -901,10 +992,10 @@ function InicioPublico() {
         </div>
       )}
 
-      {/* Modal detalle de actividad */}
+      {/* Modal: detalle de actividad */}
       {actividadDetalle && (
         <div style={s.actModalOverlay} onClick={() => setActividadDetalle(null)}>
-          <div style={s.actModal} onClick={(e) => e.stopPropagation()}>
+          <div style={s.actModal} onClick={e => e.stopPropagation()}>
             <div style={s.actModalHeader}>
               <h3 style={s.actModalTitulo}>{actividadDetalle.name}</h3>
               <button style={s.actModalClose} onClick={() => setActividadDetalle(null)}>✕</button>
@@ -916,6 +1007,7 @@ function InicioPublico() {
 
             <div style={s.actModalDivider} />
 
+<<<<<<< HEAD
             <div style={s.actModalRow}>
               <span style={s.actModalLabel}>Sala</span>
               <span>Sala {actividadDetalle.room_id}</span>
@@ -972,11 +1064,32 @@ function InicioPublico() {
                 <span>{actividadDetalle.requirements}</span>
               </div>
             )}
+=======
+            {[
+              ['Sala',        `Sala ${actividadDetalle.room_id}`],
+              ['Especialidad', actividadDetalle.specialization],
+              actividadDetalle.schedule     && ['Horario',     actividadDetalle.schedule],
+              actividadDetalle.specific_date && ['Fecha',
+                `${formatFechaLarga(actividadDetalle.specific_date)}${actividadDetalle.time_slot ? ` · ${actividadDetalle.time_slot}` : ''}`],
+              actividadDetalle.professor    && ['Profesor',    actividadDetalle.professor],
+              ['Precio',      `$${Number(actividadDetalle.price).toLocaleString('es-AR')}`],
+              ['Cupos disponibles', actividadDetalle.available_spots ?? actividadDetalle.capacity],
+              ['Cupos totales', actividadDetalle.capacity],
+              actividadDetalle.description  && ['Descripción', actividadDetalle.description],
+              actividadDetalle.requirements && ['Requisitos',  actividadDetalle.requirements],
+            ].filter(Boolean).map(([label, valor]) => (
+              <div key={label} style={s.actModalRow}>
+                <span style={s.actModalLabel}>{label}</span>
+                <span>{valor}</span>
+              </div>
+            ))}
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
 
             <div style={s.actModalDivider} />
 
             <div style={s.actModalActions}>
               <button style={s.actModalBtnCerrar} onClick={() => setActividadDetalle(null)}>Cerrar</button>
+<<<<<<< HEAD
               {(role === 'client' || !estaLogueado) && (
                 actividadesInscritas.has(actividadDetalle?.id)
                   ? <span style={s.actModalBtnYaInscripto}>Ya inscripto</span>
@@ -984,6 +1097,14 @@ function InicioPublico() {
                       Inscribirse
                     </button>
               )}
+=======
+              <button
+                style={s.actModalBtnInscribir}
+                onClick={() => { setActividadDetalle(null); handleInscribirse(actividadDetalle); }}
+              >
+                Inscribirse
+              </button>
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
             </div>
           </div>
         </div>
@@ -991,6 +1112,10 @@ function InicioPublico() {
 
     </div>
   );
+<<<<<<< HEAD
 }
 
 export default InicioPublico;
+=======
+}
+>>>>>>> f84c9d7738836b02791283eb23a4f7be303a4a90
