@@ -1,5 +1,5 @@
 // Responsable: Ezequiel
-// HU: Registrar asistencia por DNI Â· Dejar/Modificar/Eliminar comentario
+// HU: Registrar asistencia por DNI · Dejar/Modificar/Eliminar comentario
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
@@ -214,7 +214,7 @@ export default function RegistrarAsistencia() {
       <div style={s.contenedor}>
         <div style={s.cabecera}>
           <h1 style={s.titulo}>Asistencias</h1>
-          <p style={s.subtitulo}>RegistrÃ¡ asistencias y gestionÃ¡ comentarios.</p>
+          <p style={s.subtitulo}>Registrar asistencias y gestionar comentarios.</p>
         </div>
 
         {/* Banner de actividad */}
@@ -272,7 +272,7 @@ export default function RegistrarAsistencia() {
             <textarea
               id="comment"
               style={s.textarea}
-              placeholder="Ej: Buen desempeÃ±o"
+              placeholder="Ej: Buen desempeño"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               disabled={enviando}
@@ -310,7 +310,7 @@ export default function RegistrarAsistencia() {
         {cargandoLista ? (
           <div style={s.vacio}>Cargando asistencias...</div>
         ) : asistencias.length === 0 ? (
-          <div style={s.vacio}>AÃºn no hay asistencias registradas para esta actividad.</div>
+          <div style={s.vacio}>No hay asistencias registradas para esta actividad.</div>
         ) : (
           <table style={s.tabla}>
             <thead>
