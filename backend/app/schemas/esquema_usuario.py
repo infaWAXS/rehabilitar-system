@@ -55,8 +55,6 @@ class UserCreate(BaseModel):
             raise ValueError("El DNI debe tener entre 7 y 8 dígitos")
         return value
     
-    
-    
 #Inicio de sesion de usuario
 class UserLogin(BaseModel):
     email: EmailStr
@@ -97,6 +95,8 @@ class UserResponse(BaseModel):
     birth_date: Optional[date] = None
     
     plan_specialization: Optional[str] = None  # especialidad del plan del usuario (si tiene plan activo)
+
+    notifications_enabled: Optional[bool] = None
 
     class Config:
         from_attributes = True

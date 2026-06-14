@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import '../assets/styles/variables.css';
 import { logout, clearUserData, getRole, getUserName, getAccountStatus } from '../services/authService';
+import apiClient from '../services/apiClient';
 
 /* ── Menús por rol ─────────────────────────────────────── */
 const menus = {
@@ -117,6 +118,57 @@ const s = {
     fontSize: '14px',
     color: 'var(--color-texto-suave)',
   },
+  notifButton: {
+    position: 'relative',
+    marginRight: '12px',
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    color: 'var(--color-texto-suave)',
+    fontSize: '18px',
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    background: 'var(--color-acento)',
+    color: '#fff',
+    borderRadius: '999px',
+    padding: '2px 6px',
+    fontSize: '12px',
+    fontWeight: 700,
+  },
+  notifPanel: {
+    position: 'absolute',
+    right: 24,
+    top: 'var(--navbar-height)',
+    width: '320px',
+    maxHeight: '360px',
+    overflowY: 'auto',
+    background: 'var(--color-fondo-card)',
+    border: '1px solid var(--color-borde)',
+    borderRadius: '8px',
+    boxShadow: 'var(--sombra)',
+    zIndex: 200,
+  },
+  notifItem: {
+    padding: '10px 12px',
+    borderBottom: '1px solid rgba(0,0,0,0.04)',
+    fontSize: '13px',
+  },
+  notifPrefRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    padding: '10px 12px',
+    borderBottom: '1px solid rgba(0,0,0,0.08)',
+    fontSize: '12px',
+    color: 'var(--color-texto-suave)',
+    position: 'sticky',
+    top: 0,
+    background: 'var(--color-fondo-card)',
+  },
   contenido: {
     flex: 1,
     padding: '32px',
@@ -216,6 +268,10 @@ function LayoutPrivado({ children, titulo = '' }) {
   const [nombreUsuario, setNombreUsuario] = useState('');
   const [confirmarVisible, setConfirmarVisible] = useState(false);
   const [estadoCuenta, setEstadoCuenta] = useState('active');
+  const [notifications, setNotifications] = useState([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(true);
+  const notifRef = useRef();
 
   useEffect(() => {
     const roleGuardado = getRole();
@@ -225,6 +281,54 @@ function LayoutPrivado({ children, titulo = '' }) {
     if (roleGuardado) setRol(mapaRol[roleGuardado] || roleGuardado);
     if (nombreGuardado) setNombreUsuario(nombreGuardado);
     setEstadoCuenta(getAccountStatus());
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await apiClient.get('/notifications');
+        if (!mounted) return;
+        setNotifications(res.data || []);
+      } catch (e) {
+        setNotifications([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await apiClient.get('/notifications/preferences');
+        if (!mounted) return;
+        setNotifEnabled(res.data?.enabled ?? true);
+      } catch (e) {
+        // mantener valor por defecto
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const toggleNotifEnabled = async () => {
+    const siguiente = !notifEnabled;
+    setNotifEnabled(siguiente);
+    try {
+      await apiClient.put('/notifications/preferences', { enabled: siguiente });
+    } catch (e) {
+      setNotifEnabled(!siguiente);
+    }
+  };
+
+  useEffect(() => {
+    function onClickOutside(e) {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
+    }
+    document.addEventListener('click', onClickOutside);
+    return () => document.removeEventListener('click', onClickOutside);
   }, []);
 
   const tieneSidebar = rol !== 'cliente' || ubicacion.pathname.startsWith('/cliente/') || ubicacion.pathname.startsWith('/perfil');
@@ -281,7 +385,56 @@ function LayoutPrivado({ children, titulo = '' }) {
         )}
         <header style={{ ...s.navbar, top: estaSuspendido ? '45px' : 0 }}>
           <span style={s.navbarTitulo}>{titulo}</span>
-          <span style={s.navbarUsuario}>{nombreUsuario || 'Mi cuenta'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }} ref={notifRef}>
+            {(() => {
+              const rawRole = getRole();
+              if (rawRole === 'professor' || rawRole === 'client') {
+                return (
+                  <>
+                    <button
+                      aria-label="Notificaciones"
+                      style={s.notifButton}
+                      onClick={(e) => { e.stopPropagation(); setNotifOpen(!notifOpen); }}
+                    >
+                      <span role="img" aria-hidden>🔔</span>
+                      {notifications.filter(n => !n.read).length > 0 && (
+                        <span style={s.notifBadge}>{notifications.filter(n => !n.read).length}</span>
+                      )}
+                    </button>
+                    {notifOpen && (
+                      <div style={s.notifPanel}>
+                        <div style={s.notifPrefRow}>
+                          <span>Notificaciones del sistema</span>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={notifEnabled} onChange={toggleNotifEnabled} />
+                          </label>
+                        </div>
+                        {notifications.length === 0 && (
+                          <div style={s.notifItem}>No hay notificaciones.</div>
+                        )}
+                        {notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            style={{ ...s.notifItem, background: n.read ? 'transparent' : 'rgba(0,0,0,0.03)' }}
+                            onClick={async () => {
+                              setNotifications((prev) => prev.map(p => p.id === n.id ? { ...p, read: true } : p));
+                              try { await apiClient.post(`/notifications/${n.id}/read`); } catch (_) {}
+                            }}
+                          >
+                            <div style={{ fontWeight: n.read ? 500 : 700 }}>{n.title || 'Notificación'}</div>
+                            <div style={{ fontSize: 12, color: 'var(--color-texto-suave)' }}>{n.body || n.message}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              }
+              return null;
+            })()}
+
+            <span style={s.navbarUsuario}>{nombreUsuario || 'Mi cuenta'}</span>
+          </div>
         </header>
         <main style={{
           ...s.contenido,
