@@ -10,6 +10,7 @@ import FiltroActividades from './FiltroActividades';
 const MENUS_ROL = {
   client: [
     { label: 'Mis Reservas',        ruta: '/cliente/reservas' },
+    { label: 'Mis Suscripciones',   ruta: '/cliente/suscripciones' },
     { label: 'Mi Cuenta',           ruta: '/cliente/cuenta' },
     { label: 'Mi Perfil',           ruta: '/perfil' },
   ],
@@ -614,7 +615,7 @@ function InicioPublico() {
             <>
               <div style={s.cardTitle}>Hola, {nombre}</div>
               <p style={s.cardText}>Usá el menú arriba a la derecha para navegar.</p>
-              {role === 'client'       && <Link to="/cliente/reservas/inscribir"    style={s.cardLink}>Ver actividades →</Link>}
+              {role === 'client'       && <Link to="/cliente/reservas/"    style={s.cardLink}>Ver mis reservas →</Link>}
               {role === 'professor'    && <Link to="/profesor/actividades"     style={s.cardLink}>Mis actividades →</Link>}
               {role === 'receptionist' && <Link to="/recepcionista/actividades" style={s.cardLink}>Ver actividades →</Link>}
               {role === 'admin'        && <Link to="/admin/usuarios"            style={s.cardLink}>Gestión de usuarios →</Link>}

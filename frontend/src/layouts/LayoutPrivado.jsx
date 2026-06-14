@@ -22,7 +22,7 @@ const menus = {
   ],
   cliente: [
     { label: 'Mis Reservas',  ruta: '/cliente/reservas' },
-    { label: 'Planes',        ruta: '/cliente/suscripciones' },
+    { label: 'Suscripciones',        ruta: '/cliente/suscripciones' },
     { label: 'Mi Cuenta',     ruta: '/cliente/cuenta' },
     { label: 'Mi Perfil',     ruta: '/perfil' },
   ],
