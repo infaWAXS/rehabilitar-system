@@ -162,51 +162,52 @@ export default function VerPerfil() {
           </div>
 
           {/* ── Mi Suscripción ───────────────────────────── */}
-          <div style={s.seccion}>
-            <p style={s.titulo}>Mi Suscripción</p>
-            {planCargando ? (
-              <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)' }}>Cargando suscripción...</p>
-            ) : planInfo?.es_abonado ? (
-              <>
-                <div style={{ marginBottom: '12px' }}>
-                  <span style={{ ...s.badge, ...s.badgeActivo }}>Abonado activo</span>
+          {usuario.role === 'client' && (
+            <div style={s.seccion}>
+              <p style={s.titulo}>Mi Suscripción</p>
+              {planCargando ? (
+                <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)' }}>Cargando suscripción...</p>
+              ) : planInfo?.es_abonado ? (
+                <>
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={{ ...s.badge, ...s.badgeActivo }}>Abonado activo</span>
+                  </div>
+                  <div style={s.fila}>
+                    <div style={s.campo}>
+                      <label style={s.label}>Plan</label>
+                      <p style={s.valor}>{planInfo.plan.name}</p>
+                    </div>
+                    <div style={s.campo}>
+                      <label style={s.label}>Especialidad</label>
+                      <p style={s.valor}>{planInfo.plan.specialization || '—'}</p>
+                    </div>
+                  </div>
+                  <div style={s.fila}>
+                    <div style={s.campo}>
+                      <label style={s.label}>Cobertura</label>
+                      <p style={s.valor}>{planInfo.plan.coverage_type}</p>
+                    </div>
+                    <div style={s.campo}>
+                      <label style={s.label}>Vencimiento</label>
+                      <p style={s.valor}>{formatearFecha(planInfo.plan.end_date)}</p>
+                    </div>
+                  </div>
+                  {(planInfo.pending_discount_percent ?? 0) > 0 && (
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#15803d', marginTop: '4px' }}>
+                      Tenés un <strong>{planInfo.pending_discount_percent}% de descuento</strong> pendiente por cancelación. Se aplicará automáticamente en tu próximo pago monetario.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)', margin: 0 }}>
+                    No tenés un plan activo. Adquirí uno para acceder a beneficios de abonado, descuentos y reservas prioritarias.
+                  </p>
+                  <Link to="/cliente/suscripciones" style={s.planCTA}>Ver planes disponibles</Link>
                 </div>
-                <div style={s.fila}>
-                  <div style={s.campo}>
-                    <label style={s.label}>Plan</label>
-                    <p style={s.valor}>{planInfo.plan.name}</p>
-                  </div>
-                  <div style={s.campo}>
-                    <label style={s.label}>Especialidad</label>
-                    <p style={s.valor}>{planInfo.plan.specialization || '—'}</p>
-                  </div>
-                </div>
-                <div style={s.fila}>
-                  <div style={s.campo}>
-                    <label style={s.label}>Cobertura</label>
-                    <p style={s.valor}>{planInfo.plan.coverage_type}</p>
-                  </div>
-                  <div style={s.campo}>
-                    <label style={s.label}>Vencimiento</label>
-                    <p style={s.valor}>{formatearFecha(planInfo.plan.end_date)}</p>
-                  </div>
-                </div>
-                {(planInfo.pending_discount_percent ?? 0) > 0 && (
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#15803d', marginTop: '4px' }}>
-                    Tenés un <strong>{planInfo.pending_discount_percent}% de descuento</strong> pendiente por cancelación. Se aplicará automáticamente en tu próximo pago monetario.
-                  </div>
-                )}
-              </>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)', margin: 0 }}>
-                  No tenés un plan activo. Adquirí uno para acceder a beneficios de abonado, descuentos y reservas prioritarias.
-                </p>
-                <Link to="/cliente/suscripciones" style={s.planCTA}>Ver planes disponibles</Link>
-              </div>
-            )}
-          </div>
-
+              )}
+            </div>
+          )}
           {/* ── Apto físico ──────────────────────────────── */}
           <div style={s.seccion}>
             <p style={s.titulo}>Apto Físico</p>

@@ -36,8 +36,17 @@ export function generateAttendanceQr(activityId) {
 
 // Registra la asistencia del usuario autenticado a partir de un código QR escaneado
 export function scanAttendanceQr(code) {
+  const qrCode = typeof code === 'string' ? decodeURIComponent(code).trim() : '';
+  if (!qrCode) {
+    throw new Error('Código QR inválido o ausente.');
+  }
+
   return apiRequest('/attendances/qr/scan', {
     method: 'POST',
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ code: qrCode }),
   });
+}
+
+export function getAttendanceSessionStatus(activityId) {
+  return apiRequest(`/attendances/session-status/${activityId}`);
 }

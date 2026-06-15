@@ -1,5 +1,28 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+function formatApiError(payload) {
+  if (!payload) return 'Error de API';
+
+  if (typeof payload?.detail === 'string') {
+    return payload.detail;
+  }
+
+  if (Array.isArray(payload?.detail)) {
+    const first = payload.detail[0];
+    if (first?.msg) {
+      const where = Array.isArray(first.loc) ? first.loc.join('.') : '';
+      return where ? `${first.msg} (${where})` : first.msg;
+    }
+    return JSON.stringify(payload.detail);
+  }
+
+  if (typeof payload?.message === 'string') {
+    return payload.message;
+  }
+
+  return typeof payload === 'string' ? payload : 'Error de API';
+}
+
 async function apiRequest(path, options = {}) {
   const token = localStorage.getItem('access_token');
 
@@ -25,7 +48,7 @@ async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
-    const message = payload?.detail || payload?.message || 'Error de API';
+    const message = formatApiError(payload);
     throw new Error(message);
   }
 

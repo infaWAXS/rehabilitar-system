@@ -1,7 +1,8 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
-import { getActivities, resignActivity } from '../../../services/activitiesService';
+import { getActivities, resignActivity, assumeActivity } from '../../../services/activitiesService';
+import { getAttendanceSessionStatus } from '../../../services/attendanceService';
 import { getCurrentUser } from '../../../services/usersService';
 
 const s = {
@@ -28,6 +29,17 @@ const s = {
   },
   nombreAct: { fontSize: '15px', fontWeight: '600', color: 'var(--color-texto)' },
   detalle: { fontSize: '13px', color: 'var(--color-texto-suave)', marginTop: '2px' },
+  estadoSesion: (activo) => ({
+    display: 'inline-block',
+    marginTop: '8px',
+    padding: '4px 10px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    fontWeight: '700',
+    background: activo ? '#dcfce7' : '#fee2e2',
+    color: activo ? '#166534' : '#b91c1c',
+    border: `1px solid ${activo ? '#86efac' : '#fecaca'}`,
+  }),
   botonRenunciar: {
     padding: '8px 16px', borderRadius: '8px', border: 'none',
     background: '#fee2e2', color: '#dc2626',
@@ -86,6 +98,7 @@ export default function MisActividades() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [exito, setExito] = useState('');
+  const [estadoSesiones, setEstadoSesiones] = useState({});
 
   // Modal renunciar
   const [confirmTarget, setConfirmTarget] = useState(null);
@@ -93,6 +106,9 @@ export default function MisActividades() {
 
   // Modal Sprint 2
   const [sprint2Modal, setSprint2Modal] = useState(false);
+
+  // Modal asumir
+  const [assumeTarget, setAssumeTarget] = useState(null);
 
   useEffect(() => {
     async function cargar() {
@@ -145,6 +161,77 @@ export default function MisActividades() {
     }
   }
 
+  async function confirmarAsumir() {
+    if (!assumeTarget) return;
+    setProcesando(true);
+    setError('');
+    try {
+      const activityActualizada = await assumeActivity(assumeTarget.id);
+      setActividades((prev) => [...prev, activityActualizada]);
+      setActividadesParaAsumir((prev) => prev.filter((a) => a.id !== assumeTarget.id));
+      setExito(`Asumiste la actividad "${assumeTarget.nombre}" correctamente.`);
+      setAssumeTarget(null);
+    } catch (e) {
+      setError(e?.message || 'No se pudo asumir la actividad.');
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  function obtenerRangoHorario(activity) {
+    const scheduleMatches = (activity.schedule || '').match(/(\d{1,2}:\d{2})/g);
+    if (scheduleMatches && scheduleMatches.length >= 2) {
+      return `${scheduleMatches[0]} - ${scheduleMatches[1]}`;
+    }
+
+    if (activity.time_slot) {
+      const [hh, mm] = activity.time_slot.split(':').map(Number);
+      if (!Number.isNaN(hh) && !Number.isNaN(mm)) {
+        const inicio = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        const fin = `${String((hh + 1) % 24).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        return `${inicio} - ${fin}`;
+      }
+    }
+
+    return 'Horario no definido';
+  }
+
+function obtenerDiaYFecha(activity) {
+    if (activity.specific_date) {
+      const fecha = new Date(`${activity.specific_date}T00:00:00`);
+      if (!Number.isNaN(fecha.getTime())) {
+        const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        const dia = dias[fecha.getDay()];
+        const dia_num = String(fecha.getDate()).padStart(2, '0');
+        const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+        const anio = fecha.getFullYear();
+        return `${dia} · ${dia_num}/${mes}/${anio}`;
+      }
+    }
+
+    const diaTexto = (activity.schedule || '').split('·')[0]?.trim();
+    if (diaTexto) {
+      return `${diaTexto} · Fecha no definida`;
+    }
+
+    return 'Día no definido · Fecha no definida';
+  }
+
+  function renderInfoActividad(activity) {
+    const enCurso = Boolean(estadoSesiones[activity.id]);
+    return (
+      <>
+        <div style={s.nombreAct}>
+          {activity.name} <span style={s.estadoSesion(enCurso)}>{enCurso ? 'En curso' : 'Fuera de curso'}</span>
+        </div>
+        <div style={s.detalle}>{activity.activity_type === 'fixed' ? 'Fija' : 'Individual'}</div>
+        <div style={s.detalle}>{activity.specialization || 'No definida'}</div>
+        <div style={s.detalle}>{obtenerDiaYFecha(activity)}</div>
+        <div style={s.detalle}>{obtenerRangoHorario(activity)}</div>
+      </>
+    );
+  }
+
   return (
     <LayoutPrivado>
       <div style={s.cabecera}>
@@ -164,29 +251,7 @@ export default function MisActividades() {
       ) : (
         actividades.map((a) => (
           <div key={a.id} style={s.tarjeta}>
-            <div>
-              <div style={s.nombreAct}>{a.name}</div>
-              <div style={s.detalle}>
-                {a.activity_type === 'fixed' ? 'Fija' : 'Individual'}
-              </div>
-              {a.specialization && <div style={s.detalle}>{a.specialization}</div>}
-              {a.specific_date ? (
-                <div style={s.detalle}>
-                  {(() => {
-                    const fecha = new Date(`${a.specific_date}T00:00:00`);
-                    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-                    const dia = dias[fecha.getDay()];
-                    const dia_num = fecha.getDate().toString().padStart(2, '0');
-                    const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
-                    const anio = fecha.getFullYear();
-                    const fechaStr = `${dia} ${dia_num}/${mes}/${anio}`;
-                    return a.time_slot ? `${fechaStr} · ${a.time_slot}` : fechaStr;
-                  })()}
-                </div>
-              ) : (
-                a.schedule && <div style={s.detalle}>{a.schedule}</div>
-              )}
-            </div>
+            <div>{renderInfoActividad(a)}</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 style={s.botonAsistencia}
@@ -206,28 +271,50 @@ export default function MisActividades() {
       )}
 
       {/* Sección: Actividades que podés asumir */}
-      <h2 style={s.seccionTitulo}>Actividades que podés asumir</h2> Pendiente para sprint 2 
+      <h2 style={s.seccionTitulo}>Actividades que podés asumir</h2>
 
       {!cargando && actividadesParaAsumir.length === 0 ? (
         <div style={s.vacio}>No hay actividades disponibles para tu especialidad.</div>
       ) : (
         actividadesParaAsumir.map((a) => (
           <div key={a.id} style={s.tarjeta}>
-            <div>
-              <div style={s.nombreAct}>{a.name}</div>
-              <div style={s.detalle}>
-                {a.activity_type === 'fixed' ? 'Fija' : 'Individual'} &middot; {a.schedule || a.time_slot}
-              </div>
-              <div style={s.detalle}>{a.specialization}</div>
-            </div>
+            <div>{renderInfoActividad(a)}</div>
             <button
               style={s.botonAsumir}
-              onClick={() => setSprint2Modal(true)}
+              onClick={() => setAssumeTarget({ id: a.id, nombre: a.name })}
             >
               Asumir
             </button>
           </div>
         ))
+      )}
+
+      {/* Modal: confirmar asumir */}
+      {assumeTarget && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <div style={s.modalTitulo}>Confirmar asignación</div>
+            <div style={s.modalTexto}>
+              ¿Querés asumir la actividad <strong>{assumeTarget.nombre}</strong>?
+            </div>
+            <div style={s.modalBotones}>
+              <button
+                style={s.botonSecundario}
+                onClick={() => setAssumeTarget(null)}
+                disabled={procesando}
+              >
+                Cancelar
+              </button>
+              <button
+                style={{ ...s.botonPrimario, background: 'var(--color-primario)' }}
+                onClick={confirmarAsumir}
+                disabled={procesando}
+              >
+                {procesando ? 'Procesando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal: confirmar renuncia */}

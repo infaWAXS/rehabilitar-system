@@ -51,3 +51,9 @@ class QrCodeRespuesta(BaseModel):
 
 class EscanearQr(BaseModel):
     code: str
+
+class EstadoSesionAsistenciaResponse(BaseModel):
+    activity_id: int
+    session_active: bool
+    status: str
+    restrictions_enforced: bool

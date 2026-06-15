@@ -1,5 +1,6 @@
 // HU: Registrar asistencia por QR
 import React, { useState, useEffect } from 'react';
+import { useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { scanAttendanceQr } from '../../../services/attendanceService';
@@ -33,20 +34,35 @@ function ConfirmarAsistenciaQr() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [exito, setExito] = useState(false);
+  const scanRequestedRef = useRef(false);
 
   useEffect(() => {
-    let mounted = true;
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      navigate('/login', {
+        replace: true,
+        state: {
+          mensaje: 'Iniciá sesión para registrar tu asistencia con QR.',
+          redirectTo: `/asistencia/qr/${code}`,
+        },
+      });
+      return;
+    }
+
+    if (scanRequestedRef.current) return;
+    scanRequestedRef.current = true;
+
     scanAttendanceQr(code)
       .then(() => {
-        if (mounted) setExito(true);
+        setError('');
+        setExito(true);
       })
       .catch((e) => {
-        if (mounted) setError(e?.message || 'No se pudo registrar la asistencia.');
+        setError(e?.message || 'No se pudo registrar la asistencia.');
       })
       .finally(() => {
-        if (mounted) setCargando(false);
+        setCargando(false);
       });
-    return () => { mounted = false; };
   }, [code]);
 
   return (
