@@ -9,6 +9,7 @@ from app.models.waitlist import Waitlist
 from app.models.room import Room
 from app.models.activity import Activity
 from app.models.attendance import Attendance
+from app.models.attendance_qr import AttendanceQrCode
 from app.models.plan import Plan
 from app.models.user_plan import UserPlan
 from app.models.notification import Notification

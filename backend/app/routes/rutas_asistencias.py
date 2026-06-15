@@ -9,6 +9,8 @@ from app.schemas.esquema_asistencias import (
     AsistenciaConUsuario,
     MarcarAsistenciaPorDNI,
     ActualizarComentario,
+    QrCodeRespuesta,
+    EscanearQr,
 )
 from app.services.servicio_asistencias import (
     marcar_asistencia_por_dni,
@@ -16,7 +18,10 @@ from app.services.servicio_asistencias import (
     eliminar_comentario,
     listar_asistencias_por_actividad,
     pregenerar_ausentes,
+    generar_qr_asistencia,
+    registrar_asistencia_por_qr,
 )
+from app.utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/attendances", tags=["Asistencias"])
 
@@ -45,3 +50,15 @@ def modificar_comentario(attendance_id: int, request: ActualizarComentario, db: 
 @router.delete("/{attendance_id}/comment", response_model=AsistenciaRespuesta)
 def borrar_comentario(attendance_id: int, db: Session = Depends(get_db)):
     return eliminar_comentario(attendance_id, db)
+
+
+@router.post("/qr/{activity_id}", response_model=QrCodeRespuesta)
+def generar_qr(activity_id: int, token: str, db: Session = Depends(get_db)):
+    get_current_user(token, db)
+    return generar_qr_asistencia(activity_id, db)
+
+
+@router.post("/qr/scan", response_model=AsistenciaRespuesta)
+def escanear_qr(request: EscanearQr, token: str, db: Session = Depends(get_db)):
+    current_user = get_current_user(token, db)
+    return registrar_asistencia_por_qr(request.code, current_user.id, db)
