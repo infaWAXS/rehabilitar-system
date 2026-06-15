@@ -162,11 +162,13 @@ export default function VerPerfil() {
           </div>
 
           {/* ── Mi Suscripción ───────────────────────────── */}
-          <div style={s.seccion}>
-            <p style={s.titulo}>Mi Suscripción</p>
-            {planCargando ? (
-              <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)' }}>Cargando suscripción...</p>
-            ) : planInfo?.es_abonado ? (
+          {/* Solo el cliente tiene la seccion de suscripción, el resto de los roles no muestran */}
+          {usuario.role === 'client' && (
+            <div style={s.seccion}>
+              <p style={s.titulo}>Mi Suscripción</p>
+              {planCargando ? (
+                <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)' }}>Cargando suscripción...</p>
+              ) : planInfo?.es_abonado ? (
               <>
                 <div style={{ marginBottom: '12px' }}>
                   <span style={{ ...s.badge, ...s.badgeActivo }}>Abonado activo</span>
@@ -206,7 +208,7 @@ export default function VerPerfil() {
               </div>
             )}
           </div>
-
+          )}
           {/* ── Apto físico ──────────────────────────────── */}
           <div style={s.seccion}>
             <p style={s.titulo}>Apto Físico</p>

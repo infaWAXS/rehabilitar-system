@@ -7,6 +7,24 @@ export function registerAttendanceByDni(data) {
   });
 }
 
+export function generateAttendanceQr(activityId) {
+  return apiRequest('/attendances/qr/generate', {
+    method: 'POST',
+    body: JSON.stringify({ activity_id: activityId }),
+  });
+}
+
+export function registerAttendanceByQr(token) {
+  return apiRequest('/attendances/qr/register', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function getAttendanceSessionStatus(activityId) {
+  return apiRequest(`/attendances/session-status/${activityId}`);
+}
+
 export function getAttendancesByActivity(activityId) {
   return apiRequest(`/attendances/by-activity/${activityId}`);
 }

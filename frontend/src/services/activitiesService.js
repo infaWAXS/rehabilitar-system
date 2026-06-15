@@ -49,6 +49,11 @@ export function resignActivity(activityId) {
   return apiRequest(`/activities/${activityId}/resign`, { method: 'PATCH' });
 }
 
+/** El profesor autenticado asume una actividad disponible */
+export function assumeActivity(activityId) {
+  return apiRequest(`/activities/${activityId}/assume`, { method: 'PATCH' });
+}
+
 /**
  * HU Listar condiciones de cliente (Nahuel)
  * E1: hay inscriptos → lista con condición de acceso

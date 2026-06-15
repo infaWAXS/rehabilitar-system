@@ -10,6 +10,8 @@ import {
   initializeAttendances,
   updateAttendanceComment,
   deleteAttendanceComment,
+  generateAttendanceQr,
+  getAttendanceSessionStatus,
 } from '../../../services/attendanceService';
 
 const s = {
@@ -24,6 +26,17 @@ const s = {
   },
   actividadNombre: { fontSize: '15px', fontWeight: '600', color: 'var(--color-texto)' },
   actividadDetalle: { fontSize: '13px', color: 'var(--color-texto-suave)', marginTop: '2px' },
+  estadoSesion: (activo) => ({
+    display: 'inline-block',
+    marginTop: '8px',
+    padding: '4px 10px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    fontWeight: '700',
+    background: activo ? '#dcfce7' : '#fee2e2',
+    color: activo ? '#166534' : '#b91c1c',
+    border: `1px solid ${activo ? '#86efac' : '#fecaca'}`,
+  }),
   seccionTitulo: {
     fontSize: '16px', fontWeight: '700', color: 'var(--color-texto)',
     margin: '0 0 16px', paddingBottom: '8px',
@@ -58,6 +71,12 @@ const s = {
     border: '1px solid var(--color-borde)', background: 'transparent',
     color: 'var(--color-texto)', fontSize: '14px', fontWeight: '600', cursor: 'pointer',
   },
+  // Boton de regreso con fondo blanco y centrado
+  botonRegreso: {
+    display: 'inline-block', marginBottom: '20px', padding: '8px 16px', borderRadius: '8px',
+    border: '1px solid var(--color-borde)', background: '#fff',
+    color: 'var(--color-texto)', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+    },
   alerta: (tipo) => ({
     padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px',
     background: tipo === 'error' ? '#fef2f2' : '#f0fdf4',
@@ -97,6 +116,15 @@ const s = {
     color: 'var(--color-texto-suave)', fontSize: '13px',
     background: 'var(--color-fondo-card)', borderRadius: '10px',
   },
+  qrCaja: {
+    background: 'var(--color-fondo-card)',
+    border: '1px solid var(--color-borde)',
+    borderRadius: '10px',
+    padding: '14px',
+    marginBottom: '18px',
+  },
+  qrTexto: { fontSize: '12px', color: 'var(--color-texto-suave)', marginTop: '8px', wordBreak: 'break-all' },
+  qrImg: { width: 180, height: 180, borderRadius: 8, border: '1px solid var(--color-borde)', background: '#fff' },
 };
 
 export default function RegistrarAsistencia() {
@@ -123,6 +151,15 @@ export default function RegistrarAsistencia() {
   const [comentarioEdit, setComentarioEdit] = useState('');
   const [guardando, setGuardando] = useState(false);
 
+  // QR de asistencia
+  const [qrData, setQrData] = useState(null);
+  const [generandoQr, setGenerandoQr] = useState(false);
+
+  // Sesión de actividad
+  const [sesionActiva, setSesionActiva] = useState(false);
+  const [cargandoSesion, setCargandoSesion] = useState(true);
+  const [restriccionesActivas, setRestriccionesActivas] = useState(true);
+
   useEffect(() => {
     getActivityById(actividadId)
       .then(setActividad)
@@ -130,24 +167,57 @@ export default function RegistrarAsistencia() {
       .finally(() => setCargandoAct(false));
   }, [actividadId]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    async function cargarEstadoSesion() {
+      setCargandoSesion(true);
+      try {
+        const data = await getAttendanceSessionStatus(actividadId);
+        if (!mounted) return;
+        setSesionActiva(Boolean(data?.session_active));
+        setRestriccionesActivas(Boolean(data?.restrictions_enforced));
+      } catch (_) {
+        if (!mounted) return;
+        setSesionActiva(false);
+        setRestriccionesActivas(true);
+      } finally {
+        if (mounted) setCargandoSesion(false);
+      }
+    }
+
+    cargarEstadoSesion();
+    const interval = setInterval(cargarEstadoSesion, 30000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [actividadId]);
+
+  const bloqueoPorSesion = restriccionesActivas && !sesionActiva;
+  const controlesBloqueados = cargandoSesion || bloqueoPorSesion;
+
   const cargarAsistencias = useCallback(() => {
     setCargandoLista(true);
     setErrorLista('');
-    // Primero inicializa (idempotente), luego carga la lista completa
-    initializeAttendances(actividadId)
-      .catch(() => {}) // silenciar si la actividad no tiene reservas aún
-      .finally(() => {
-        getAttendancesByActivity(actividadId)
-          .then(setAsistencias)
-          .catch(() => setErrorLista('No se pudieron cargar las asistencias.'))
-          .finally(() => setCargandoLista(false));
-      });
-  }, [actividadId]);
+    const inicializar = !controlesBloqueados
+      ? initializeAttendances(actividadId).catch(() => {})
+      : Promise.resolve();
+
+    inicializar.finally(() => {
+      getAttendancesByActivity(actividadId)
+        .then(setAsistencias)
+        .catch(() => setErrorLista('No se pudieron cargar las asistencias.'))
+        .finally(() => setCargandoLista(false));
+    });
+  }, [actividadId, controlesBloqueados]);
 
   useEffect(() => { cargarAsistencias(); }, [cargarAsistencias]);
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (controlesBloqueados) return;
     if (!dni.trim()) return;
     setEnviando(true);
     setErrorForm('');
@@ -180,6 +250,7 @@ export default function RegistrarAsistencia() {
   }
 
   async function guardarComentario(id) {
+    if (controlesBloqueados) return;
     if (!comentarioEdit.trim()) return;
     setGuardando(true);
     try {
@@ -196,6 +267,7 @@ export default function RegistrarAsistencia() {
   }
 
   async function eliminarComentario(id) {
+    if (controlesBloqueados) return;
     setGuardando(true);
     try {
       await deleteAttendanceComment(id);
@@ -209,12 +281,34 @@ export default function RegistrarAsistencia() {
     }
   }
 
+  async function handleGenerarQr() {
+    if (controlesBloqueados) return;
+    setGenerandoQr(true);
+    setErrorForm('');
+    try {
+      const data = await generateAttendanceQr(Number(actividadId));
+      setQrData(data);
+      setExitoForm('QR generado correctamente. Vigencia: 15 minutos.');
+    } catch (e) {
+      setErrorForm(e?.message || 'No se pudo generar el QR.');
+    } finally {
+      setGenerandoQr(false);
+    }
+  }
+
   return (
     <LayoutPrivado>
       <div style={s.contenedor}>
+        <button
+              type="button"
+              style={s.botonRegreso}
+              onClick={() => navigate('/profesor/actividades')}
+            >
+              Volver
+        </button>
         <div style={s.cabecera}>
           <h1 style={s.titulo}>Asistencias</h1>
-          <p style={s.subtitulo}>RegistrÃ¡ asistencias y gestionÃ¡ comentarios.</p>
+          <p style={s.subtitulo}>Registrá asistencias y gestioná comentarios.</p>
         </div>
 
         {/* Banner de actividad */}
@@ -241,14 +335,53 @@ export default function RegistrarAsistencia() {
                 actividad.schedule ? ` · ${actividad.schedule}` : ''
               )}
             </div>
+            <div style={s.estadoSesion(sesionActiva && !cargandoSesion)}>
+              {cargandoSesion ? 'Estado: verificando...' : (sesionActiva ? 'En curso' : 'Fuera de curso')}
+            </div>
           </div>
         ) : null}
 
-        {/* â”€â”€ SecciÃ³n: Registrar nueva asistencia â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* Sección: Registrar nueva asistencia */}
         <h2 style={s.seccionTitulo}>Registrar nueva asistencia</h2>
 
         {errorForm && <div style={s.alerta('error')}>{errorForm}</div>}
         {exitoForm && <div style={s.alerta('exito')}>{exitoForm}</div>}
+        {!cargandoSesion && bloqueoPorSesion && (
+          <div style={s.alerta('error')}>
+            La clase aún no está en curso. Las funcionalidades de asistencia están bloqueadas.
+          </div>
+        )}
+
+        <div style={s.qrCaja}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <div>
+              <strong>Asistencia por QR</strong>
+              <div style={s.subtitulo}>Genera un QR temporal para que clientes inscriptos registren su asistencia.</div>
+            </div>
+            <button
+              type="button"
+              style={{ ...s.botonPrimario, minWidth: 160, flex: 'none', opacity: generandoQr ? 0.7 : 1 }}
+              onClick={handleGenerarQr}
+              disabled={generandoQr || controlesBloqueados}
+            >
+              {generandoQr ? 'Generando...' : 'Generar QR'}
+            </button>
+          </div>
+
+          {qrData?.qr_payload && (
+            <div style={{ marginTop: 12, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+              <img
+                style={s.qrImg}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData.qr_payload)}`}
+                alt="QR asistencia"
+              />
+              <div style={{ minWidth: 220 }}>
+                <div style={s.qrTexto}>Expira: {new Date(qrData.expires_at).toLocaleString()}</div>
+                <div style={s.qrTexto}>Token: {qrData.token}</div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit}>
           <div style={s.grupo}>
@@ -260,7 +393,7 @@ export default function RegistrarAsistencia() {
               placeholder="Ej: 12345678"
               value={dni}
               onChange={(e) => setDni(e.target.value)}
-              disabled={enviando}
+              disabled={enviando || controlesBloqueados}
               autoFocus
               required
             />
@@ -272,25 +405,17 @@ export default function RegistrarAsistencia() {
             <textarea
               id="comment"
               style={s.textarea}
-              placeholder="Ej: Buen desempeÃ±o"
+              placeholder="Ej: Buen desempeño"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              disabled={enviando}
+              disabled={enviando || controlesBloqueados}
             />
           </div>
           <div style={s.botones}>
             <button
-              type="button"
-              style={s.botonSecundario}
-              onClick={() => navigate('/profesor/actividades')}
-              disabled={enviando}
-            >
-              Volver
-            </button>
-            <button
               type="submit"
               style={{ ...s.botonPrimario, opacity: enviando ? 0.7 : 1 }}
-              disabled={enviando || !dni.trim()}
+              disabled={enviando || !dni.trim() || controlesBloqueados}
             >
               {enviando ? 'Registrando...' : 'Registrar'}
             </button>
@@ -299,7 +424,7 @@ export default function RegistrarAsistencia() {
 
         <div style={s.divisor} />
 
-        {/* â”€â”€ SecciÃ³n: Asistencias registradas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* Sección: Asistencias registradas */}
         <h2 style={s.seccionTitulo}>
           Asistencias registradas
           {!cargandoLista && ` (${asistencias.length})`}
@@ -310,7 +435,7 @@ export default function RegistrarAsistencia() {
         {cargandoLista ? (
           <div style={s.vacio}>Cargando asistencias...</div>
         ) : asistencias.length === 0 ? (
-          <div style={s.vacio}>AÃºn no hay asistencias registradas para esta actividad.</div>
+          <div style={s.vacio}>Aún no hay asistencias registradas para esta actividad.</div>
         ) : (
           <table style={s.tabla}>
             <thead>
@@ -344,11 +469,11 @@ export default function RegistrarAsistencia() {
                         value={comentarioEdit}
                         onChange={(e) => setComentarioEdit(e.target.value)}
                         autoFocus
-                        disabled={guardando}
+                        disabled={guardando || controlesBloqueados}
                       />
                     ) : (
                       <span style={{ color: a.comment ? 'inherit' : 'var(--color-texto-suave)' }}>
-                        {a.comment || 'â€”'}
+                        {a.comment || '—'}
                       </span>
                     )}
                   </td>
@@ -358,14 +483,14 @@ export default function RegistrarAsistencia() {
                         <button
                           style={s.botonAccion('verde')}
                           onClick={() => guardarComentario(a.id)}
-                          disabled={guardando || !comentarioEdit.trim()}
+                          disabled={guardando || !comentarioEdit.trim() || controlesBloqueados}
                         >
                           Guardar
                         </button>
                         <button
                           style={s.botonAccion('gris')}
                           onClick={cancelarEdicion}
-                          disabled={guardando}
+                          disabled={guardando || cargandoSesion}
                         >
                           Cancelar
                         </button>
@@ -375,7 +500,7 @@ export default function RegistrarAsistencia() {
                         <button
                           style={s.botonAccion('azul')}
                           onClick={() => iniciarEdicion(a)}
-                          disabled={guardando}
+                          disabled={guardando || controlesBloqueados}
                         >
                           {a.comment ? 'Editar' : 'Agregar'}
                         </button>
@@ -383,7 +508,7 @@ export default function RegistrarAsistencia() {
                           <button
                             style={s.botonAccion('rojo')}
                             onClick={() => eliminarComentario(a.id)}
-                            disabled={guardando}
+                            disabled={guardando || controlesBloqueados}
                           >
                             Eliminar
                           </button>

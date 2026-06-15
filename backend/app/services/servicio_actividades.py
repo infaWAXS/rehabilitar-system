@@ -477,6 +477,53 @@ def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity
     return actividad
 
 
+def asumir_actividad(activity_id: int, current_user, db: Session) -> Activity:
+    """Asigna al profesor autenticado a una actividad disponible.
+
+    Reglas:
+    - La actividad debe estar activa y sin profesor asignado.
+    - La especialidad del profesor debe coincidir con la de la actividad.
+    - El profesor no debe tener superposición horaria con otra actividad activa.
+    """
+    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    if actividad.status != "active":
+        raise HTTPException(status_code=400, detail="La actividad no está activa.")
+
+    if actividad.professor:
+        raise HTTPException(status_code=409, detail="La actividad ya tiene profesor asignado.")
+
+    if not current_user.specialization:
+        raise HTTPException(status_code=400, detail="Tu perfil no tiene especialidad asignada.")
+
+    if current_user.specialization.strip().lower() != (actividad.specialization or "").strip().lower():
+        raise HTTPException(
+            status_code=409,
+            detail="No podés asumir esta actividad porque tu especialidad no coincide.",
+        )
+
+    nombre_completo = f"{current_user.name} {current_user.lastname}".strip()
+
+    # Reutiliza la validación de solapamiento ya existente en creación/edición.
+    actividad_propuesta = Activity(
+        room_id=actividad.room_id,
+        activity_type=actividad.activity_type,
+        schedule=actividad.schedule,
+        specific_date=actividad.specific_date,
+        time_slot=actividad.time_slot,
+        status="active",
+        professor=nombre_completo,
+    )
+    _validar_disponibilidad_profesor(actividad_propuesta, db)
+
+    actividad.professor = nombre_completo
+    db.commit()
+    db.refresh(actividad)
+    return actividad
+
+
 def listar_clientes_actividad(activity_id: int, db: Session) -> List[ClientConditionResponse]:
     """Lista los clientes inscriptos en una actividad con su condición de acceso."""
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
