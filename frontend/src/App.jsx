@@ -49,6 +49,9 @@ import MisSuscripciones from './pages/client/pagos/MisSuscripciones';
 import GestionCuentaCliente from './pages/client/cuenta/GestionCuentaCliente';
 import SolicitarReintegro from './pages/client/cuenta/SolicitarReintegro';
 
+// ── Cliente: Asistencias ──────────────────────────────────
+import ConfirmarAsistenciaQr from './pages/client/asistencias/ConfirmarAsistenciaQr';
+
 // ── Recepcionista (Nahuel) ────────────────────────────────
 // VerInscriptos fusionado en DetalleActividad (misma tabla, mismo endpoint)
 
@@ -107,6 +110,7 @@ function App() {
         <Route path="/cliente/lista-espera" element={<ListaEspera />} />
         <Route path="/cliente/suscripciones" element={<MisSuscripciones />} />
         <Route path="/cliente/cuenta" element={<GestionCuentaCliente />} />
+        <Route path="/asistencia/qr/:code" element={<ConfirmarAsistenciaQr />} />
 
         {/* Profesor (Kinesiólogo) */}
         <Route path="/profesor/actividades" element={<MisActividadesProfesor />} />

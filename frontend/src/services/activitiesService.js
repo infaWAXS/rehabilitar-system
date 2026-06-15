@@ -58,4 +58,3 @@ export function resignActivity(activityId) {
 export function getActivityClients(activityId) {
   return apiRequest(`/activities/${activityId}/clients`);
 }
-
