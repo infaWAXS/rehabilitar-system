@@ -149,7 +149,7 @@ export default function MisActividades() {
     <LayoutPrivado>
       <div style={s.cabecera}>
         <h1 style={s.titulo}>Mis Actividades</h1>
-        <button style={s.botonSugerir} onClick={() => setSprint2Modal(true)}>
+        <button style={s.botonSugerir} onClick={() => navigate('/profesor/actividades/sugerir')}>
           + Sugerir Actividad
         </button>
       </div>

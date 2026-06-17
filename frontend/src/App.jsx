@@ -54,6 +54,7 @@ import SolicitarReintegro from './pages/client/cuenta/SolicitarReintegro';
 
 // ── Kinesiólogo (Nahuel) ─────────────────────────────────
 import MisActividadesProfesor from './pages/kinesiologist/actividades/MisActividades';
+import SugerirActividad from './pages/kinesiologist/actividades/SugerirActividad';
 import RegistrarAsistenciaProfesor from './pages/kinesiologist/asistencias/RegistrarAsistencia';
 
 function App() {
@@ -109,6 +110,7 @@ function App() {
 
         {/* Profesor (Kinesiólogo) */}
         <Route path="/profesor/actividades" element={<MisActividadesProfesor />} />
+        <Route path="/profesor/actividades/sugerir" element={<SugerirActividad />} />
         <Route path="/profesor/actividades/:id/asistencias" element={<RegistrarAsistenciaProfesor />} />
 
         {/* Redirect por defecto */}
