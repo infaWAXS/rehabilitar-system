@@ -12,7 +12,7 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
 from app.utils.subscriptions import is_abonado
-from app.utils.notifications import notify_activity_cancellation
+from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation
 from database.connection import SessionLocal
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -517,6 +517,18 @@ def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity
     actividad.professor = None
     db.commit()
     db.refresh(actividad)
+
+    def _notificar_renuncia_async(activity_id: int, prof_name: str) -> None:
+        db_notif = SessionLocal()
+        try:
+            notify_professor_resignation(activity_id, prof_name, db_notif)
+        except Exception:
+            pass
+        finally:
+            db_notif.close()
+
+    Thread(target=_notificar_renuncia_async, args=(actividad.id, nombre_completo), daemon=True).start()
+
     return actividad
 
 

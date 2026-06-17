@@ -561,7 +561,7 @@ function InicioPublico() {
 
   const estaLogueado = !!token;
   const esAdmin      = role === 'admin';
-  const puedeVerNotificaciones = role === 'client' || role === 'professor';
+  const puedeVerNotificaciones = role === 'client' || role === 'professor' || role === 'admin';
   const tieneSidebar = estaLogueado && role !== 'client';
   const itemsSidebar = esAdmin ? MENU_ADMIN : (MENUS_ROL[role] || []);
 

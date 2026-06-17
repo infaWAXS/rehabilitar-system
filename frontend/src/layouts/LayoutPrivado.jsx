@@ -388,7 +388,7 @@ function LayoutPrivado({ children, titulo = '' }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }} ref={notifRef}>
             {(() => {
               const rawRole = getRole();
-              if (rawRole === 'professor' || rawRole === 'client') {
+              if (rawRole === 'professor' || rawRole === 'client' || rawRole === 'admin') {
                 return (
                   <>
                     <button

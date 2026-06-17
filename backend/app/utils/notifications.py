@@ -285,3 +285,66 @@ def notify_activity_cancellation(activity_id: int, db: Session) -> None:
                 if _send_email(candidato.email, subject_profesor, body):
                     enviados_profesor.add(candidato.email)
                     break
+
+
+def _when_label(actividad: Activity) -> str:
+    """Devuelve una representación legible de la fecha/hora de la actividad."""
+    try:
+        if actividad.activity_type == "individual" and actividad.specific_date and actividad.time_slot:
+            return datetime(
+                actividad.specific_date.year,
+                actividad.specific_date.month,
+                actividad.specific_date.day,
+                int(actividad.time_slot.split(":")[0]),
+                int(actividad.time_slot.split(":")[1]) if ":" in actividad.time_slot else 0,
+            ).strftime("%Y-%m-%d %H:%M")
+        elif actividad.schedule and actividad.specific_date:
+            fecha_str = actividad.specific_date.strftime("%Y-%m-%d")
+            if " · " in actividad.schedule:
+                dia_nombre, resto = actividad.schedule.split(" · ", 1)
+                return f"{dia_nombre} {fecha_str} · {resto}"
+            return f"{actividad.schedule} {fecha_str}"
+        return actividad.schedule or "(horario no disponible)"
+    except Exception:
+        return actividad.schedule or str(actividad.specific_date) or "(horario no disponible)"
+
+
+def notify_professor_resignation(activity_id: int, professor_name: str, db: Session) -> None:
+    """Notifica a todos los administradores (email + in-app) cuando un profesor renuncia a una actividad."""
+    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not actividad:
+        logger.warning("notify_professor_resignation: actividad %s no encontrada", activity_id)
+        return
+
+    when = _when_label(actividad)
+    title = f"Renuncia de profesor: {actividad.name or 'Actividad'}"
+    subject = f"Aviso: renuncia de profesor en '{actividad.name or 'Actividad'}'"
+
+    admins = db.query(User).filter(User.role == "admin").all()
+    if not admins:
+        logger.info("notify_professor_resignation: no hay administradores en el sistema")
+        return
+
+    for admin in admins:
+        try:
+            body_email = (
+                f"Hola {admin.name} {admin.lastname},\n\n"
+                f"El profesor {professor_name} renunció a la actividad '{actividad.name}' "
+                f"programada para {when}.\n\n"
+                "La actividad queda sin profesor asignado y puede necesitar atención.\n\n"
+                "Saludos cordiales."
+            )
+            if getattr(admin, "email", None):
+                _send_email(admin.email, subject, body_email)
+
+            crear_notificacion(
+                admin.id,
+                title,
+                f"El profesor {professor_name} renunció a '{actividad.name}' programada para {when}.",
+                db,
+            )
+        except Exception:
+            logger.exception(
+                "Error notificando al admin %s sobre renuncia en actividad %s",
+                admin.id, activity_id,
+            )
