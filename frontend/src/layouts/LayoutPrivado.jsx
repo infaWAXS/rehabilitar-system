@@ -11,6 +11,7 @@ const menus = {
     { label: 'Clientes',      ruta: '/admin/clientes' },
     { label: 'Aptos Físicos', ruta: '/admin/aptos-fisicos' },
     { label: 'Actividades',   ruta: '/admin/actividades' },
+    { label: 'Sugerencias',   ruta: '/admin/actividades/sugerencias' },
   ],
   profesor: [
     { label: 'Actividades', ruta: '/profesor/actividades' },
