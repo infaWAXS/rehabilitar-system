@@ -1,5 +1,6 @@
 # Responsable: Francis - Lógica de negocio de lista de espera
 # HUs Listar lista de espera / Dar de baja en lista de espera: Nahuel
+from threading import Thread
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException
@@ -8,6 +9,7 @@ from app.models.waitlist import Waitlist
 from app.models.user import User
 from app.exceptions.http_exceptions import user_not_found_exception
 from app.utils.subscriptions import is_abonado
+from database.connection import SessionLocal
 
 
 # Añade un usuario a la lista de espera de una actividad
@@ -74,6 +76,22 @@ def add_to_waitlist(user_id: int, activity_id: int, db: Session):
     db.add(waitlist_entry)
     db.commit()
     db.refresh(waitlist_entry)
+
+    uid_copia = waitlist_entry.user_id
+    aid_copia = waitlist_entry.activity_id
+    pos_copia = waitlist_entry.position
+
+    def _notif_async(uid: int, aid: int, pos: int) -> None:
+        from app.utils.notifications import notify_waitlist_added
+        db_n = SessionLocal()
+        try:
+            notify_waitlist_added(uid, aid, pos, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(uid_copia, aid_copia, pos_copia), daemon=True).start()
 
     return waitlist_entry
 
@@ -149,8 +167,20 @@ def remove_from_waitlist(waitlist_id: int, db: Session):
     entry.status = "cancelled"
     db.commit()
 
-    # SIMULADO (Sprint 2): se enviará mail real al cliente confirmando la baja.
-    # Por ahora la confirmación se muestra únicamente en la UI del frontend.
+    uid_copia = entry.user_id
+    aid_copia = entry.activity_id
+
+    def _notif_async(uid: int, aid: int) -> None:
+        from app.utils.notifications import notify_waitlist_removed
+        db_n = SessionLocal()
+        try:
+            notify_waitlist_removed(uid, aid, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(uid_copia, aid_copia), daemon=True).start()
 
     # Re-ordenar posiciones solo dentro de la misma cola
     remaining_entries = db.query(Waitlist).filter(

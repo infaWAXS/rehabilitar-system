@@ -12,7 +12,7 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
 from app.utils.subscriptions import is_abonado
-from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation
+from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation, notify_activity_modified
 from database.connection import SessionLocal
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -345,6 +345,7 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
     cambios = datos.model_dump(exclude_unset=True)
+    profesor_anterior = actividad.professor
 
     valores_propuestos = {
         **{
@@ -403,6 +404,20 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
 
     db.commit()
     db.refresh(actividad)
+
+    campos_relevantes = {"name", "specific_date", "time_slot", "room_id", "professor", "price"}
+    if cambios.keys() & campos_relevantes:
+        def _notif_edicion_async(aid: int, cam: dict, prof_ant: Optional[str]) -> None:
+            db_n = SessionLocal()
+            try:
+                notify_activity_modified(aid, cam, prof_ant, db_n)
+            except Exception:
+                pass
+            finally:
+                db_n.close()
+
+        Thread(target=_notif_edicion_async, args=(actividad.id, dict(cambios), profesor_anterior), daemon=True).start()
+
     return actividad
 
 

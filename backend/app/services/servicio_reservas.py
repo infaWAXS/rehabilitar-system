@@ -1,5 +1,6 @@
 # Responsable: Francis - Logica de negocio de reservas
 # HU: Inscribirse a actividad fija / Inscribirse a actividad individual
+from threading import Thread
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from datetime import datetime
@@ -8,6 +9,7 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.models.activity import Activity
 from app.exceptions.http_exceptions import user_not_found_exception
+from database.connection import SessionLocal
 
 
 # Crea una nueva reserva para un usuario en una actividad.
@@ -75,6 +77,21 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
     db.add(new_reservation)
     db.commit()
     db.refresh(new_reservation)
+
+    uid_copia = new_reservation.user_id
+    aid_copia = new_reservation.activity_id
+
+    def _notif_async(uid: int, aid: int) -> None:
+        from app.utils.notifications import notify_reservation_created
+        db_n = SessionLocal()
+        try:
+            notify_reservation_created(uid, aid, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(uid_copia, aid_copia), daemon=True).start()
 
     return {
         "id": new_reservation.id,

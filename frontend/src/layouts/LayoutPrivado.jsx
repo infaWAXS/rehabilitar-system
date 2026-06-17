@@ -415,10 +415,11 @@ function LayoutPrivado({ children, titulo = '' }) {
                         {notifications.map((n) => (
                           <div
                             key={n.id}
-                            style={{ ...s.notifItem, background: n.read ? 'transparent' : 'rgba(0,0,0,0.03)' }}
+                            style={{ ...s.notifItem, background: n.read ? 'transparent' : 'rgba(0,0,0,0.03)', cursor: n.link ? 'pointer' : 'default' }}
                             onClick={async () => {
                               setNotifications((prev) => prev.map(p => p.id === n.id ? { ...p, read: true } : p));
                               try { await apiClient.post(`/notifications/${n.id}/read`); } catch (_) {}
+                              if (n.link) { setNotifOpen(false); navigate(n.link); }
                             }}
                           >
                             <div style={{ fontWeight: n.read ? 500 : 700 }}>{n.title || 'Notificación'}</div>

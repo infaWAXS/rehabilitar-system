@@ -1,5 +1,6 @@
 ﻿# Responsable: Nahuel - Servicio de gestion de clientes
 from typing import Optional
+from threading import Thread
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.reservation import Reservation
@@ -7,6 +8,7 @@ from app.models.reintegration import ReintegrationRequest
 from app.utils.subscriptions import is_abonado
 from fastapi import HTTPException
 from datetime import datetime, timedelta
+from database.connection import SessionLocal
 
 
 def obtener_todos_los_clientes(db: Session, search: str = None, status: str = None):
@@ -119,6 +121,20 @@ def registrar_reintegro_jwt(cliente: User, motivo: str, db: Session):
         db.rollback()
         raise HTTPException(status_code=500, detail="Error interno al guardar la solicitud en la base de datos.")
 
+    cliente_id_copia = cliente.id
+
+    def _notif_async(cid: int) -> None:
+        from app.utils.notifications import notify_reintegration_requested
+        db_n = SessionLocal()
+        try:
+            notify_reintegration_requested(cid, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(cliente_id_copia,), daemon=True).start()
+
     return {"status": "success", "mensaje": "Solicitud de reintegro registrada con éxito."}
 
 
@@ -139,6 +155,20 @@ def registrar_reintegro(cliente_id: int, motivo: str, db: Session):
     db.commit()
     db.refresh(cliente)
 
+    cliente_id_copia = cliente.id
+
+    def _notif_async(cid: int) -> None:
+        from app.utils.notifications import notify_reintegration_requested
+        db_n = SessionLocal()
+        try:
+            notify_reintegration_requested(cid, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(cliente_id_copia,), daemon=True).start()
+
     return {
         "status": "success",
         "mensaje": f"Solicitud de reintegro registrada para {cliente.name}. Motivo: {motivo}. Pendiente de revision por el administrador.",
@@ -158,8 +188,19 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session):
     db.commit()
     db.refresh(cliente)
 
-    # TODO: notificar al cliente via mail que su cuenta fue suspendida (Escenario 1 HU Suspender)
-    # TODO: registrar accion en historial del sistema (Escenario 1 HU Suspender)
+    cliente_id_copia = cliente.id
+
+    def _notif_async(cid: int, mot: str) -> None:
+        from app.utils.notifications import notify_account_suspended
+        db_n = SessionLocal()
+        try:
+            notify_account_suspended(cid, mot, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(cliente_id_copia, motivo), daemon=True).start()
 
     return {
         "status": "success",
@@ -181,8 +222,19 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session):
     db.refresh(cliente)
 
     detalle = f" Motivo: {motivo}" if motivo else ""
+    cliente_id_copia = cliente.id
 
-    # TODO: notificar al cliente via mail que su cuenta fue reintegrada (Escenarios 1 y 2 HU Reintegrar)
+    def _notif_async(cid: int) -> None:
+        from app.utils.notifications import notify_account_reinstated
+        db_n = SessionLocal()
+        try:
+            notify_account_reinstated(cid, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(cliente_id_copia,), daemon=True).start()
 
     return {
         "status": "success",
@@ -209,7 +261,19 @@ def rechazar_reintegro(cliente_id: int, db: Session):
     db.commit()
     db.refresh(cliente)
 
-    # TODO: notificar al cliente via mail que su solicitud fue rechazada (Escenario 3 HU Reintegrar)
+    cliente_id_copia = cliente.id
+
+    def _notif_async(cid: int) -> None:
+        from app.utils.notifications import notify_reintegration_rejected
+        db_n = SessionLocal()
+        try:
+            notify_reintegration_rejected(cid, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(cliente_id_copia,), daemon=True).start()
 
     return {
         "status": "success",

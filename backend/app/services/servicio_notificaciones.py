@@ -7,13 +7,13 @@ from app.models.notification import Notification
 from app.models.user import User
 
 
-def crear_notificacion(user_id: int, title: str, body: str, db: Session) -> Optional[Notification]:
+def crear_notificacion(user_id: int, title: str, body: str, db: Session, link: Optional[str] = None) -> Optional[Notification]:
     """Crea una notificación in-app para un usuario, salvo que las haya deshabilitado."""
     usuario = db.query(User).filter(User.id == user_id).first()
     if usuario and not usuario.notifications_enabled:
         return None
 
-    notificacion = Notification(user_id=user_id, title=title, body=body)
+    notificacion = Notification(user_id=user_id, title=title, body=body, link=link)
     db.add(notificacion)
     db.commit()
     db.refresh(notificacion)

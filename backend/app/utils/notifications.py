@@ -309,6 +309,308 @@ def _when_label(actividad: Activity) -> str:
         return actividad.schedule or str(actividad.specific_date) or "(horario no disponible)"
 
 
+def notify_activity_modified(activity_id: int, cambios: dict, profesor_anterior: Optional[str], db: Session) -> None:
+    """Notifica a clientes (reservas + lista de espera) y al profesor cuando se modifica una actividad."""
+    from app.models.reservation import Reservation
+    from app.models.waitlist import Waitlist
+    from app.models.room import Room
+
+    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not actividad:
+        logger.warning("notify_activity_modified: actividad %s no encontrada", activity_id)
+        return
+
+    when = _when_label(actividad)
+
+    # Resumen legible de los cambios
+    etiquetas = {
+        "name": "Nombre",
+        "specific_date": "Fecha",
+        "time_slot": "Horario",
+        "professor": "Profesor",
+        "price": "Precio",
+    }
+    lineas: list[str] = []
+    for campo, valor in cambios.items():
+        if campo == "room_id":
+            sala = db.query(Room).filter(Room.id == valor).first()
+            lineas.append(f"  - Sala: {sala.name if sala else valor}")
+        elif campo in etiquetas:
+            val_str = f"${valor}" if campo == "price" else (str(valor) if valor is not None else "sin asignar")
+            lineas.append(f"  - {etiquetas[campo]}: {val_str}")
+    resumen = "\n".join(lineas) if lineas else "  - (cambios generales)"
+
+    # IDs de clientes a notificar (reservas activas + lista de espera)
+    ids_reservas = {
+        r.user_id for r in db.query(Reservation).filter(
+            Reservation.activity_id == activity_id,
+            Reservation.status.in_(["confirmed", "pending"]),
+        ).all()
+    }
+    ids_espera = {
+        w.user_id for w in db.query(Waitlist).filter(
+            Waitlist.activity_id == activity_id,
+            Waitlist.status == "waiting",
+        ).all()
+    }
+    ids_clientes = ids_reservas | ids_espera
+
+    title_mod = f"Actividad modificada: {actividad.name or 'Actividad'}"
+    subject_mod = f"Aviso: modificación en '{actividad.name or 'Actividad'}'"
+
+    for user_id in ids_clientes:
+        try:
+            usuario = db.query(User).filter(User.id == user_id).first()
+            if not usuario:
+                continue
+            body_email = (
+                f"Hola {usuario.name} {usuario.lastname},\n\n"
+                f"Te informamos que la actividad '{actividad.name}' programada para {when} fue modificada.\n\n"
+                f"Cambios:\n{resumen}\n\n"
+                "Si tenés dudas, comunicate con la administración.\n\n"
+                "Saludos cordiales."
+            )
+            if getattr(usuario, "email", None):
+                _send_email(usuario.email, subject_mod, body_email)
+            crear_notificacion(user_id, title_mod, f"La actividad '{actividad.name}' fue modificada. Revisá los detalles actualizados.", db)
+        except Exception:
+            logger.exception("Error notificando usuario %s sobre modificación de actividad %s", user_id, activity_id)
+
+    # Notificación al profesor
+    profesor_nuevo = actividad.professor
+    profesor_cambio = "professor" in cambios
+    ids_prof_notificados: set[int] = set()
+
+    if profesor_cambio:
+        # Notificar al profesor anterior que fue removido
+        if profesor_anterior and profesor_anterior != profesor_nuevo:
+            prof_ant = _resolve_professor_user(profesor_anterior, db)
+            if prof_ant and prof_ant.id not in ids_prof_notificados:
+                try:
+                    body_email = (
+                        f"Hola {prof_ant.name} {prof_ant.lastname},\n\n"
+                        f"Te informamos que fuiste removido/a de la actividad '{actividad.name}' "
+                        f"programada para {when}.\n\n"
+                        "Saludos cordiales."
+                    )
+                    if getattr(prof_ant, "email", None):
+                        _send_email(prof_ant.email, f"Cambio en actividad: {actividad.name or 'Actividad'}", body_email)
+                    crear_notificacion(
+                        prof_ant.id,
+                        f"Cambio en actividad: {actividad.name or 'Actividad'}",
+                        f"Fuiste removido/a de la actividad '{actividad.name}' programada para {when}.",
+                        db,
+                    )
+                    ids_prof_notificados.add(prof_ant.id)
+                except Exception:
+                    logger.exception("Error notificando al profesor anterior %s", profesor_anterior)
+
+        # Notificar al nuevo profesor que fue asignado
+        if profesor_nuevo:
+            prof_nuevo = _resolve_professor_user(profesor_nuevo, db)
+            if prof_nuevo and prof_nuevo.id not in ids_prof_notificados:
+                try:
+                    body_email = (
+                        f"Hola {prof_nuevo.name} {prof_nuevo.lastname},\n\n"
+                        f"Fuiste asignado/a como profesor/a de la actividad '{actividad.name}' "
+                        f"programada para {when}.\n\n"
+                        "Saludos cordiales."
+                    )
+                    if getattr(prof_nuevo, "email", None):
+                        _send_email(prof_nuevo.email, f"Asignación a actividad: {actividad.name or 'Actividad'}", body_email)
+                    crear_notificacion(
+                        prof_nuevo.id,
+                        f"Asignación a actividad: {actividad.name or 'Actividad'}",
+                        f"Fuiste asignado/a como profesor/a de '{actividad.name}' programada para {when}.",
+                        db,
+                    )
+                    ids_prof_notificados.add(prof_nuevo.id)
+                except Exception:
+                    logger.exception("Error notificando al nuevo profesor %s", profesor_nuevo)
+    else:
+        # El profesor no cambió; notificarle sobre los cambios en la actividad
+        if profesor_nuevo:
+            prof_usuario = _resolve_professor_user(profesor_nuevo, db)
+            if prof_usuario:
+                try:
+                    body_email = (
+                        f"Hola {prof_usuario.name} {prof_usuario.lastname},\n\n"
+                        f"Te informamos que la actividad '{actividad.name}' programada para {when} fue modificada.\n\n"
+                        f"Cambios:\n{resumen}\n\n"
+                        "Saludos cordiales."
+                    )
+                    if getattr(prof_usuario, "email", None):
+                        _send_email(prof_usuario.email, subject_mod, body_email)
+                    crear_notificacion(
+                        prof_usuario.id,
+                        title_mod,
+                        f"La actividad '{actividad.name}' programada para {when} fue modificada.",
+                        db,
+                    )
+                except Exception:
+                    logger.exception("Error notificando al profesor %s sobre modificación", profesor_nuevo)
+
+
+def notify_reintegration_requested(cliente_id: int, db: Session) -> None:
+    """Notifica a todos los administradores (email + in-app) cuando un cliente suspendido pide reintegro."""
+    cliente = db.query(User).filter(User.id == cliente_id).first()
+    if not cliente:
+        return
+
+    nombre = f"{cliente.name} {cliente.lastname}"
+    title = f"Solicitud de reintegro: {nombre}"
+    subject = f"Nueva solicitud de reintegro de {nombre}"
+
+    admins = db.query(User).filter(User.role == "admin").all()
+    if not admins:
+        return
+
+    for admin in admins:
+        try:
+            body_email = (
+                f"Hola {admin.name} {admin.lastname},\n\n"
+                f"El cliente {nombre} (DNI: {cliente.dni or 'sin registrar'}) solicitó el reintegro de su cuenta suspendida.\n\n"
+                "Podés revisar y resolver la solicitud desde el panel de administración.\n\n"
+                "Saludos cordiales."
+            )
+            if getattr(admin, "email", None):
+                _send_email(admin.email, subject, body_email)
+            crear_notificacion(admin.id, title, f"{nombre} solicitó el reintegro de su cuenta. Revisá la solicitud en el panel de administración.", db, link="/admin/clientes")
+        except Exception:
+            logger.exception("Error notificando al admin %s sobre solicitud de reintegro de cliente %s", admin.id, cliente_id)
+
+
+def notify_account_suspended(cliente_id: int, motivo: str, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que su cuenta fue suspendida."""
+    cliente = db.query(User).filter(User.id == cliente_id).first()
+    if not cliente:
+        return
+    subject = "Tu cuenta ha sido suspendida"
+    body_email = (
+        f"Hola {cliente.name} {cliente.lastname},\n\n"
+        f"Te informamos que tu cuenta en Rehabilitar ha sido suspendida.\n"
+        f"Motivo: {motivo}\n\n"
+        "Si creés que esto es un error, podés solicitar un reintegro desde la plataforma.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(cliente, "email", None):
+        _send_email(cliente.email, subject, body_email)
+    crear_notificacion(cliente_id, "Cuenta suspendida", f"Tu cuenta fue suspendida. Motivo: {motivo}", db)
+
+
+def notify_account_reinstated(cliente_id: int, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que su cuenta fue reintegrada."""
+    cliente = db.query(User).filter(User.id == cliente_id).first()
+    if not cliente:
+        return
+    subject = "Tu cuenta ha sido reintegrada"
+    body_email = (
+        f"Hola {cliente.name} {cliente.lastname},\n\n"
+        "Nos complace informarte que tu cuenta en Rehabilitar ha sido reintegrada "
+        "y ya podés acceder a todas las funcionalidades nuevamente.\n\n"
+        "¡Te esperamos!\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(cliente, "email", None):
+        _send_email(cliente.email, subject, body_email)
+    crear_notificacion(cliente_id, "Cuenta reintegrada", "Tu cuenta fue reintegrada. Ya podés acceder a todas las funcionalidades.", db)
+
+
+def notify_reintegration_rejected(cliente_id: int, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que su solicitud de reintegro fue rechazada."""
+    cliente = db.query(User).filter(User.id == cliente_id).first()
+    if not cliente:
+        return
+    subject = "Tu solicitud de reintegro fue rechazada"
+    body_email = (
+        f"Hola {cliente.name} {cliente.lastname},\n\n"
+        "Lamentamos informarte que tu solicitud de reintegro fue rechazada por la administración. "
+        "Tu cuenta permanece suspendida.\n\n"
+        "Si tenés dudas, podés comunicarte con nosotros para obtener más información.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(cliente, "email", None):
+        _send_email(cliente.email, subject, body_email)
+    crear_notificacion(cliente_id, "Solicitud de reintegro rechazada", "Tu solicitud de reintegro fue rechazada. Tu cuenta permanece suspendida.", db)
+
+
+def notify_reservation_created(user_id: int, activity_id: int, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que su inscripción a una actividad fue confirmada."""
+    from app.models.activity import Activity as _Activity
+    usuario = db.query(User).filter(User.id == user_id).first()
+    actividad = db.query(_Activity).filter(_Activity.id == activity_id).first()
+    if not usuario or not actividad:
+        return
+    when = _when_label(actividad)
+    subject = f"Inscripción confirmada: {actividad.name or 'Actividad'}"
+    body_email = (
+        f"Hola {usuario.name} {usuario.lastname},\n\n"
+        f"Tu inscripción a '{actividad.name}' programada para {when} fue confirmada con éxito.\n\n"
+        "Podés ver tus reservas en la plataforma.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(usuario, "email", None):
+        _send_email(usuario.email, subject, body_email)
+    crear_notificacion(
+        user_id,
+        f"Inscripción confirmada: {actividad.name or 'Actividad'}",
+        f"Tu inscripción a '{actividad.name}' programada para {when} fue confirmada.",
+        db,
+    )
+
+
+def notify_waitlist_added(user_id: int, activity_id: int, position: int, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que quedó en lista de espera de una actividad."""
+    from app.models.activity import Activity as _Activity
+    usuario = db.query(User).filter(User.id == user_id).first()
+    actividad = db.query(_Activity).filter(_Activity.id == activity_id).first()
+    if not usuario or not actividad:
+        return
+    when = _when_label(actividad)
+    subject = f"Estás en lista de espera: {actividad.name or 'Actividad'}"
+    body_email = (
+        f"Hola {usuario.name} {usuario.lastname},\n\n"
+        f"Te anotaste en la lista de espera de '{actividad.name}' programada para {when}. "
+        f"Tu posición actual es la número {position}.\n\n"
+        "Te notificaremos si se libera un cupo.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(usuario, "email", None):
+        _send_email(usuario.email, subject, body_email)
+    crear_notificacion(
+        user_id,
+        f"En lista de espera: {actividad.name or 'Actividad'}",
+        f"Quedaste en lista de espera de '{actividad.name}' (posición {position}). Te avisaremos si hay un cupo.",
+        db,
+    )
+
+
+def notify_waitlist_removed(user_id: int, activity_id: int, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que fue dado de baja en la lista de espera."""
+    from app.models.activity import Activity as _Activity
+    usuario = db.query(User).filter(User.id == user_id).first()
+    actividad = db.query(_Activity).filter(_Activity.id == activity_id).first()
+    if not usuario or not actividad:
+        return
+    when = _when_label(actividad)
+    subject = f"Baja de lista de espera: {actividad.name or 'Actividad'}"
+    body_email = (
+        f"Hola {usuario.name} {usuario.lastname},\n\n"
+        f"Te confirmamos que fuiste dado/a de baja en la lista de espera de '{actividad.name}' "
+        f"programada para {when}.\n\n"
+        "Si fue un error, podés volver a anotarte desde la plataforma.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(usuario, "email", None):
+        _send_email(usuario.email, subject, body_email)
+    crear_notificacion(
+        user_id,
+        f"Baja de lista de espera: {actividad.name or 'Actividad'}",
+        f"Fuiste dado/a de baja en la lista de espera de '{actividad.name}' programada para {when}.",
+        db,
+    )
+
+
 def notify_professor_resignation(activity_id: int, professor_name: str, db: Session) -> None:
     """Notifica a todos los administradores (email + in-app) cuando un profesor renuncia a una actividad."""
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
