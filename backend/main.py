@@ -8,6 +8,7 @@ from app.models.reservation import Reservation
 from app.models.waitlist import Waitlist
 from app.models.room import Room
 from app.models.activity import Activity
+from app.models.activity_suggestion import ActivitySuggestion
 from app.models.attendance import Attendance
 from app.models.attendance_qr import AttendanceQrCode
 from app.models.plan import Plan
@@ -24,6 +25,7 @@ from app.routes.rutas_lista_espera import router as waitlist_router
 from app.routes.rutas_asistencias import router as attendance_router
 from app.routes.rutas_pagos import router as payment_router
 from app.routes.rutas_notificaciones import router as notification_router
+from app.routes.rutas_sugerencias import router as suggestion_router
 from database.seed_mock import seed as seed_mock_users
 
 app = FastAPI()
@@ -74,6 +76,7 @@ app.include_router(waitlist_router)
 app.include_router(attendance_router)
 app.include_router(payment_router)
 app.include_router(notification_router)
+app.include_router(suggestion_router)
 
 @app.get("/")
 def home():
