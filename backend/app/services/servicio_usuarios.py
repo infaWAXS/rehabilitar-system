@@ -342,6 +342,10 @@ def reset_password(token: str, new_password: str, confirm_password: str, db: Ses
 
 # Elimina permanentemente una cuenta de usuario (hard delete).
 def delete_user(user_id: int, db: Session):
+    from app.models.reservation import Reservation
+    from app.models.waitlist import Waitlist
+    from app.services.servicio_lista_espera import promote_next_waitlist_entry
+
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
@@ -355,6 +359,53 @@ def delete_user(user_id: int, db: Session):
             Activity.professor == name,
             Activity.status == "active",
         ).update({Activity.professor: None}, synchronize_session=False)
+
+    # Liberar reservas y posiciones en lista de espera antes de eliminar la cuenta.
+    # Si no se hace, quedan registros huérfanos que siguen descontando cupos
+    # (obtener_disponibilidad_actividad) pero ya no aparecen en el listado de inscriptos
+    # (listar_clientes_actividad hace join con User).
+    reservas_activas = db.query(Reservation).filter(
+        Reservation.user_id == user_id,
+        Reservation.status.in_(["pending", "confirmed"]),
+    ).all()
+    activity_ids_liberados = [r.activity_id for r in reservas_activas]
+    for reserva in reservas_activas:
+        reserva.status = "cancelled"
+
+    entradas_espera = db.query(Waitlist).filter(
+        Waitlist.user_id == user_id,
+        Waitlist.status == "waiting",
+    ).all()
+    for entrada in entradas_espera:
+        entrada.status = "cancelled"
+        restantes = db.query(Waitlist).filter(
+            Waitlist.activity_id == entrada.activity_id,
+            Waitlist.waitlist_type == entrada.waitlist_type,
+            Waitlist.position > entrada.position,
+            Waitlist.status == "waiting",
+        ).order_by(Waitlist.position).all()
+        for idx, r in enumerate(restantes):
+            r.position = entrada.position + idx
+
+    db.commit()
+
+    for activity_id in activity_ids_liberados:
+        nueva_reserva = promote_next_waitlist_entry(activity_id, db)
+        if nueva_reserva:
+            uid_promovido = nueva_reserva.user_id
+            aid_promovido = nueva_reserva.activity_id
+
+            def _notif_async(uid: int, aid: int) -> None:
+                from app.utils.notifications import notify_waitlist_promoted
+                db_n = SessionLocal()
+                try:
+                    notify_waitlist_promoted(uid, aid, db_n)
+                except Exception:
+                    pass
+                finally:
+                    db_n.close()
+
+            Thread(target=_notif_async, args=(uid_promovido, aid_promovido), daemon=True).start()
 
     db.delete(user)
     db.commit()

@@ -609,6 +609,33 @@ def notify_waitlist_added(user_id: int, activity_id: int, position: int, db: Ses
     )
 
 
+def notify_waitlist_promoted(user_id: int, activity_id: int, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que se le asignó automáticamente un cupo liberado."""
+    from app.models.activity import Activity as _Activity
+    usuario = db.query(User).filter(User.id == user_id).first()
+    actividad = db.query(_Activity).filter(_Activity.id == activity_id).first()
+    if not usuario or not actividad:
+        return
+    when = _when_label(actividad)
+    subject = f"¡Conseguiste un cupo!: {actividad.name or 'Actividad'}"
+    body_email = (
+        f"Hola {usuario.name} {usuario.lastname},\n\n"
+        f"Se liberó un cupo en '{actividad.name}' programada para {when} y fuiste inscripto/a "
+        "automáticamente por ser el siguiente en la lista de espera.\n\n"
+        "Revisá tus reservas en la plataforma para más detalles.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(usuario, "email", None):
+        _send_email(usuario.email, subject, body_email)
+    crear_notificacion(
+        user_id,
+        f"Cupo asignado: {actividad.name or 'Actividad'}",
+        f"Se liberó un cupo en '{actividad.name}' y fuiste inscripto/a automáticamente.",
+        db,
+        link="/cliente/reservas",
+    )
+
+
 def notify_waitlist_removed(user_id: int, activity_id: int, db: Session) -> None:
     """Notifica al cliente (email + in-app) que fue dado de baja en la lista de espera."""
     from app.models.activity import Activity as _Activity

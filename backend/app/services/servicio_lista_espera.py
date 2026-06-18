@@ -296,3 +296,79 @@ def notify_next_in_waitlist(activity_id: int, db: Session):
         return next_entry
 
     return None
+
+
+# Promueve automáticamente al primero de la lista de espera cuando se libera un cupo
+# (por cancelación de una reserva). Crea la reserva y reordena la cola afectada.
+def promote_next_waitlist_entry(activity_id: int, db: Session):
+    """Asigna la reserva liberada al primero de la lista de espera (prioridad: cola
+    'priority' antes que 'general'). Devuelve la nueva Reservation o None si no había nadie."""
+    from app.models.reservation import Reservation
+    from app.models.activity import Activity
+    from datetime import datetime as dt
+
+    next_entry = db.query(Waitlist).filter(
+        Waitlist.activity_id == activity_id,
+        Waitlist.status == "waiting",
+        Waitlist.waitlist_type == "priority",
+        Waitlist.position == 1
+    ).first()
+
+    if not next_entry:
+        next_entry = db.query(Waitlist).filter(
+            Waitlist.activity_id == activity_id,
+            Waitlist.status == "waiting",
+            Waitlist.waitlist_type == "general",
+            Waitlist.position == 1
+        ).first()
+
+    if not next_entry:
+        return None
+
+    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not actividad:
+        return None
+
+    reservation_date = dt.now()
+    if actividad.specific_date and actividad.time_slot:
+        try:
+            hh, mm = actividad.time_slot.split(":")
+            reservation_date = dt(
+                actividad.specific_date.year, actividad.specific_date.month, actividad.specific_date.day,
+                int(hh), int(mm),
+            )
+        except (ValueError, AttributeError):
+            pass
+
+    abonado = is_abonado(next_entry.user_id, db)
+
+    nueva_reserva = Reservation(
+        user_id=next_entry.user_id,
+        activity_id=activity_id,
+        reservation_type=actividad.activity_type,
+        status="confirmed" if abonado else "pending",
+        payment_status="completed" if abonado else "pending",
+        reservation_date=reservation_date,
+    )
+    db.add(nueva_reserva)
+
+    removed_position = next_entry.position
+    tipo_cola = next_entry.waitlist_type
+    next_entry.status = "converted"
+    db.commit()
+    db.refresh(nueva_reserva)
+
+    # Re-ordenar posiciones restantes de la misma cola
+    remaining_entries = db.query(Waitlist).filter(
+        Waitlist.activity_id == activity_id,
+        Waitlist.waitlist_type == tipo_cola,
+        Waitlist.position > removed_position,
+        Waitlist.status == "waiting"
+    ).order_by(Waitlist.position).all()
+
+    for idx, remaining_entry in enumerate(remaining_entries):
+        remaining_entry.position = removed_position + idx
+
+    db.commit()
+
+    return nueva_reserva

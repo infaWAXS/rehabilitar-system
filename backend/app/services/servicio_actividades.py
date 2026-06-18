@@ -110,6 +110,22 @@ def _dias_actividad(activity: Activity) -> set[str]:
     return _extraer_dias(activity.schedule)
 
 
+def _ya_paso(actividad: Activity, ahora: datetime) -> bool:
+    """True si la actividad ya comenzó o finalizó según su specific_date + horario."""
+    if not actividad.specific_date:
+        return False  # recurrente sin fecha puntual (legacy) -> siempre vigente
+
+    inicio, _ = _rango_horario(actividad)
+    if inicio is None:
+        return actividad.specific_date < ahora.date()
+
+    inicio_dt = datetime(
+        actividad.specific_date.year, actividad.specific_date.month, actividad.specific_date.day,
+        inicio // 60, inicio % 60,
+    )
+    return inicio_dt <= ahora
+
+
 def _solapa_en_sala(propuesta: Activity, existente: Activity) -> bool:
     if propuesta.room_id != existente.room_id:
         return False
@@ -228,7 +244,9 @@ def listar_actividades(
     status: Optional[str] = "active",
     db: Session = None,
 ) -> List[Activity]:
-    """Lista actividades con filtros opcionales por sala, tipo y estado."""
+    """Lista actividades con filtros opcionales por sala, tipo y estado.
+    Cuando se filtra por status="active", excluye las que ya comenzaron o finalizaron.
+    """
     query = db.query(Activity)
     if room_id is not None:
         query = query.filter(Activity.room_id == room_id)
@@ -236,7 +254,14 @@ def listar_actividades(
         query = query.filter(Activity.activity_type == activity_type)
     if status is not None:
         query = query.filter(Activity.status == status)
-    return query.order_by(Activity.id).all()
+
+    actividades = query.order_by(Activity.id).all()
+
+    if status == "active":
+        ahora = datetime.now()
+        actividades = [a for a in actividades if not _ya_paso(a, ahora)]
+
+    return actividades
 
 
 def obtener_actividad(activity_id: int, db: Session) -> Activity:

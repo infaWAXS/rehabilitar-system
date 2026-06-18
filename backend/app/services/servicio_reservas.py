@@ -263,6 +263,24 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
     db.commit()
     db.refresh(reservation)
 
+    from app.services.servicio_lista_espera import promote_next_waitlist_entry
+    nueva_reserva = promote_next_waitlist_entry(reservation.activity_id, db)
+    if nueva_reserva:
+        uid_promovido = nueva_reserva.user_id
+        aid_promovido = nueva_reserva.activity_id
+
+        def _notif_async(uid: int, aid: int) -> None:
+            from app.utils.notifications import notify_waitlist_promoted
+            db_n = SessionLocal()
+            try:
+                notify_waitlist_promoted(uid, aid, db_n)
+            except Exception:
+                pass
+            finally:
+                db_n.close()
+
+        Thread(target=_notif_async, args=(uid_promovido, aid_promovido), daemon=True).start()
+
     return {
         "id": reservation.id,
         "result": result,
