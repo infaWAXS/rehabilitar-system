@@ -83,7 +83,7 @@ function App() {
 
         {/* Admin — Clientes */}
         <Route path="/admin/clientes" element={<ListaClientes />} />
-        <Route path="/admin/clientes/aptos-fisicos" element={<AptosFisicosAdmin />} />
+        <Route path="/admin/aptos-fisicos" element={<AptosFisicosAdmin />} />
         <Route path="/admin/clientes/:id" element={<GestionCuentaAdmin />} />
 
         {/* Admin — Actividades */}

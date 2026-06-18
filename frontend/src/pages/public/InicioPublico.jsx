@@ -30,7 +30,7 @@ const MENUS_ROL = {
 const MENU_ADMIN = [
   { label: 'Usuarios',      ruta: '/admin/usuarios' },
   { label: 'Clientes',      ruta: '/admin/clientes' },
-  { label: 'Aptos Físicos', ruta: '/admin/clientes/aptos-fisicos' },
+  { label: 'Aptos Físicos', ruta: '/admin/aptos-fisicos' },
   { label: 'Actividades',   ruta: '/admin/actividades' },
 ];
 
