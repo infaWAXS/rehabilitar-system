@@ -1,6 +1,7 @@
 # Responsable: Agustin - logica de negocio de registro e inicio de sesion.
 # Francis: resto de funciones de gestion de usuarios.
 from urllib import request
+from threading import Thread
 from sqlalchemy import or_
 
 from app.schemas.esquema_usuario import UserLogin
@@ -13,6 +14,7 @@ from app.models.activity import Activity
 
 from app.utils.security import hash_password, verify_password, create_access_token, verify_token
 from app.exceptions.http_exceptions import email_already_exists_exception, unauthorized_exception, forbidden_exception, user_not_found_exception
+from database.connection import SessionLocal
 
 
 #Valida si el email ya existe, si no existe, hashea la contraseña y crea un nuevo usuario en la base de datos. 
@@ -253,11 +255,25 @@ def change_medical_clearance_status(user_id: int, status: str, db: Session):
     if not user:
         raise user_not_found_exception()
 
-    user.medical_certificate_status = status 
+    user.medical_certificate_status = status
 
     db.commit()
 
     db.refresh(user)
+
+    user_id_copia = user.id
+
+    def _notif_async(uid: int, st: str) -> None:
+        from app.utils.notifications import notify_medical_clearance_status
+        db_n = SessionLocal()
+        try:
+            notify_medical_clearance_status(uid, st, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(user_id_copia, status), daemon=True).start()
 
     return user
 

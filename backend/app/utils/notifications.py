@@ -451,6 +451,30 @@ def notify_activity_modified(activity_id: int, cambios: dict, profesor_anterior:
                     logger.exception("Error notificando al profesor %s sobre modificación", profesor_nuevo)
 
 
+def notify_medical_clearance_status(cliente_id: int, status: str, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que su apto físico fue aprobado o rechazado."""
+    cliente = db.query(User).filter(User.id == cliente_id).first()
+    if not cliente:
+        return
+
+    aprobado = status == "approved"
+    title = "Apto físico aprobado" if aprobado else "Apto físico rechazado"
+    subject = "Tu apto físico fue aprobado" if aprobado else "Tu apto físico fue rechazado"
+    cuerpo = (
+        "Tu apto físico fue aprobado. Ya podés ingresar a tus actividades."
+        if aprobado else
+        "Tu apto físico fue rechazado. Por favor, subí un nuevo certificado válido."
+    )
+    body_email = (
+        f"Hola {cliente.name} {cliente.lastname},\n\n"
+        f"{cuerpo}\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(cliente, "email", None):
+        _send_email(cliente.email, subject, body_email)
+    crear_notificacion(cliente_id, title, cuerpo, db)
+
+
 def notify_reintegration_requested(cliente_id: int, db: Session) -> None:
     """Notifica a todos los administradores (email + in-app) cuando un cliente suspendido pide reintegro."""
     cliente = db.query(User).filter(User.id == cliente_id).first()
