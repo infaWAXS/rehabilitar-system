@@ -30,7 +30,7 @@ const MENUS_ROL = {
 const MENU_ADMIN = [
   { label: 'Usuarios',      ruta: '/admin/usuarios' },
   { label: 'Clientes',      ruta: '/admin/clientes' },
-  { label: 'Aptos Físicos', ruta: '/admin/clientes/aptos-fisicos' },
+  { label: 'Aptos Físicos', ruta: '/admin/aptos-fisicos' },
   { label: 'Actividades',   ruta: '/admin/actividades' },
 ];
 
@@ -518,27 +518,6 @@ const s = {
   },
 };
 
-function parseHoraMinutos(valor) {
-  if (!valor) return null;
-  const match = String(valor).match(/(\d{1,2}):(\d{2})/);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
-}
-
-function actividadSigueVigente(actividad) {
-  if (actividad.activity_type !== 'individual') return true;
-  if (!actividad.specific_date) return true;
-  const fechaActividad = new Date(`${actividad.specific_date}T00:00:00`);
-  const hoy = new Date();
-  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-  const minutosActividad = parseHoraMinutos(actividad.time_slot);
-  const minutosAhora = hoy.getHours() * 60 + hoy.getMinutes();
-  if (fechaActividad < inicioHoy) return false;
-  if (fechaActividad > inicioHoy) return true;
-  if (minutosActividad === null) return true;
-  return minutosActividad >= minutosAhora;
-}
-
 function InicioPublico() {
   const navigate = useNavigate();
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -561,14 +540,14 @@ function InicioPublico() {
 
   const estaLogueado = !!token;
   const esAdmin      = role === 'admin';
-  const puedeVerNotificaciones = role === 'client' || role === 'professor';
+  const puedeVerNotificaciones = role === 'client' || role === 'professor' || role === 'admin';
   const tieneSidebar = estaLogueado && role !== 'client';
   const itemsSidebar = esAdmin ? MENU_ADMIN : (MENUS_ROL[role] || []);
 
   // Cargar actividades activas al montar
   useEffect(() => {
     getActivities({ status: 'active' })
-      .then((data) => setActividades((Array.isArray(data) ? data : []).filter(actividadSigueVigente)))
+      .then((data) => setActividades(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 

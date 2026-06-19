@@ -9,7 +9,7 @@ const menus = {
   admin: [
     { label: 'Usuarios',      ruta: '/admin/usuarios' },
     { label: 'Clientes',      ruta: '/admin/clientes' },
-    { label: 'Aptos Físicos', ruta: '/admin/clientes/aptos-fisicos' },
+    { label: 'Aptos Físicos', ruta: '/admin/aptos-fisicos' },
     { label: 'Actividades',   ruta: '/admin/actividades' },
   ],
   profesor: [
@@ -388,7 +388,7 @@ function LayoutPrivado({ children, titulo = '' }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }} ref={notifRef}>
             {(() => {
               const rawRole = getRole();
-              if (rawRole === 'professor' || rawRole === 'client') {
+              if (rawRole === 'professor' || rawRole === 'client' || rawRole === 'admin') {
                 return (
                   <>
                     <button
@@ -415,10 +415,11 @@ function LayoutPrivado({ children, titulo = '' }) {
                         {notifications.map((n) => (
                           <div
                             key={n.id}
-                            style={{ ...s.notifItem, background: n.read ? 'transparent' : 'rgba(0,0,0,0.03)' }}
+                            style={{ ...s.notifItem, background: n.read ? 'transparent' : 'rgba(0,0,0,0.03)', cursor: n.link ? 'pointer' : 'default' }}
                             onClick={async () => {
                               setNotifications((prev) => prev.map(p => p.id === n.id ? { ...p, read: true } : p));
                               try { await apiClient.post(`/notifications/${n.id}/read`); } catch (_) {}
+                              if (n.link) { setNotifOpen(false); navigate(n.link); }
                             }}
                           >
                             <div style={{ fontWeight: n.read ? 500 : 700 }}>{n.title || 'Notificación'}</div>

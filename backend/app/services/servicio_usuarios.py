@@ -1,6 +1,7 @@
 # Responsable: Agustin - logica de negocio de registro e inicio de sesion.
 # Francis: resto de funciones de gestion de usuarios.
 from urllib import request
+from threading import Thread
 from sqlalchemy import or_
 
 from app.schemas.esquema_usuario import UserLogin
@@ -13,6 +14,7 @@ from app.models.activity import Activity
 
 from app.utils.security import hash_password, verify_password, create_access_token, verify_token
 from app.exceptions.http_exceptions import email_already_exists_exception, unauthorized_exception, forbidden_exception, user_not_found_exception
+from database.connection import SessionLocal
 
 
 #Valida si el email ya existe, si no existe, hashea la contraseña y crea un nuevo usuario en la base de datos. 
@@ -253,11 +255,25 @@ def change_medical_clearance_status(user_id: int, status: str, db: Session):
     if not user:
         raise user_not_found_exception()
 
-    user.medical_certificate_status = status 
+    user.medical_certificate_status = status
 
     db.commit()
 
     db.refresh(user)
+
+    user_id_copia = user.id
+
+    def _notif_async(uid: int, st: str) -> None:
+        from app.utils.notifications import notify_medical_clearance_status
+        db_n = SessionLocal()
+        try:
+            notify_medical_clearance_status(uid, st, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_notif_async, args=(user_id_copia, status), daemon=True).start()
 
     return user
 
@@ -326,6 +342,10 @@ def reset_password(token: str, new_password: str, confirm_password: str, db: Ses
 
 # Elimina permanentemente una cuenta de usuario (hard delete).
 def delete_user(user_id: int, db: Session):
+    from app.models.reservation import Reservation
+    from app.models.waitlist import Waitlist
+    from app.services.servicio_lista_espera import promote_next_waitlist_entry
+
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
@@ -339,6 +359,53 @@ def delete_user(user_id: int, db: Session):
             Activity.professor == name,
             Activity.status == "active",
         ).update({Activity.professor: None}, synchronize_session=False)
+
+    # Liberar reservas y posiciones en lista de espera antes de eliminar la cuenta.
+    # Si no se hace, quedan registros huérfanos que siguen descontando cupos
+    # (obtener_disponibilidad_actividad) pero ya no aparecen en el listado de inscriptos
+    # (listar_clientes_actividad hace join con User).
+    reservas_activas = db.query(Reservation).filter(
+        Reservation.user_id == user_id,
+        Reservation.status.in_(["pending", "confirmed"]),
+    ).all()
+    activity_ids_liberados = [r.activity_id for r in reservas_activas]
+    for reserva in reservas_activas:
+        reserva.status = "cancelled"
+
+    entradas_espera = db.query(Waitlist).filter(
+        Waitlist.user_id == user_id,
+        Waitlist.status == "waiting",
+    ).all()
+    for entrada in entradas_espera:
+        entrada.status = "cancelled"
+        restantes = db.query(Waitlist).filter(
+            Waitlist.activity_id == entrada.activity_id,
+            Waitlist.waitlist_type == entrada.waitlist_type,
+            Waitlist.position > entrada.position,
+            Waitlist.status == "waiting",
+        ).order_by(Waitlist.position).all()
+        for idx, r in enumerate(restantes):
+            r.position = entrada.position + idx
+
+    db.commit()
+
+    for activity_id in activity_ids_liberados:
+        nueva_reserva = promote_next_waitlist_entry(activity_id, db)
+        if nueva_reserva:
+            uid_promovido = nueva_reserva.user_id
+            aid_promovido = nueva_reserva.activity_id
+
+            def _notif_async(uid: int, aid: int) -> None:
+                from app.utils.notifications import notify_waitlist_promoted
+                db_n = SessionLocal()
+                try:
+                    notify_waitlist_promoted(uid, aid, db_n)
+                except Exception:
+                    pass
+                finally:
+                    db_n.close()
+
+            Thread(target=_notif_async, args=(uid_promovido, aid_promovido), daemon=True).start()
 
     db.delete(user)
     db.commit()

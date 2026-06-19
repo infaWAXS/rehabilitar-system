@@ -12,7 +12,7 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
 from app.utils.subscriptions import is_abonado
-from app.utils.notifications import notify_activity_cancellation
+from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation, notify_activity_modified
 from database.connection import SessionLocal
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -23,7 +23,51 @@ def _extraer_dias(schedule: Optional[str]) -> set[str]:
         return set()
     schedule_lower = schedule.lower()
     return {dia for dia in DIAS_SEMANA if dia.lower() in schedule_lower}
+def _solapa_en_profesor(propuesta: Activity, existente: Activity) -> bool:
+    """True si el mismo profesor tiene solapamiento horario en cualquier sala."""
+    if not propuesta.professor or not existente.professor:
+        return False
+    if propuesta.professor.strip().lower() != existente.professor.strip().lower():
+        return False
 
+    dias_propuesta = _dias_actividad(propuesta)
+    dias_existente = _dias_actividad(existente)
+    if not dias_propuesta or not dias_existente or dias_propuesta.isdisjoint(dias_existente):
+        return False
+
+    inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
+    inicio_existente, fin_existente = _rango_horario(existente)
+    if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
+        return False
+
+    return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
+
+
+def _validar_disponibilidad_profesor(
+    actividad_propuesta: Activity,
+    db: Session,
+    excluir_activity_id: Optional[int] = None,
+) -> None:
+    if not actividad_propuesta.professor or actividad_propuesta.status != "active":
+        return
+
+    actividades_existentes = (
+        db.query(Activity)
+        .filter(
+            Activity.professor == actividad_propuesta.professor,
+            Activity.status == "active",
+        )
+        .all()
+    )
+
+    for existente in actividades_existentes:
+        if excluir_activity_id is not None and existente.id == excluir_activity_id:
+            continue
+        if _solapa_en_profesor(actividad_propuesta, existente):
+            raise HTTPException(
+                status_code=409,
+                detail=f"El profesor {actividad_propuesta.professor} ya tiene una actividad asignada en ese horario.",
+            )
 
 def _dia_desde_fecha(specific_date) -> Optional[str]:
     if not specific_date:
@@ -64,6 +108,22 @@ def _dias_actividad(activity: Activity) -> set[str]:
         dia = _dia_desde_fecha(activity.specific_date)
         return {dia} if dia else set()
     return _extraer_dias(activity.schedule)
+
+
+def _ya_paso(actividad: Activity, ahora: datetime) -> bool:
+    """True si la actividad ya comenzó o finalizó según su specific_date + horario."""
+    if not actividad.specific_date:
+        return False  # recurrente sin fecha puntual (legacy) -> siempre vigente
+
+    inicio, _ = _rango_horario(actividad)
+    if inicio is None:
+        return actividad.specific_date < ahora.date()
+
+    inicio_dt = datetime(
+        actividad.specific_date.year, actividad.specific_date.month, actividad.specific_date.day,
+        inicio // 60, inicio % 60,
+    )
+    return inicio_dt <= ahora
 
 
 def _solapa_en_sala(propuesta: Activity, existente: Activity) -> bool:
@@ -184,7 +244,9 @@ def listar_actividades(
     status: Optional[str] = "active",
     db: Session = None,
 ) -> List[Activity]:
-    """Lista actividades con filtros opcionales por sala, tipo y estado."""
+    """Lista actividades con filtros opcionales por sala, tipo y estado.
+    Cuando se filtra por status="active", excluye las que ya comenzaron o finalizaron.
+    """
     query = db.query(Activity)
     if room_id is not None:
         query = query.filter(Activity.room_id == room_id)
@@ -192,7 +254,14 @@ def listar_actividades(
         query = query.filter(Activity.activity_type == activity_type)
     if status is not None:
         query = query.filter(Activity.status == status)
-    return query.order_by(Activity.id).all()
+
+    actividades = query.order_by(Activity.id).all()
+
+    if status == "active":
+        ahora = datetime.now()
+        actividades = [a for a in actividades if not _ya_paso(a, ahora)]
+
+    return actividades
 
 
 def obtener_actividad(activity_id: int, db: Session) -> Activity:
@@ -301,6 +370,7 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
     cambios = datos.model_dump(exclude_unset=True)
+    profesor_anterior = actividad.professor
 
     valores_propuestos = {
         **{
@@ -334,7 +404,6 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
 
     _validar_disponibilidad_sala(actividad_propuesta, db, excluir_activity_id=actividad.id)
     _validar_disponibilidad_profesor(actividad_propuesta, db, excluir_activity_id=actividad.id)
-
     for campo, valor in cambios.items():
         setattr(actividad, campo, valor)
 
@@ -360,6 +429,20 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
 
     db.commit()
     db.refresh(actividad)
+
+    campos_relevantes = {"name", "specific_date", "time_slot", "room_id", "professor", "price"}
+    if cambios.keys() & campos_relevantes:
+        def _notif_edicion_async(aid: int, cam: dict, prof_ant: Optional[str]) -> None:
+            db_n = SessionLocal()
+            try:
+                notify_activity_modified(aid, cam, prof_ant, db_n)
+            except Exception:
+                pass
+            finally:
+                db_n.close()
+
+        Thread(target=_notif_edicion_async, args=(actividad.id, dict(cambios), profesor_anterior), daemon=True).start()
+
     return actividad
 
 
@@ -472,6 +555,58 @@ def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity
                         )
 
     actividad.professor = None
+    db.commit()
+    db.refresh(actividad)
+
+    def _notificar_renuncia_async(activity_id: int, prof_name: str) -> None:
+        db_notif = SessionLocal()
+        try:
+            notify_professor_resignation(activity_id, prof_name, db_notif)
+        except Exception:
+            pass
+        finally:
+            db_notif.close()
+
+    Thread(target=_notificar_renuncia_async, args=(actividad.id, nombre_completo), daemon=True).start()
+
+    return actividad
+
+
+def asumir_actividad(activity_id: int, current_user, db: Session) -> Activity:
+    """Asigna al profesor autenticado a una actividad disponible."""
+    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    if actividad.status != "active":
+        raise HTTPException(status_code=400, detail="La actividad no está activa.")
+
+    if actividad.professor:
+        raise HTTPException(status_code=409, detail="La actividad ya tiene profesor asignado.")
+
+    if not current_user.specialization:
+        raise HTTPException(status_code=400, detail="Tu perfil no tiene especialidad asignada.")
+
+    if current_user.specialization.strip().lower() != (actividad.specialization or "").strip().lower():
+        raise HTTPException(
+            status_code=409,
+            detail="No podés asumir esta actividad porque tu especialidad no coincide.",
+        )
+
+    nombre_completo = f"{current_user.name} {current_user.lastname}".strip()
+
+    actividad_propuesta = Activity(
+        room_id=actividad.room_id,
+        activity_type=actividad.activity_type,
+        schedule=actividad.schedule,
+        specific_date=actividad.specific_date,
+        time_slot=actividad.time_slot,
+        status="active",
+        professor=nombre_completo,
+    )
+    _validar_disponibilidad_profesor(actividad_propuesta, db)
+
+    actividad.professor = nombre_completo
     db.commit()
     db.refresh(actividad)
     return actividad

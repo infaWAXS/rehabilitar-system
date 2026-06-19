@@ -22,3 +22,4 @@ export function obtenerFeriadoArgentino(fechaTexto) {
     nombre: feriados[0].name || '',
   };
 }
+

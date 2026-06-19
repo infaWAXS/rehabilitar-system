@@ -12,4 +12,5 @@ class Notification(Base):
     title = Column(String, nullable=False)
     body = Column(String, nullable=False)
     read = Column(Boolean, nullable=False, default=False)
+    link = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())

@@ -1,4 +1,5 @@
 # Esquemas de notificaciones internas del sistema (in-app)
+from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -9,6 +10,7 @@ class NotificationResponse(BaseModel):
     title: str
     body: str
     read: bool
+    link: Optional[str] = None
     created_at: datetime
 
     class Config:

@@ -55,6 +55,10 @@ def _migrate(engine):
         if "notifications_enabled" not in cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN notifications_enabled BOOLEAN NOT NULL DEFAULT 1"))
             conn.commit()
+        notif_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(notifications)"))]
+        if "link" not in notif_cols:
+            conn.execute(text("ALTER TABLE notifications ADD COLUMN link TEXT"))
+            conn.commit()
 
 _migrate(engine)
 
