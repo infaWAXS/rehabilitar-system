@@ -28,3 +28,16 @@ export function deleteAttendanceComment(attendanceId) {
     method: 'DELETE',
   });
 }
+
+// Genera un código QR válido por 15 minutos para registrar asistencia a la actividad
+export function generateAttendanceQr(activityId) {
+  return apiRequest(`/attendances/qr/${activityId}`, { method: 'POST' });
+}
+
+// Registra la asistencia del usuario autenticado a partir de un código QR escaneado
+export function scanAttendanceQr(code) {
+  return apiRequest('/attendances/qr/scan', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+}

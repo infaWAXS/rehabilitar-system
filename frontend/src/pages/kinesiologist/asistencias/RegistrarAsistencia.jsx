@@ -1,7 +1,8 @@
 // Responsable: Ezequiel
-// HU: Registrar asistencia por DNI Â· Dejar/Modificar/Eliminar comentario
+// HU: Registrar asistencia por DNI · Dejar/Modificar/Eliminar comentario
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getActivityById } from '../../../services/activitiesService';
 import {
@@ -10,9 +11,16 @@ import {
   initializeAttendances,
   updateAttendanceComment,
   deleteAttendanceComment,
+  generateAttendanceQr,
 } from '../../../services/attendanceService';
 
 const s = {
+  layout: (isMobile) => ({
+    display: 'flex',
+    flexDirection: isMobile ? 'column' : 'row',
+    gap: isMobile ? '0' : '24px',
+    alignItems: 'flex-start',
+  }),
   contenedor: { maxWidth: '640px' },
   cabecera: { marginBottom: '24px' },
   titulo: { fontSize: '22px', fontWeight: '700', color: 'var(--color-texto)', margin: '0 0 6px' },
@@ -97,6 +105,20 @@ const s = {
     color: 'var(--color-texto-suave)', fontSize: '13px',
     background: 'var(--color-fondo-card)', borderRadius: '10px',
   },
+  // Panel del código QR
+  qrPanel: {
+    background: 'var(--color-fondo-card)', borderRadius: '10px',
+    padding: '20px', textAlign: 'center', flexShrink: 0,
+    marginBottom: '24px',
+  },
+  qrTitulo: {
+    fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)',
+    margin: '0 0 12px',
+  },
+  qrTexto: {
+    fontSize: '12px', color: 'var(--color-texto-suave)',
+    marginTop: '12px', maxWidth: '200px',
+  },
 };
 
 export default function RegistrarAsistencia() {
@@ -122,6 +144,20 @@ export default function RegistrarAsistencia() {
   const [editandoId, setEditandoId] = useState(null);
   const [comentarioEdit, setComentarioEdit] = useState('');
   const [guardando, setGuardando] = useState(false);
+
+  // Código QR de asistencia
+  const [qrData, setQrData] = useState(null);
+  const [generandoQr, setGenerandoQr] = useState(false);
+  const [errorQr, setErrorQr] = useState('');
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     getActivityById(actividadId)
@@ -169,6 +205,19 @@ export default function RegistrarAsistencia() {
     }
   }
 
+  async function handleGenerarQr() {
+    setGenerandoQr(true);
+    setErrorQr('');
+    try {
+      const data = await generateAttendanceQr(actividadId);
+      setQrData(data);
+    } catch (e) {
+      setErrorQr(e?.message || 'No se pudo generar el código QR.');
+    } finally {
+      setGenerandoQr(false);
+    }
+  }
+
   function iniciarEdicion(asistencia) {
     setEditandoId(asistencia.id);
     setComentarioEdit(asistencia.comment || '');
@@ -209,13 +258,24 @@ export default function RegistrarAsistencia() {
     }
   }
 
+  const qrPanel = qrData && (
+    <div style={s.qrPanel}>
+      <h3 style={s.qrTitulo}>Código QR de asistencia</h3>
+      <QRCodeSVG value={`${window.location.origin}/asistencia/qr/${qrData.code}`} size={180} />
+      <p style={s.qrTexto}>
+        Válido por 15 minutos. Los alumnos pueden escanearlo para registrar su asistencia.
+      </p>
+    </div>
+  );
+
   return (
     <LayoutPrivado>
-      <div style={s.contenedor}>
-        <div style={s.cabecera}>
-          <h1 style={s.titulo}>Asistencias</h1>
-          <p style={s.subtitulo}>RegistrÃ¡ asistencias y gestionÃ¡ comentarios.</p>
-        </div>
+      <div style={s.layout(isMobile)}>
+        <div style={s.contenedor}>
+          <div style={s.cabecera}>
+            <h1 style={s.titulo}>Asistencias</h1>
+            <p style={s.subtitulo}>Registrar asistencias y gestionar comentarios.</p>
+          </div>
 
         {/* Banner de actividad */}
         {cargandoAct ? (
@@ -272,12 +332,14 @@ export default function RegistrarAsistencia() {
             <textarea
               id="comment"
               style={s.textarea}
-              placeholder="Ej: Buen desempeÃ±o"
+              placeholder="Ej: Buen desempeño"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               disabled={enviando}
             />
           </div>
+          {errorQr && <div style={s.alerta('error')}>{errorQr}</div>}
+
           <div style={s.botones}>
             <button
               type="button"
@@ -288,6 +350,14 @@ export default function RegistrarAsistencia() {
               Volver
             </button>
             <button
+              type="button"
+              style={{ ...s.botonSecundario, opacity: generandoQr ? 0.7 : 1 }}
+              onClick={handleGenerarQr}
+              disabled={generandoQr}
+            >
+              {generandoQr ? 'Generando...' : 'Generar QR'}
+            </button>
+            <button
               type="submit"
               style={{ ...s.botonPrimario, opacity: enviando ? 0.7 : 1 }}
               disabled={enviando || !dni.trim()}
@@ -296,6 +366,8 @@ export default function RegistrarAsistencia() {
             </button>
           </div>
         </form>
+
+        {isMobile && qrPanel}
 
         <div style={s.divisor} />
 
@@ -310,7 +382,7 @@ export default function RegistrarAsistencia() {
         {cargandoLista ? (
           <div style={s.vacio}>Cargando asistencias...</div>
         ) : asistencias.length === 0 ? (
-          <div style={s.vacio}>AÃºn no hay asistencias registradas para esta actividad.</div>
+          <div style={s.vacio}>No hay asistencias registradas para esta actividad.</div>
         ) : (
           <table style={s.tabla}>
             <thead>
@@ -396,6 +468,8 @@ export default function RegistrarAsistencia() {
             </tbody>
           </table>
         )}
+        </div>
+        {!isMobile && qrPanel}
       </div>
     </LayoutPrivado>
   );

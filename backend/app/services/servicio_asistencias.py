@@ -1,7 +1,11 @@
 # Responsable: Ezequiel - lógica de negocio de asistencias
+import uuid
+from datetime import datetime, timedelta
+
 from sqlalchemy.orm import Session
 
 from app.models.attendance import Attendance
+from app.models.attendance_qr import AttendanceQrCode
 from app.models.user import User
 from app.models.activity import Activity
 from app.models.reservation import Reservation
@@ -12,7 +16,11 @@ from app.exceptions.http_exceptions import (
     attendance_already_exists_exception,
     attendance_already_marked_exception,
     user_not_enrolled_exception,
+    qr_not_found_exception,
+    qr_expired_exception,
 )
+
+QR_VALIDITY_MINUTES = 15
 
 
 def pregenerar_ausentes(activity_id: int, db: Session):
@@ -48,17 +56,13 @@ def pregenerar_ausentes(activity_id: int, db: Session):
     return {"creados": creados, "actividad_id": activity_id}
 
 
-def marcar_asistencia_por_dni(dni: str, activity_id: int, comment: str | None, db: Session):
-    user = db.query(User).filter(User.dni == dni).first()
-    if not user:
-        raise user_not_found_exception()
-
+def _registrar_presente(user_id: int, activity_id: int, db: Session, comment: str | None = None):
     activity = db.query(Activity).filter(Activity.id == activity_id).first()
     if not activity:
         raise activity_not_found_exception()
 
     enrolled = db.query(Reservation).filter(
-        Reservation.user_id == user.id,
+        Reservation.user_id == user_id,
         Reservation.activity_id == activity_id,
         Reservation.status != "cancelled",
     ).first()
@@ -66,7 +70,7 @@ def marcar_asistencia_por_dni(dni: str, activity_id: int, comment: str | None, d
         raise user_not_enrolled_exception()
 
     existing = db.query(Attendance).filter(
-        Attendance.user_id == user.id,
+        Attendance.user_id == user_id,
         Attendance.activity_id == activity_id,
     ).first()
 
@@ -83,7 +87,7 @@ def marcar_asistencia_por_dni(dni: str, activity_id: int, comment: str | None, d
 
     # No existe aún → crear directamente como "present"
     attendance = Attendance(
-        user_id=user.id,
+        user_id=user_id,
         activity_id=activity_id,
         status="present",
         comment=comment,
@@ -92,6 +96,41 @@ def marcar_asistencia_por_dni(dni: str, activity_id: int, comment: str | None, d
     db.commit()
     db.refresh(attendance)
     return attendance
+
+
+def marcar_asistencia_por_dni(dni: str, activity_id: int, comment: str | None, db: Session):
+    user = db.query(User).filter(User.dni == dni).first()
+    if not user:
+        raise user_not_found_exception()
+
+    return _registrar_presente(user.id, activity_id, db, comment)
+
+
+def generar_qr_asistencia(activity_id: int, db: Session) -> AttendanceQrCode:
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise activity_not_found_exception()
+
+    qr = AttendanceQrCode(
+        code=uuid.uuid4().hex,
+        activity_id=activity_id,
+        expires_at=datetime.utcnow() + timedelta(minutes=QR_VALIDITY_MINUTES),
+    )
+    db.add(qr)
+    db.commit()
+    db.refresh(qr)
+    return qr
+
+
+def registrar_asistencia_por_qr(code: str, user_id: int, db: Session) -> Attendance:
+    qr = db.query(AttendanceQrCode).filter(AttendanceQrCode.code == code).first()
+    if not qr:
+        raise qr_not_found_exception()
+
+    if qr.expires_at < datetime.utcnow():
+        raise qr_expired_exception()
+
+    return _registrar_presente(user_id, qr.activity_id, db)
 
 
 

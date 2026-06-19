@@ -1,23 +1,13 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
-
 import { useNavigate, useParams } from 'react-router-dom';
-
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
-
 import { getRooms } from '../../../services/roomsService';
-
 import { getActivityById, updateActivity, getActivities } from '../../../services/activitiesService';
-
 import { searchUsers } from '../../../services/usersService';
-
-import { obtenerFeriadoArgentino } from '../../../utils/feriados';
 
 
 
 // Constantes 
-
-
-
 const ESPECIALIZACIONES = [
 
   'Kinesiologia deportiva',
