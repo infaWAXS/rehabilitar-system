@@ -90,7 +90,7 @@ function App() {
 
         {/* Admin — Actividades */}
         <Route path="/admin/actividades" element={<ListaActividades />} />
-        <Route path="/admin/actividades/sugerencias" element={<SugerenciasPendientes />} />
+        <Route path="/admin/sugerencias" element={<SugerenciasPendientes />} />
         <Route path="/admin/actividades/crear" element={<CrearActividad />} />
         <Route path="/admin/actividades/editar/:id" element={<EditarActividad />} />
         <Route path="/admin/actividades/:id/lista-espera" element={<VerListaEsperaAdmin />} />
