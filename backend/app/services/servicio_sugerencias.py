@@ -10,6 +10,11 @@ from app.models.room import Room
 from app.schemas.esquema_sugerencias import SuggestionCreate, SuggestionResponse
 from app.schemas.esquema_actividad import ActivityCreate
 from app.services import servicio_actividades
+from app.utils.notifications import (
+    notify_activity_suggestion_created,
+    notify_activity_suggestion_accepted,
+    notify_activity_suggestion_rejected,
+)
 
 
 def _serializar_fechas(fechas: Optional[List[date_cls]]) -> Optional[str]:
@@ -76,6 +81,9 @@ def crear_sugerencia(datos: SuggestionCreate, current_user, db: Session) -> Sugg
     db.add(sugerencia)
     db.commit()
     db.refresh(sugerencia)
+
+    notify_activity_suggestion_created(sugerencia, db)
+
     return _a_response(sugerencia)
 
 
@@ -128,6 +136,8 @@ def aceptar_sugerencia(suggestion_id: int, price: Decimal, db: Session):
     sugerencia.status = "accepted"
     db.commit()
 
+    notify_activity_suggestion_accepted(sugerencia, db)
+
     return actividades
 
 
@@ -136,4 +146,7 @@ def rechazar_sugerencia(suggestion_id: int, db: Session) -> SuggestionResponse:
     sugerencia.status = "rejected"
     db.commit()
     db.refresh(sugerencia)
+
+    notify_activity_suggestion_rejected(sugerencia, db)
+
     return _a_response(sugerencia)

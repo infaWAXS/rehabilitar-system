@@ -504,6 +504,62 @@ def notify_reintegration_requested(cliente_id: int, db: Session) -> None:
             logger.exception("Error notificando al admin %s sobre solicitud de reintegro de cliente %s", admin.id, cliente_id)
 
 
+def notify_activity_suggestion_created(suggestion, db: Session) -> None:
+    """Notifica a todos los administradores (solo in-app) que un profesor sugirió una actividad."""
+    profesor = suggestion.professor
+    nombre = f"{profesor.name} {profesor.lastname}" if profesor else "Un profesor"
+    titulo_actividad = suggestion.name or suggestion.specialization
+
+    admins = db.query(User).filter(User.role == "admin").all()
+    for admin in admins:
+        try:
+            crear_notificacion(
+                admin.id,
+                f"Nueva sugerencia de actividad: {titulo_actividad}",
+                f"{nombre} sugirió la actividad \"{titulo_actividad}\". Revisala en el panel de sugerencias.",
+                db,
+                link="/admin/sugerencias",
+            )
+        except Exception:
+            logger.exception("Error notificando al admin %s sobre nueva sugerencia %s", admin.id, suggestion.id)
+
+
+def notify_activity_suggestion_accepted(suggestion, db: Session) -> None:
+    """Notifica al profesor (solo in-app) que su sugerencia de actividad fue aceptada."""
+    profesor = suggestion.professor
+    if not profesor:
+        return
+    titulo_actividad = suggestion.name or suggestion.specialization
+    try:
+        crear_notificacion(
+            profesor.id,
+            f"Sugerencia aceptada: {titulo_actividad}",
+            f"Tu sugerencia de actividad \"{titulo_actividad}\" fue aceptada y ya está disponible.",
+            db,
+            link="/profesor/actividades",
+        )
+    except Exception:
+        logger.exception("Error notificando al profesor %s sobre aceptación de sugerencia %s", profesor.id, suggestion.id)
+
+
+def notify_activity_suggestion_rejected(suggestion, db: Session) -> None:
+    """Notifica al profesor (solo in-app) que su sugerencia de actividad fue rechazada."""
+    profesor = suggestion.professor
+    if not profesor:
+        return
+    titulo_actividad = suggestion.name or suggestion.specialization
+    try:
+        crear_notificacion(
+            profesor.id,
+            f"Sugerencia rechazada: {titulo_actividad}",
+            f"Tu sugerencia de actividad \"{titulo_actividad}\" fue rechazada por un administrador.",
+            db,
+            link="/profesor/actividades",
+        )
+    except Exception:
+        logger.exception("Error notificando al profesor %s sobre rechazo de sugerencia %s", profesor.id, suggestion.id)
+
+
 def notify_account_suspended(cliente_id: int, motivo: str, db: Session) -> None:
     """Notifica al cliente (email + in-app) que su cuenta fue suspendida."""
     cliente = db.query(User).filter(User.id == cliente_id).first()

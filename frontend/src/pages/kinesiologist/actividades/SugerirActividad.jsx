@@ -335,7 +335,6 @@ function SugerirActividad() {
       });
       setConfirmando(false);
       setExito('Tu sugerencia fue enviada. Queda pendiente de aprobación por un administrador.');
-      setTimeout(() => navigate('/profesor/actividades'), 2000);
     } catch (err) {
       setConfirmando(false);
       setError(err.message || 'No se pudo enviar la sugerencia.');
@@ -363,7 +362,14 @@ function SugerirActividad() {
         </p>
 
         {error && <div style={s.error}>{error}</div>}
-        {exito && <div style={{ ...s.error, background: '#f0fdf4', borderColor: '#bbf7d0', color: '#15803d' }}>{exito}</div>}
+        {exito && (
+          <>
+            <div style={{ ...s.error, background: '#f0fdf4', borderColor: '#bbf7d0', color: '#15803d' }}>{exito}</div>
+            <button style={s.botonPrimario} onClick={() => navigate('/profesor/actividades')}>
+              Volver a Mis Actividades
+            </button>
+          </>
+        )}
 
         {!exito && (
           <form onSubmit={handleSubmit}>
