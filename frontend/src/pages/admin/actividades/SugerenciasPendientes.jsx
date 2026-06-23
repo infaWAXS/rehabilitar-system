@@ -51,6 +51,12 @@ const s = {
     padding: '8px 18px', border: 'none', borderRadius: '8px', cursor: 'pointer',
     background: '#f1f1f1', color: '#333', fontWeight: '600', fontSize: '13px',
   },
+  confirmModal: {
+    backgroundColor: '#fff', borderRadius: '16px', padding: '28px',
+    width: '90%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '14px',
+  },
+  confirmTitulo: { fontSize: '18px', fontWeight: 'bold', color: '#111' },
+  confirmTexto: { fontSize: '14px', color: '#444', lineHeight: '1.5' },
 };
 
 function SugerenciasPendientes() {
@@ -60,6 +66,7 @@ function SugerenciasPendientes() {
   const [procesando, setProcesando] = useState({});
   const [seleccionada, setSeleccionada] = useState(null);
   const [precio, setPrecio] = useState('');
+  const [confirmRechazo, setConfirmRechazo] = useState(null);
 
   const cargar = async () => {
     setCargando(true);
@@ -88,7 +95,7 @@ function SugerenciasPendientes() {
     try {
       await rejectSuggestion(id);
       setMensajes((prev) => ({ ...prev, [id]: { tipo: 'err', texto: 'Sugerencia rechazada.' } }));
-      setTimeout(() => setSugerencias((prev) => prev.filter((c) => c.id !== id)), 1200);
+      setTimeout(() => setSugerencias((prev) => prev.filter((c) => c.id !== id)), 7500);
     } catch (err) {
       setMensajes((prev) => ({ ...prev, [id]: { tipo: 'err', texto: err.message || 'Error al rechazar.' } }));
     } finally {
@@ -101,7 +108,7 @@ function SugerenciasPendientes() {
     try {
       await acceptSuggestion(id, Number(precioIngresado));
       setMensajes((prev) => ({ ...prev, [id]: { tipo: 'ok', texto: 'Sugerencia aceptada. La actividad ya está disponible.' } }));
-      setTimeout(() => setSugerencias((prev) => prev.filter((c) => c.id !== id)), 1200);
+      setTimeout(() => setSugerencias((prev) => prev.filter((c) => c.id !== id)), 7500);
     } catch (err) {
       setMensajes((prev) => ({ ...prev, [id]: { tipo: 'err', texto: err.message || 'Error al aceptar.' } }));
     } finally {
@@ -205,7 +212,7 @@ function SugerenciasPendientes() {
                 style={s.btnRechazar}
                 disabled={procesando[seleccionada.id]}
                 onClick={() => {
-                  manejarRechazo(seleccionada.id);
+                  setConfirmRechazo({ id: seleccionada.id, nombre: seleccionada.name || seleccionada.specialization });
                   setSeleccionada(null);
                 }}
               >
@@ -213,6 +220,37 @@ function SugerenciasPendientes() {
               </button>
               <button style={s.btnCerrar} onClick={() => setSeleccionada(null)}>
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmRechazo && (
+        <div style={s.modalOverlay}>
+          <div style={s.confirmModal}>
+            <p style={s.confirmTitulo}>Confirmar rechazo</p>
+            <p style={s.confirmTexto}>
+              ¿Estás seguro/a de que querés rechazar la sugerencia <strong>{confirmRechazo.nombre}</strong>?
+              Esta acción no se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                style={s.btnCerrar}
+                onClick={() => setConfirmRechazo(null)}
+                disabled={procesando[confirmRechazo.id]}
+              >
+                Cancelar
+              </button>
+              <button
+                style={s.btnRechazar}
+                disabled={procesando[confirmRechazo.id]}
+                onClick={() => {
+                  manejarRechazo(confirmRechazo.id);
+                  setConfirmRechazo(null);
+                }}
+              >
+                {procesando[confirmRechazo.id] ? 'Procesando...' : 'Sí, rechazar'}
               </button>
             </div>
           </div>

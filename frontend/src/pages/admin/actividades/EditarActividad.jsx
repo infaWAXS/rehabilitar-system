@@ -1,1102 +1,319 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getRooms } from '../../../services/roomsService';
 import { getActivityById, updateActivity, getActivities } from '../../../services/activitiesService';
 import { searchUsers } from '../../../services/usersService';
 
-
-
-// Constantes 
-const ESPECIALIZACIONES = [
-
-  'Kinesiologia deportiva',
-
-  'Fisioterapia',
-
-  'Kinesiologia neurologica',
-
-  'Rehabilitacion cardiovascular',
-
-  'Kinesiologia traumatologica',
-
-  'Pilates terapeutico',
-
-  'Kinesiologia pediatrica',
-
-  'Osteopatia',
-
-  'Acupuntura',
-
-  'Masoterapia',
-
-  'Kinesiologia respiratoria',
-
-  'Rehabilitacion post-quirurgica',
-
-  'Kinesiologia gerontologica',
-
-  'Electroterapia',
-
-];
-
-
-
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
-
-
-const HORAS = Array.from({ length: 8 }, (_, i) => {
-
-  const h = 9 + i;
-
-  return { valor: `${String(h).padStart(2, '0')}:00`, label: `${String(h).padStart(2, '0')}:00 - ${String(h + 1).padStart(2, '0')}:00` };
-
-});
-
-
-
-function esFinDeSemana(fechaTexto) {
-
-  if (!fechaTexto) return false;
-
-  const fecha = new Date(`${fechaTexto}T00:00:00`);
-
-  if (Number.isNaN(fecha.getTime())) return false;
-
-  const dia = fecha.getDay();
-
-  return dia === 0 || dia === 6;
-
-}
-
-
-
 function parseMinutes(texto) {
-
   if (!texto) return null;
-
   const m = texto.match(/(\d{1,2}):(\d{2})/);
-
   if (!m) return null;
-
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-
 }
 
-
+/** Extrae la hora de inicio de una actividad (time_slot o primer horario del schedule) */
+function parseHora(activity) {
+  if (activity.time_slot) return activity.time_slot;
+  if (activity.schedule) {
+    const partes = activity.schedule.split(' · ');
+    if (partes[1]) return partes[1].split('–')[0].trim();
+  }
+  return '';
+}
 
 function rangoDeActividad(act) {
-
   if (act.activity_type === 'individual') {
-
     const inicio = parseMinutes(act.time_slot);
-
     return inicio !== null ? [inicio, inicio + 60] : [null, null];
-
   }
-
-
 
   const matches = [...(act.schedule || '').matchAll(/(\d{1,2}):(\d{2})/g)];
-
   if (matches.length >= 2) {
-
     return [
-
       parseInt(matches[0][1], 10) * 60 + parseInt(matches[0][2], 10),
-
       parseInt(matches[1][1], 10) * 60 + parseInt(matches[1][2], 10),
-
     ];
-
   }
-
-
 
   const inicio = parseMinutes(act.time_slot || act.schedule);
-
   return inicio !== null ? [inicio, inicio + 60] : [null, null];
-
 }
-
-
 
 function diasDeActividad(act) {
-
   if (act.activity_type === 'individual') {
-
     if (!act.specific_date) return new Set();
-
     const d = new Date(`${act.specific_date}T00:00:00`);
-
     return new Set([DIAS_SEMANA[d.getDay()]]);
-
   }
-
-
 
   const s = (act.schedule || '').toLowerCase();
-
   return new Set(DIAS.filter((dia) => s.includes(dia.toLowerCase())));
-
 }
-
-
 
 function solapaHorario(inicioA, inicioB, finB) {
-
   return inicioA < finB && inicioB < inicioA + 60;
-
 }
-
-
 
 function useOcupaciones(actividadesActivas) {
-
   return useMemo(() => {
-
     return function ocupada(roomId, dia, horaInicio) {
-
       if (!roomId || !dia || !horaInicio) return false;
-
       const inicio = parseMinutes(horaInicio);
-
       if (inicio === null) return false;
 
-
-
       return actividadesActivas.some((act) => {
-
         if (act.room_id !== Number(roomId)) return false;
-
         const dias = diasDeActividad(act);
-
         if (!dias.has(dia)) return false;
-
         const [inicioExist, finExist] = rangoDeActividad(act);
-
         if (inicioExist === null) return false;
-
         return solapaHorario(inicio, inicioExist, finExist);
-
       });
-
     };
-
   }, [actividadesActivas]);
-
 }
-
-
-
-// ?????? Estilos ????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
-
-
-
-const s = {
-
-  card: {
-
-    background: 'var(--color-fondo-card)',
-
-    borderRadius: '12px',
-
-    padding: '32px',
-
-    boxShadow: 'var(--sombra)',
-
-    maxWidth: '720px',
-
-  },
-
-  titulo: { fontSize: '20px', fontWeight: '700', color: 'var(--color-texto)', marginBottom: '24px' },
-
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' },
-
-  gridFull: { gridColumn: '1 / -1' },
-
-  grupo: { display: 'flex', flexDirection: 'column', gap: '6px' },
-
-  label: { fontSize: '13px', fontWeight: '600', color: 'var(--color-texto-suave)' },
-
-  input: {
-
-    padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-borde)',
-
-    fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto)',
-
-    boxSizing: 'border-box', width: '100%',
-
-  },
-
-  textarea: {
-
-    padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-borde)',
-
-    fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto)',
-
-    width: '100%', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box',
-
-  },
-
-  select: {
-
-    padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-borde)',
-
-    fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto)',
-
-    width: '100%', cursor: 'pointer',
-
-  },
-
-  diasRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
-
-  diaBtn: (activo) => ({
-
-    padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
-
-    cursor: 'pointer', border: '1px solid',
-
-    borderColor: activo ? 'var(--color-primario)' : 'var(--color-borde)',
-
-    background: activo ? 'var(--color-primario)' : 'transparent',
-
-    color: activo ? '#fff' : 'var(--color-texto)',
-
-    transition: 'all 0.15s',
-
-  }),
-
-  hint: { fontSize: '12px', color: 'var(--color-texto-suave)', marginTop: '2px' },
-
-  acciones: { display: 'flex', gap: '12px', marginTop: '28px' },
-
-  botonPrimario: {
-
-    padding: '11px 28px', borderRadius: '8px', border: 'none',
-
-    background: 'var(--color-primario)', color: '#fff',
-
-    fontSize: '14px', fontWeight: '600', cursor: 'pointer',
-
-  },
-
-  botonSecundario: {
-
-    padding: '11px 24px', borderRadius: '8px', border: '1px solid var(--color-borde)',
-
-    background: 'transparent', color: 'var(--color-texto)',
-
-    fontSize: '14px', fontWeight: '600', cursor: 'pointer',
-
-  },
-
-  error: {
-
-    background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px',
-
-    padding: '10px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '20px',
-
-  },
-
-  cargando: { padding: '48px', textAlign: 'center', color: 'var(--color-texto-suave)' },
-
-};
-
-
-
-// ?????? Helpers ????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
-
-
-
-/** Extrae los d??as seleccionados de un schedule como "Lunes, Mi??rcoles ?? 09:00???10:00" */
-
-function parseDias(schedule) {
-
-  if (!schedule) return [];
-
-  const [diasParte] = schedule.split(' ?? ');
-
-  return diasParte ? diasParte.split(', ').filter((d) => DIAS.includes(d)) : [];
-
-}
-
-
-
-/** Extrae la hora de inicio de un schedule o time_slot */
-
-function parseHora(activity) {
-
-  if (activity.time_slot) return activity.time_slot;
-
-  if (activity.schedule) {
-
-    const partes = activity.schedule.split(' ?? ');
-
-    if (partes[1]) return partes[1].split('???')[0].trim();
-
-  }
-
-  return '';
-
-}
-
-
 
 function esMismoProfesor(profesorA, profesorB) {
-
   return profesorA.trim().toLowerCase() === profesorB.trim().toLowerCase();
-
 }
 
-
-
-// ?????? Componente ???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
-
-
+const s = {
+  card: {
+    background: 'var(--color-fondo-card)',
+    borderRadius: '12px',
+    padding: '32px',
+    boxShadow: 'var(--sombra)',
+    maxWidth: '640px',
+  },
+  titulo: { fontSize: '20px', fontWeight: '700', color: 'var(--color-texto)', marginBottom: '8px' },
+  subtitulo: { fontSize: '13px', color: 'var(--color-texto-suave)', marginBottom: '24px' },
+  resumen: {
+    background: 'var(--color-fondo)', borderRadius: '8px', padding: '14px 18px',
+    marginBottom: '24px', fontSize: '14px', lineHeight: '1.7', color: 'var(--color-texto)',
+  },
+  grupo: { display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '18px' },
+  label: { fontSize: '13px', fontWeight: '600', color: 'var(--color-texto-suave)' },
+  select: {
+    padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-borde)',
+    fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto)',
+    width: '100%', cursor: 'pointer',
+  },
+  hint: { fontSize: '12px', color: 'var(--color-texto-suave)', marginTop: '2px' },
+  acciones: { display: 'flex', gap: '12px', marginTop: '12px' },
+  botonPrimario: {
+    padding: '11px 28px', borderRadius: '8px', border: 'none',
+    background: 'var(--color-primario)', color: '#fff',
+    fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+  },
+  botonSecundario: {
+    padding: '11px 24px', borderRadius: '8px', border: '1px solid var(--color-borde)',
+    background: 'transparent', color: 'var(--color-texto)',
+    fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+  },
+  error: {
+    background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px',
+    padding: '10px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '20px',
+  },
+  cargando: { padding: '48px', textAlign: 'center', color: 'var(--color-texto-suave)' },
+};
 
 function EditarActividad() {
-
   const { id } = useParams();
-
   const navigate = useNavigate();
 
-
-
-  const [form, setForm] = useState(null);
-
-  const [horaInicio, setHoraInicio] = useState('');
-
+  const [actividad, setActividad] = useState(null); // datos de solo lectura
+  const [roomId, setRoomId] = useState('');
+  const [professor, setProfessor] = useState('');
   const [salas, setSalas] = useState([]);
-
   const [profesores, setProfesores] = useState([]);
-
   const [actividadesActivas, setActividadesActivas] = useState([]);
-
   const [error, setError] = useState('');
-
   const [guardando, setGuardando] = useState(false);
 
-  const feriadoSeleccionado = useMemo(
-
-    () => obtenerFeriadoArgentino(form?.specific_date),
-
-    [form?.specific_date]
-
-  );
-
-
-
-  const esIndividual = form?.activity_type === 'individual';
-
-  // Excluye la actividad actual y las actividades hermanas (mismo día-semana pero distinta
-  // specific_date) para que no bloqueen falsamente la sala/horario al editar una repetición.
-  const actividadesParaColision = useMemo(
-    () => actividadesActivas.filter((a) => {
-      if (a.id === Number(id)) return false;
-      if (form?.specific_date && a.specific_date && a.specific_date !== form.specific_date) return false;
-      return true;
-    }),
-    [actividadesActivas, id, form?.specific_date]
-  );
-
-  const ocupada = useOcupaciones(actividadesParaColision);
-
-
-
-  // Carga actividad, salas y actividades activas
-
+  // Carga la actividad, las salas y las actividades activas (para chequear disponibilidad)
   useEffect(() => {
-
     Promise.all([
-
       getActivityById(id),
-
       getRooms(),
-
       getActivities({ status: 'active' }),
-
     ])
-
-      .then(([actividad, rooms, acts]) => {
-
+      .then(([act, rooms, acts]) => {
+        setActividad(act);
+        setRoomId(act.room_id ?? '');
+        setProfessor(act.professor ?? '');
         setSalas(rooms);
-
         setActividadesActivas(Array.isArray(acts) ? acts : []);
-
-        setHoraInicio(parseHora(actividad));
-
-        setForm({
-
-          name:          actividad.name ?? '',
-
-          specialization: actividad.specialization ?? '',
-
-          room_id:       actividad.room_id ?? '',
-
-          activity_type: actividad.activity_type ?? 'fixed',
-
-          price:         actividad.price ?? '',
-
-          capacity:      actividad.capacity ?? '',
-
-          description:   actividad.description ?? '',
-
-          requirements:  actividad.requirements ?? '',
-
-          specific_date: actividad.specific_date ?? '',
-
-          professor:     actividad.professor ?? '',
-
-        });
-
       })
-
       .catch(() => setError('No se pudo cargar la actividad.'));
-
   }, [id]);
 
-
-
-  // Recarga profesores cuando cambia la especialidad
-
+  // Profesores con la misma especialidad que la actividad
   useEffect(() => {
-
-    if (!form?.specialization) { setProfesores([]); return; }
-
+    if (!actividad?.specialization) { setProfesores([]); return; }
     searchUsers('', 'professor', 'active')
-
       .then((lista) => {
-
         const filtrados = (Array.isArray(lista) ? lista : []).filter(
-
-          (p) => p.specialization === form.specialization
-
+          (p) => p.specialization === actividad.specialization
         );
-
         setProfesores(filtrados);
-
       })
-
       .catch(() => setProfesores([]));
+  }, [actividad?.specialization]);
 
-  }, [form?.specialization]);
+  // Excluye la actividad actual de los chequeos de colisión
+  const actividadesParaColision = useMemo(
+    () => actividadesActivas.filter((a) => a.id !== Number(id)),
+    [actividadesActivas, id]
+  );
+  const ocupada = useOcupaciones(actividadesParaColision);
 
-  
+  const diaActividad = actividad?.specific_date
+    ? DIAS_SEMANA[new Date(`${actividad.specific_date}T00:00:00`).getDay()]
+    : null;
+  const horaActividad = actividad ? parseHora(actividad) : '';
+  const salaOriginal = useMemo(
+    () => salas.find((sala) => sala.id === actividad?.room_id),
+    [salas, actividad?.room_id]
+  );
 
+  // Salas disponibles: con capacidad >= la del aula asignada originalmente y libres
+  // en el día/horario fijo de esta actividad
+  const salasDisponibles = useMemo(() => {
+    let candidatas = salaOriginal
+      ? salas.filter((sala) => sala.capacity >= salaOriginal.capacity)
+      : salas;
+    if (!diaActividad || !horaActividad) return candidatas;
+    return candidatas.filter((sala) => !ocupada(sala.id, diaActividad, horaActividad));
+  }, [salas, salaOriginal, diaActividad, horaActividad, ocupada]);
+
+  // Profesores disponibles para el día/horario fijo de esta actividad
   const profesoresDisponibles = useMemo(() => {
-    if (!form?.specialization) return [];
-    if (!form?.specific_date || !horaInicio) return profesores;
-    const diaFormulario = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
+    if (!actividad?.specialization) return [];
+    if (!diaActividad || !horaActividad) return profesores;
     return profesores.filter((profesor) => {
       const nombreCompleto = `${profesor.name} ${profesor.lastname}`;
-      return !actividadesActivas.some((actividad) => {
-        if (actividad.id === Number(id)) return false;
-        if (!actividad.professor) return false;
-        if (!esMismoProfesor(actividad.professor, nombreCompleto)) return false;
-        const diasActividad = diasDeActividad(actividad);
-        if (!diasActividad.has(diaFormulario)) return false;
-        const [inicioExist, finExist] = rangoDeActividad(actividad);
+      return !actividadesActivas.some((act) => {
+        if (act.id === Number(id)) return false;
+        if (!act.professor) return false;
+        if (!esMismoProfesor(act.professor, nombreCompleto)) return false;
+        const diasAct = diasDeActividad(act);
+        if (!diasAct.has(diaActividad)) return false;
+        const [inicioExist, finExist] = rangoDeActividad(act);
         if (inicioExist === null) return false;
-        const inicioProp = parseMinutes(horaInicio);
+        const inicioProp = parseMinutes(horaActividad);
         return inicioProp < finExist && inicioExist < inicioProp + 60;
       });
     });
-  }, [profesores, actividadesActivas, horaInicio, form?.specific_date, id]);
-
-
-
-  const salasDisponibles = useMemo(() => {
-    if (!form?.specific_date || !horaInicio) return salas;
-    const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
-    return salas.filter((sala) => !ocupada(sala.id, dia, horaInicio));
-  }, [salas, form?.specific_date, horaInicio, ocupada]);
-
-
-
-  const horasDisponibles = useMemo(() => {
-    if (!form?.room_id || !form?.specific_date) return HORAS;
-    const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
-    return HORAS.filter((hora) => !ocupada(form.room_id, dia, hora.valor));
-  }, [form?.room_id, form?.specific_date, ocupada]);
-
-
-
-  useEffect(() => {
-
-    if (form?.room_id && !salasDisponibles.find((sala) => sala.id === Number(form.room_id))) {
-
-      setForm((prev) => ({ ...prev, room_id: '' }));
-
-    }
-
-  }, [salasDisponibles, form?.room_id]);
-
-
-
-  useEffect(() => {
-
-    if (horaInicio && !horasDisponibles.find((hora) => hora.valor === horaInicio)) {
-
-      setHoraInicio('');
-
-    }
-
-  }, [horasDisponibles, horaInicio]);
-
-
-
-
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    let newValue = value;
-    
-    // Validación especial para precio: solo números y un punto
-    if (name === 'price') {
-      newValue = value.replace(/[^0-9.]/g, ''); // solo números y punto
-      const parts = newValue.split('.');
-      if (parts.length > 2) newValue = parts[0] + '.' + parts.slice(1).join(''); // solo un punto
-    }
-    
-    // Validación especial para cupos: solo números positivos, no supera máximo
-    if (name === 'capacity') {
-      newValue = value.replace(/[^0-9]/g, ''); // solo números
-      if (salaSeleccionada && newValue && Number(newValue) > salaSeleccionada.capacity) {
-        newValue = String(salaSeleccionada.capacity);
-      }
-    }
-
-    if (name === 'specialization') {
-      setForm((prev) => ({ ...prev, specialization: newValue, professor: '' }));
-    } else if (name === 'activity_type') {
-      setForm((prev) => ({
-        ...prev,
-        activity_type: newValue,
-        specific_date: '',
-      }));
-      setHoraInicio('');
-    } else {
-      setForm((prev) => ({ ...prev, [name]: newValue }));
-    }
-  };
-
-
+  }, [profesores, actividadesActivas, diaActividad, horaActividad, id, actividad?.specialization]);
 
   const handleSubmit = async (e) => {
-
     e.preventDefault();
-
     setError('');
 
-
-
-    if (!form.room_id) return setError('Seleccioná una sala.');
-
-    if (!form.specialization) return setError('Seleccioná una especialidad.');
-
-    if (!horaInicio) return setError('Seleccioná un horario.');
-
-    if (!form.specific_date) return setError('Seleccioná la fecha.');
-
-    if (feriadoSeleccionado.esFeriado) {
-
-      return setError(`La fecha seleccionada es feriado (${feriadoSeleccionado.nombre}). Eleg?? otra fecha.`);
-
-    }
-
-    if (esFinDeSemana(form.specific_date)) {
-
-      return setError('Las actividades no se pueden programar en fin de semana.');
-
-    }
-
-    if (Number(form.capacity) <= 0) return setError('Los cupos deben ser mayor a 0.');
-
-    if (Number(form.price) < 0) return setError('El precio no puede ser negativo.');
-
-
+    if (!roomId) return setError('Seleccioná una sala.');
 
     const payload = {
-
-      name:          form.name.trim(),
-
-      specialization: form.specialization,
-
-      room_id:       Number(form.room_id),
-
-      activity_type: form.activity_type,
-
-      specific_date: form.specific_date || null,
-
-      time_slot:     horaInicio,
-
-      professor:     form.professor || null,
-
-      price:         parseFloat(form.price),
-
-      capacity:      Number(form.capacity),
-
-      description:   form.description.trim() || null,
-
-      requirements:  form.requirements.trim() || null,
-
+      room_id: Number(roomId),
+      professor: professor || null,
     };
 
-
-
     setGuardando(true);
-
     try {
-
       await updateActivity(id, payload);
-
       navigate('/admin/actividades');
-
     } catch (err) {
-
       setError(err.message || 'Error al guardar los cambios.');
-
     } finally {
-
       setGuardando(false);
-
     }
-
   };
 
-
-
-  const salaSeleccionada = salasDisponibles.find((r) => r.id === Number(form?.room_id));
-
-
-
-  if (!form) {
-
+  if (!actividad) {
     return (
-
       <LayoutPrivado titulo="Editar Actividad">
-
-        {error
-
-          ? <div style={s.error}>{error}</div>
-
-          : <div style={s.cargando}>Cargando</div>}
-
+        {error ? <div style={s.error}>{error}</div> : <div style={s.cargando}>Cargando…</div>}
       </LayoutPrivado>
-
     );
-
   }
 
-
-
   return (
-
     <LayoutPrivado titulo="Editar Actividad">
-
       <div style={s.card}>
-
         <h2 style={s.titulo}>Editar actividad</h2>
-
-
+        <p style={s.subtitulo}>Solo se puede reasignar la sala y/o el profesor. El resto de los datos quedan fijos.</p>
 
         {error && <div style={s.error}>{error}</div>}
 
-
+        <div style={s.resumen}>
+          <strong>{actividad.name}</strong><br />
+          Especialidad: {actividad.specialization}<br />
+          Tipo: {actividad.activity_type === 'fixed' ? 'Fija' : 'Individual'}<br />
+          Horario: {actividad.specific_date ? `${actividad.specific_date} · ` : ''}{actividad.schedule || horaActividad || '—'}
+        </div>
 
         <form onSubmit={handleSubmit}>
-
-          <div style={s.grid}>
-
-
-
-            {/* Nombre */}
-
-            <div style={{ ...s.grupo, ...s.gridFull }}>
-
-              <label style={s.label}>Nombre de la actividad *</label>
-
-              <input
-
-                style={s.input}
-
-                name="name"
-
-                value={form.name}
-
-                onChange={handleChange}
-
-                placeholder="Ej: Yoga Terapéutico, Pilates Grupal"
-
-                required
-
-              />
-
-            </div>
-
-
-
-            {/* Especialidad */}
-
-            <div style={{ ...s.grupo, ...s.gridFull }}>
-
-              <label style={s.label}>Especialidad *</label>
-
-              <select style={s.select} name="specialization" value={form.specialization} onChange={handleChange} required>
-
-                <option value=""> Seleccionar especialidad </option>
-
-                {ESPECIALIZACIONES.map((e) => (
-
-                  <option key={e} value={e}>{e}</option>
-
-                ))}
-
-              </select>
-
-            </div>
-
-
-
-            {/* Sala */}
-
-            <div style={s.grupo}>
-
-              <label style={s.label}>Sala *</label>
-
-              <select style={s.select} name="room_id" value={form.room_id} onChange={handleChange} required>
-
-                <option value="">
-
-                  {salas.length > 0 && salasDisponibles.length === 0
-
-                    ? ' No hay salas disponibles '
-
-                    : ' Seleccionar sala '}
-
+          <div style={s.grupo}>
+            <label style={s.label}>Sala *</label>
+            <select style={s.select} value={roomId} onChange={(e) => setRoomId(e.target.value)} required>
+              <option value="">
+                {salas.length > 0 && salasDisponibles.length === 0 ? 'No hay salas disponibles' : 'Seleccionar sala'}
+              </option>
+              {salasDisponibles.map((sala) => (
+                <option key={sala.id} value={sala.id}>
+                  {sala.name} (cap. {sala.capacity})
                 </option>
-
-                {salasDisponibles.map((sala) => (
-
-                  <option key={sala.id} value={sala.id}>
-
-                    {sala.name} (cap. {sala.capacity})
-
-                  </option>
-
-                ))}
-
-              </select>
-
-            </div>
-
-
-
-            {/* Tipo */}
-
-            <div style={s.grupo}>
-
-              <label style={s.label}>Tipo de clase *</label>
-
-              <select style={s.select} name="activity_type" value={form.activity_type} onChange={handleChange}>
-
-                <option value="fixed">Fija (grupo fijo semanal)</option>
-
-                <option value="individual">Individual (turno por turno)</option>
-
-              </select>
-
-            </div>
-
-
-
-            {/* Fecha */}
-
-            <div style={s.grupo}>
-
-              <label style={s.label}>{esIndividual ? 'Fecha del turno *' : 'Fecha de la actividad *'}</label>
-
-              <input
-
-                style={s.input}
-
-                type="date"
-
-                name="specific_date"
-
-                value={form.specific_date}
-
-                onChange={handleChange}
-
-                min={new Date().toISOString().split('T')[0]}
-
-                required
-
-              />
-
-            </div>
-
-
-
-            {/* Selector de horario */}
-
-            <div style={s.grupo}>
-
-              <label style={s.label}>Horario *</label>
-
-              <select
-
-                style={s.select}
-
-                value={horaInicio}
-
-                onChange={(e) => setHoraInicio(e.target.value)}
-
-              >
-
-                <option value="">
-
-                  {horasDisponibles.length === 0
-
-                    ? ' No hay horarios disponibles '
-
-                    : ' Seleccionar turno '}
-
-                </option>
-
-                {horasDisponibles.map((h) => (
-
-                  <option key={h.valor} value={h.valor}>{h.label}</option>
-
-                ))}
-
-              </select>
-
-              {horaInicio && form.specific_date && (
-
-                <span style={s.hint}>
-
-                  {`${form.specific_date} · ${horaInicio}–${String(parseInt(horaInicio) + 1).padStart(2, '0')}:00`}
-
-                </span>
-
-              )}
-
-            </div>
-
-
-
-            {/* Profesor ??? opcional para clases individuales */}
-
-            <div style={s.grupo}>
-
-              <label style={s.label}>
-
-                Profesor {form.activity_type === 'individual' ? '(opcional)' : '*'}
-
-              </label>
-
-              <select
-
-                style={s.select}
-
-                name="professor"
-
-                value={form.professor}
-
-                onChange={handleChange}
-
-                disabled={!form.specialization}
-
-              >
-
-                <option value="">
-
-                  {!form.specialization
-
-                    ? ' Seleccioná primero una especialidad '
-
-                    : profesoresDisponibles.length === 0
-
-                    ? ' No hay profesores disponibles '
-
-                    : form.activity_type === 'individual'
-
-                    ? ' Sin asignar '
-                    : ' Seleccionar profesor'}
-
-                </option>
-
-                {profesoresDisponibles.map((p) => (
-
-                  <option key={p.id} value={`${p.name} ${p.lastname}`}>
-
-                    {p.name} {p.lastname}
-
-                  </option>
-
-                ))}
-
-              </select>
-
-            </div>
-
-
-
-            {/* Precio */}
-
-            <div style={s.grupo}>
-
-              <label style={s.label}>Precio ($) *</label>
-
-              <input
-
-                style={s.input}
-
-                type="text"
-
-                name="price"
-
-                value={form.price}
-
-                onChange={handleChange}
-
-                placeholder="0.00"
-
-                required
-
-              />
-
-            </div>
-
-
-
-            {/* Cupos */}
-
-            <div style={s.grupo}>
-
-              <label style={s.label}>Cupos ofrecidos *</label>
-
-              <input
-
-                style={s.input}
-
-                type="text"
-
-                name="capacity"
-
-                value={form.capacity}
-
-                onChange={handleChange}
-
-                placeholder="Ej: 8"
-
-                required
-
-              />
-
-              {salaSeleccionada && (
-
-                <span style={s.hint}>M??ximo: {salaSeleccionada.capacity} (capacidad de la sala)</span>
-
-              )}
-
-            </div>
-
-
-
-            {/* Descripci??n */}
-
-            <div style={{ ...s.grupo, ...s.gridFull }}>
-
-              <label style={s.label}>Descripci??n</label>
-
-              <textarea
-
-                style={s.textarea}
-
-                name="description"
-
-                value={form.description}
-
-                onChange={handleChange}
-
-                placeholder="Descripcion de la actividad, beneficios, etc."
-
-              />
-
-            </div>
-
-
-
-            {/* Requisitos */}
-
-            <div style={{ ...s.grupo, ...s.gridFull }}>
-
-              <label style={s.label}>Requisitos</label>
-
-              <input
-
-                style={s.input}
-
-                name="requirements"
-
-                value={form.requirements}
-
-                onChange={handleChange}
-
-                placeholder="Ej: Ropa cómoda, certificado médico"
-
-              />
-
-            </div>
-
-
-
+              ))}
+            </select>
+            {salaOriginal && (
+              <span style={s.hint}>Solo se muestran aulas con capacidad ≥ {salaOriginal.capacity} (la del aula asignada originalmente).</span>
+            )}
           </div>
 
-
+          <div style={s.grupo}>
+            <label style={s.label}>
+              Profesor {actividad.activity_type === 'individual' ? '(opcional)' : '*'}
+            </label>
+            <select
+              style={s.select}
+              value={professor}
+              onChange={(e) => setProfessor(e.target.value)}
+            >
+              <option value="">
+                {profesoresDisponibles.length === 0
+                  ? 'No hay profesores disponibles'
+                  : actividad.activity_type === 'individual'
+                  ? 'Sin asignar'
+                  : 'Seleccionar profesor'}
+              </option>
+              {profesoresDisponibles.map((p) => (
+                <option key={p.id} value={`${p.name} ${p.lastname}`}>
+                  {p.name} {p.lastname}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div style={s.acciones}>
-
             <button type="submit" style={s.botonPrimario} disabled={guardando}>
-
               {guardando ? 'Guardando…' : 'Guardar cambios'}
-
             </button>
-
             <button
-
               type="button"
-
               style={s.botonSecundario}
-
               onClick={() => navigate('/admin/actividades')}
-
               disabled={guardando}
-
             >
-
               Cancelar
-
             </button>
-
           </div>
-
         </form>
-
       </div>
-
     </LayoutPrivado>
-
   );
-
 }
-
-
 
 export default EditarActividad;

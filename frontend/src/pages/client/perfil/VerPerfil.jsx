@@ -161,6 +161,19 @@ export default function VerPerfil() {
             </div>
           </div>
 
+          {/* ── Datos profesionales ────────────────────────── */}
+          {usuario.role === 'professor' && (
+            <div style={s.seccion}>
+              <p style={s.titulo}>Datos Profesionales</p>
+              <div style={s.fila}>
+                <div style={s.campo}>
+                  <label style={s.label}>Especialidad</label>
+                  <p style={s.valor}>{usuario.specialization || '—'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Mi Suscripción ───────────────────────────── */}
           {usuario.role === 'client' && (
             <div style={s.seccion}>
