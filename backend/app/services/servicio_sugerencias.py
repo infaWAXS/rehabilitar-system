@@ -1,8 +1,9 @@
 
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from fastapi import HTTPException
 from decimal import Decimal
+from datetime import date as date_cls
 
 from app.models.activity_suggestion import ActivitySuggestion
 from app.models.room import Room
@@ -10,6 +11,17 @@ from app.schemas.esquema_sugerencias import SuggestionCreate, SuggestionResponse
 from app.schemas.esquema_actividad import ActivityCreate
 from app.services import servicio_actividades
 
+
+def _serializar_fechas(fechas: Optional[List[date_cls]]) -> Optional[str]:
+    if not fechas:
+        return None
+    return ",".join(f.isoformat() for f in fechas)
+
+
+def _deserializar_fechas(texto: Optional[str]) -> Optional[List[date_cls]]:
+    if not texto:
+        return None
+    return [date_cls.fromisoformat(parte) for parte in texto.split(",") if parte]
 
 
 def _a_response(sugerencia: ActivitySuggestion) -> SuggestionResponse:
@@ -19,11 +31,13 @@ def _a_response(sugerencia: ActivitySuggestion) -> SuggestionResponse:
         professor_name=f"{sugerencia.professor.name} {sugerencia.professor.lastname}",
         room_id=sugerencia.room_id,
         room_name=sugerencia.room.name,
+        name=sugerencia.name,
         specialization=sugerencia.specialization,
         activity_type=sugerencia.activity_type,
         schedule=sugerencia.schedule,
         specific_date=sugerencia.specific_date,
         time_slot=sugerencia.time_slot,
+        dates=_deserializar_fechas(sugerencia.dates),
         capacity=sugerencia.capacity,
         description=sugerencia.description,
         requirements=sugerencia.requirements,
@@ -47,11 +61,13 @@ def crear_sugerencia(datos: SuggestionCreate, current_user, db: Session) -> Sugg
     sugerencia = ActivitySuggestion(
         professor_id=current_user.id,
         room_id=datos.room_id,
+        name=datos.name,
         specialization=datos.specialization,
         activity_type=datos.activity_type,
         schedule=datos.schedule,
         specific_date=datos.specific_date,
         time_slot=datos.time_slot,
+        dates=_serializar_fechas(datos.dates),
         capacity=datos.capacity,
         description=datos.description,
         requirements=datos.requirements,
@@ -93,12 +109,13 @@ def aceptar_sugerencia(suggestion_id: int, price: Decimal, db: Session):
 
     datos_actividad = ActivityCreate(
         room_id=sugerencia.room_id,
-        name=sugerencia.specialization,
+        name=sugerencia.name or sugerencia.specialization,
         specialization=sugerencia.specialization,
         activity_type=sugerencia.activity_type,
         schedule=sugerencia.schedule,
         specific_date=sugerencia.specific_date,
         time_slot=sugerencia.time_slot,
+        dates=_deserializar_fechas(sugerencia.dates),
         professor=f"{profesor.name} {profesor.lastname}",
         price=price,
         capacity=sugerencia.capacity,
@@ -106,12 +123,12 @@ def aceptar_sugerencia(suggestion_id: int, price: Decimal, db: Session):
         requirements=sugerencia.requirements,
     )
 
-    actividad = servicio_actividades.crear_actividad(datos_actividad, db)
+    actividades = servicio_actividades.crear_actividad(datos_actividad, db)
 
     sugerencia.status = "accepted"
     db.commit()
 
-    return actividad
+    return actividades
 
 
 def rechazar_sugerencia(suggestion_id: int, db: Session) -> SuggestionResponse:

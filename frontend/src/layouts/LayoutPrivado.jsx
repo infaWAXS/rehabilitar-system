@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import '../assets/styles/variables.css';
 import { logout, clearUserData, getRole, getUserName, getAccountStatus } from '../services/authService';
 import apiClient from '../services/apiClient';
+import { getMyPlan } from '../services/paymentsService';
 
 /* ── Menús por rol ─────────────────────────────────────── */
 const menus = {
@@ -11,7 +12,7 @@ const menus = {
     { label: 'Clientes',      ruta: '/admin/clientes' },
     { label: 'Aptos Físicos', ruta: '/admin/aptos-fisicos' },
     { label: 'Actividades',   ruta: '/admin/actividades' },
-    { label: 'Sugerencias',   ruta: '/admin/actividades/sugerencias' },
+    { label: 'Sugerencias',   ruta: '/admin/sugerencias' },
   ],
   profesor: [
     { label: 'Actividades', ruta: '/profesor/actividades' },
@@ -118,6 +119,18 @@ const s = {
   navbarUsuario: {
     fontSize: '14px',
     color: 'var(--color-texto-suave)',
+  },
+  creditsBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '5px 12px',
+    borderRadius: '999px',
+    background: '#eff6ff',
+    border: '1px solid #bfdbfe',
+    color: '#1d4ed8',
+    fontSize: '13px',
+    fontWeight: '700',
   },
   notifButton: {
     position: 'relative',
@@ -272,6 +285,7 @@ function LayoutPrivado({ children, titulo = '' }) {
   const [notifications, setNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(true);
+  const [creditsInfo, setCreditsInfo] = useState(null);
   const notifRef = useRef();
 
   useEffect(() => {
@@ -282,6 +296,16 @@ function LayoutPrivado({ children, titulo = '' }) {
     if (roleGuardado) setRol(mapaRol[roleGuardado] || roleGuardado);
     if (nombreGuardado) setNombreUsuario(nombreGuardado);
     setEstadoCuenta(getAccountStatus());
+
+    if (roleGuardado === 'client') {
+      getMyPlan()
+        .then((data) => {
+          if (data?.es_abonado) {
+            setCreditsInfo({ credits: data.credits ?? 0, cap: data.credits_cap ?? 3 });
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -387,6 +411,12 @@ function LayoutPrivado({ children, titulo = '' }) {
         <header style={{ ...s.navbar, top: estaSuspendido ? '45px' : 0 }}>
           <span style={s.navbarTitulo}>{titulo}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }} ref={notifRef}>
+            {creditsInfo && (
+              <span style={s.creditsBadge} title="Créditos disponibles este mes">
+                <span role="img" aria-hidden>🎫</span>
+                {creditsInfo.credits}/{creditsInfo.cap}
+              </span>
+            )}
             {(() => {
               const rawRole = getRole();
               if (rawRole === 'professor' || rawRole === 'client' || rawRole === 'admin') {

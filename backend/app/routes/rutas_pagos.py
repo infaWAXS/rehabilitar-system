@@ -9,6 +9,7 @@ from app.models.user import User
 from app.schemas.esquema_planes import PlanRespuesta, PagoMercadoPagoRequest, PagoMercadoPagoResponse
 from app.services.servicio_pagos import get_active_plans, simulate_mercadopago_payment
 from app.utils.subscriptions import get_active_user_plan
+from app.utils.credits import get_monthly_balance, get_monthly_balance_by_type, MONTHLY_CREDIT_CAP
 
 router = APIRouter(prefix="/payments", tags=["Pagos"])
 
@@ -38,12 +39,23 @@ def get_my_plan(
     db: Session = Depends(get_db),
 ):
     """Devuelve el plan activo del usuario o null si no es abonado."""
+    credits = get_monthly_balance(current_user.id, db)
+    credits_by_type = get_monthly_balance_by_type(current_user.id, db)
     user_plan = get_active_user_plan(current_user.id, db)
     if not user_plan:
-        return {"es_abonado": False, "plan": None, "credits": current_user.credits, "pending_discount_percent": current_user.pending_discount_percent}
+        return {
+            "es_abonado": False,
+            "plan": None,
+            "credits": credits,
+            "credits_cap": MONTHLY_CREDIT_CAP,
+            "credits_by_type": credits_by_type,
+            "pending_discount_percent": current_user.pending_discount_percent,
+        }
     return {
         "es_abonado": True,
-        "credits": current_user.credits,
+        "credits": credits,
+        "credits_cap": MONTHLY_CREDIT_CAP,
+        "credits_by_type": credits_by_type,
         "pending_discount_percent": current_user.pending_discount_percent,
         "plan": {
             "id": user_plan.plan.id,

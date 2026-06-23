@@ -18,6 +18,39 @@ const HORAS = Array.from({ length: 8 }, (_, i) => {
   };
 });
 
+// ── Meses disponibles (próximos 6 meses) — espejo de CrearActividad ────────
+
+const MESES_DISPONIBLES = (() => {
+  const today = new Date();
+  const result = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const valor = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+    result.push({ valor, label: label.charAt(0).toUpperCase() + label.slice(1) });
+  }
+  return result;
+})();
+
+// Genera todas las ocurrencias de un día de la semana dentro del mes dado.
+function generarFechasDelMes(mesStr, diaSemanaStr) {
+  if (!mesStr || !diaSemanaStr) return [];
+  const [year, month] = mesStr.split('-').map(Number);
+  const targetDay = DIAS_SEMANA.indexOf(diaSemanaStr);
+  if (targetDay === -1) return [];
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const result = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(year, month - 1, d);
+    if (dateObj.getDay() === targetDay) {
+      const fechaStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const feriado = obtenerFeriadoArgentino(fechaStr);
+      result.push({ date: dateObj, fechaStr, esFeriado: feriado.esFeriado, nombreFeriado: feriado.nombre || '' });
+    }
+  }
+  return result;
+}
+
 // ── Helpers de colisión (espejo de CrearActividad / backend) ──────────────
 
 function parseMinutes(texto) {
@@ -44,11 +77,13 @@ function rangoDeActividad(act) {
 }
 
 function diasDeActividad(act) {
-  if (act.activity_type === 'individual') {
-    if (!act.specific_date) return new Set();
+  // Tanto individual como fijas nuevas tienen specific_date
+  if (act.specific_date) {
     const d = new Date(`${act.specific_date}T00:00:00`);
     return new Set([DIAS_SEMANA[d.getDay()]]);
   }
+  if (act.activity_type === 'individual') return new Set();
+  // Fijas legacy con schedule
   const sch = (act.schedule || '').toLowerCase();
   return new Set(DIAS.filter((d) => sch.includes(d.toLowerCase())));
 }
@@ -107,14 +142,6 @@ const s = {
     padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-borde)',
     fontSize: '14px', background: 'var(--color-fondo)', color: 'var(--color-texto-suave)',
   },
-  diasRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
-  diaBtn: (activo) => ({
-    padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
-    cursor: 'pointer', border: '1px solid',
-    borderColor: activo ? 'var(--color-primario)' : 'var(--color-borde)',
-    background: activo ? 'var(--color-primario)' : 'transparent',
-    color: activo ? '#fff' : 'var(--color-texto)',
-  }),
   hint: { fontSize: '12px', color: 'var(--color-texto-suave)', marginTop: '2px' },
   acciones: { display: 'flex', gap: '12px', marginTop: '28px' },
   botonPrimario: {
@@ -145,9 +172,12 @@ const s = {
 };
 
 const FORM_INICIAL = {
+  name: '',
   room_id: '',
   activity_type: 'fixed',
-  specific_date: '',
+  specific_date: '',  // solo individual
+  mes: '',            // YYYY-MM — solo fija
+  diaSemana: '',      // Lunes|Martes|… — solo fija
   capacity: '',
   description: '',
   requirements: '',
@@ -159,7 +189,6 @@ function SugerirActividad() {
   const [salas, setSalas] = useState([]);
   const [actividadesActivas, setActividadesActivas] = useState([]);
   const [form, setForm] = useState(FORM_INICIAL);
-  const [diasSeleccionados, setDiasSeleccionados] = useState([]);
   const [horaInicio, setHoraInicio] = useState('');
 
   const [cargando, setCargando] = useState(true);
@@ -170,6 +199,20 @@ function SugerirActividad() {
 
   const esIndividual = form.activity_type === 'individual';
   const ocupada = useOcupaciones(actividadesActivas);
+
+  const fechasGeneradas = useMemo(
+    () => generarFechasDelMes(form.mes, form.diaSemana),
+    [form.mes, form.diaSemana]
+  );
+  const fechasValidas = useMemo(
+    () => fechasGeneradas.filter((f) => !f.esFeriado),
+    [fechasGeneradas]
+  );
+  // Fecha representativa para cálculos de colisión de sala
+  const representativeDate = useMemo(() => {
+    if (esIndividual) return form.specific_date || null;
+    return fechasValidas.length > 0 ? fechasValidas[0].fechaStr : null;
+  }, [esIndividual, form.specific_date, fechasValidas]);
 
   const feriadoSeleccionado = useMemo(
     () => obtenerFeriadoArgentino(form.specific_date),
@@ -193,34 +236,16 @@ function SugerirActividad() {
   // ── Derivaciones: qué opciones quedan disponibles ─────────────────────
 
   const salasDisponibles = useMemo(() => {
-    if (esIndividual) {
-      if (!form.specific_date || !horaInicio) return salas;
-      const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
-      return salas.filter((sala) => !ocupada(sala.id, dia, horaInicio));
-    }
-    if (diasSeleccionados.length === 0 || !horaInicio) return salas;
-    return salas.filter((sala) =>
-      diasSeleccionados.every((dia) => !ocupada(sala.id, dia, horaInicio))
-    );
-  }, [salas, esIndividual, form.specific_date, horaInicio, diasSeleccionados, ocupada]);
-
-  const diasDisponibles = useMemo(() => {
-    if (esIndividual || !form.room_id || !horaInicio) return DIAS;
-    return DIAS.filter((dia) => !ocupada(form.room_id, dia, horaInicio));
-  }, [esIndividual, form.room_id, horaInicio, ocupada]);
+    if (!representativeDate || !horaInicio) return salas;
+    const dia = DIAS_SEMANA[new Date(`${representativeDate}T00:00:00`).getDay()];
+    return salas.filter((sala) => !ocupada(sala.id, dia, horaInicio));
+  }, [salas, representativeDate, horaInicio, ocupada]);
 
   const horasDisponibles = useMemo(() => {
-    if (!form.room_id) return HORAS;
-    if (esIndividual) {
-      if (!form.specific_date) return HORAS;
-      const dia = DIAS_SEMANA[new Date(`${form.specific_date}T00:00:00`).getDay()];
-      return HORAS.filter((h) => !ocupada(form.room_id, dia, h.valor));
-    }
-    if (diasSeleccionados.length === 0) return HORAS;
-    return HORAS.filter((h) =>
-      diasSeleccionados.every((dia) => !ocupada(form.room_id, dia, h.valor))
-    );
-  }, [form.room_id, esIndividual, form.specific_date, diasSeleccionados, ocupada]);
+    if (!form.room_id || !representativeDate) return HORAS;
+    const dia = DIAS_SEMANA[new Date(`${representativeDate}T00:00:00`).getDay()];
+    return HORAS.filter((h) => !ocupada(form.room_id, dia, h.valor));
+  }, [form.room_id, representativeDate, ocupada]);
 
   // ── Limpieza automática si la opción elegida deja de estar disponible ──
 
@@ -236,21 +261,27 @@ function SugerirActividad() {
     }
   }, [horasDisponibles, horaInicio]);
 
-  useEffect(() => {
-    setDiasSeleccionados((prev) => prev.filter((d) => diasDisponibles.includes(d)));
-  }, [diasDisponibles]);
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => {
-      const next = { ...prev, [name]: value };
+      let newValue = value;
+
+      if (name === 'capacity') {
+        newValue = value.replace(/[^0-9]/g, '');
+        if (salaSeleccionada && newValue && Number(newValue) > salaSeleccionada.capacity) {
+          newValue = String(salaSeleccionada.capacity);
+        }
+      }
+
+      const next = { ...prev, [name]: newValue };
       if (name === 'activity_type') {
         next.specific_date = '';
-        setDiasSeleccionados([]);
+        next.mes = '';
+        next.diaSemana = '';
         setHoraInicio('');
       }
-      if (name === 'specific_date' && value) {
-        const dia = new Date(`${value}T00:00:00`).getDay();
+      if (name === 'specific_date' && newValue) {
+        const dia = new Date(`${newValue}T00:00:00`).getDay();
         if (dia === 0 || dia === 6) {
           setError('Las actividades individuales no se pueden programar en fin de semana.');
           return { ...prev, [name]: '' };
@@ -261,31 +292,24 @@ function SugerirActividad() {
     });
   };
 
-  const toggleDia = (dia) => {
-    setDiasSeleccionados((prev) =>
-      prev.includes(dia) ? prev.filter((d) => d !== dia) : [...prev, dia]
-    );
-  };
-
-  const buildSchedule = () => {
-    if (diasSeleccionados.length === 0 || !horaInicio) return '';
-    const ordenados = DIAS.filter((d) => diasSeleccionados.includes(d));
-    const horaFin = `${String(parseInt(horaInicio) + 1).padStart(2, '0')}:00`;
-    return `${ordenados.join(', ')} · ${horaInicio}–${horaFin}`;
-  };
-
   // Paso 1: valida y abre el modal de confirmación (no manda nada al backend todavía)
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
 
+    if (!form.name.trim()) return setError('Ingresá un nombre para la actividad.');
     if (!form.room_id) return setError('Seleccioná una sala.');
     if (!horaInicio) return setError('Seleccioná un horario.');
-    if (esIndividual && !form.specific_date) return setError('Seleccioná la fecha del turno.');
-    if (esIndividual && feriadoSeleccionado.esFeriado) {
-      return setError(`La fecha seleccionada es feriado (${feriadoSeleccionado.nombre}). Elegí otra fecha.`);
+    if (esIndividual) {
+      if (!form.specific_date) return setError('Seleccioná la fecha del turno.');
+      if (feriadoSeleccionado.esFeriado) {
+        return setError(`La fecha seleccionada es feriado (${feriadoSeleccionado.nombre}). Elegí otra fecha.`);
+      }
+    } else {
+      if (!form.mes) return setError('Seleccioná el mes.');
+      if (!form.diaSemana) return setError('Seleccioná el día de la semana.');
+      if (fechasValidas.length === 0) return setError('No hay clases disponibles ese mes (todas las fechas son feriados).');
     }
-    if (!esIndividual && diasSeleccionados.length === 0) return setError('Seleccioná al menos un día.');
     if (!form.capacity || Number(form.capacity) <= 0) return setError('Los cupos deben ser mayor a 0.');
 
     setConfirmando(true);
@@ -298,11 +322,13 @@ function SugerirActividad() {
     try {
       await suggestActivity({
         room_id: Number(form.room_id),
+        name: form.name.trim(),
         specialization: especialidad,
         activity_type: form.activity_type,
-        schedule: esIndividual ? null : buildSchedule(),
-        specific_date: esIndividual ? form.specific_date : null,
+        schedule: esIndividual ? null : `${form.diaSemana} · ${horaInicio}–${String(parseInt(horaInicio) + 1).padStart(2, '0')}:00`,
+        specific_date: esIndividual ? form.specific_date : fechasValidas[0]?.fechaStr || null,
         time_slot: horaInicio,
+        dates: esIndividual ? undefined : fechasValidas.map((f) => f.fechaStr),
         capacity: Number(form.capacity),
         description: form.description.trim() || null,
         requirements: form.requirements.trim() || null,
@@ -342,6 +368,18 @@ function SugerirActividad() {
         {!exito && (
           <form onSubmit={handleSubmit}>
             <div style={s.grid}>
+
+              {/* Nombre */}
+              <div style={{ ...s.grupo, ...s.gridFull }}>
+                <label style={s.label}>Nombre de la actividad *</label>
+                <input
+                  style={s.input}
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Ej: Yoga Terapéutico, Pilates Grupal"
+                />
+              </div>
 
               <div style={{ ...s.grupo, ...s.gridFull }}>
                 <label style={s.label}>Tipo de actividad (tu especialidad)</label>
@@ -385,24 +423,62 @@ function SugerirActividad() {
                   />
                 </div>
               ) : (
-                <div style={{ ...s.grupo, ...s.gridFull }}>
-                  <label style={s.label}>Días *</label>
-                  <div style={s.diasRow}>
-                    {diasDisponibles.length === 0 ? (
-                      <span style={s.hint}>— No hay días disponibles —</span>
-                    ) : (
-                      diasDisponibles.map((dia) => (
-                        <button
-                          key={dia}
-                          type="button"
-                          style={s.diaBtn(diasSeleccionados.includes(dia))}
-                          onClick={() => toggleDia(dia)}
-                        >
-                          {dia}
-                        </button>
-                      ))
-                    )}
+                <>
+                  <div style={s.grupo}>
+                    <label style={s.label}>Mes *</label>
+                    <select style={s.select} name="mes" value={form.mes} onChange={handleChange}>
+                      <option value="">— Seleccionar mes —</option>
+                      {MESES_DISPONIBLES.map((m) => (
+                        <option key={m.valor} value={m.valor}>{m.label}</option>
+                      ))}
+                    </select>
                   </div>
+                  <div style={s.grupo}>
+                    <label style={s.label}>Día de la semana *</label>
+                    <select style={s.select} name="diaSemana" value={form.diaSemana} onChange={handleChange}>
+                      <option value="">— Seleccionar día —</option>
+                      {DIAS.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* Preview clases del mes — solo fija */}
+              {!esIndividual && fechasGeneradas.length > 0 && (
+                <div style={{ ...s.grupo, ...s.gridFull }}>
+                  <label style={s.label}>
+                    Clases a sugerir&nbsp;
+                    <span style={{ fontWeight: 400, color: 'var(--color-texto)' }}>
+                      ({fechasValidas.length} clase{fechasValidas.length !== 1 ? 's' : ''}
+                      {fechasGeneradas.length !== fechasValidas.length && ` — ${fechasGeneradas.length - fechasValidas.length} feriado(s) omitido(s)`})
+                    </span>
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {fechasGeneradas.map((f) => (
+                      <span
+                        key={f.fechaStr}
+                        title={f.esFeriado ? `Feriado: ${f.nombreFeriado} — se omite` : ''}
+                        style={{
+                          borderRadius: '4px',
+                          padding: '3px 10px',
+                          fontSize: '13px',
+                          background: f.esFeriado ? '#fef2f2' : '#e8f5e9',
+                          color: f.esFeriado ? '#dc2626' : '#2e7d32',
+                          textDecoration: f.esFeriado ? 'line-through' : 'none',
+                        }}
+                      >
+                        {f.date.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {f.esFeriado && ' — feriado'}
+                      </span>
+                    ))}
+                  </div>
+                  {fechasValidas.length === 0 && (
+                    <span style={{ fontSize: '12px', color: '#dc2626', marginTop: '4px' }}>
+                      Todas las fechas son feriados. Elegí otro mes o día.
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -418,8 +494,8 @@ function SugerirActividad() {
                     <option key={h.valor} value={h.valor}>{h.label}</option>
                   ))}
                 </select>
-                {!esIndividual && diasSeleccionados.length > 0 && horaInicio && (
-                  <span style={s.hint}>Horario: {buildSchedule()}</span>
+                {!esIndividual && form.diaSemana && horaInicio && (
+                  <span style={s.hint}>Horario: {horaInicio} – {`${String(parseInt(horaInicio) + 1).padStart(2, '0')}:00`}</span>
                 )}
               </div>
 
@@ -427,11 +503,10 @@ function SugerirActividad() {
                 <label style={s.label}>Cupos máximos *</label>
                 <input
                   style={s.input}
-                  type="number"
+                  type="text"
                   name="capacity"
                   value={form.capacity}
                   onChange={handleChange}
-                  min="1"
                   placeholder="Ej: 8"
                 />
                 {salaSeleccionada && (
@@ -496,4 +571,3 @@ function SugerirActividad() {
 }
 
 export default SugerirActividad;
-

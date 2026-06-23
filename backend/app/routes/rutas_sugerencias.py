@@ -30,14 +30,14 @@ def listar_sugerencias_pendientes(
     return servicio_sugerencias.listar_sugerencias_pendientes(db)
 
 
-@router.patch("/{suggestion_id}/accept", response_model=ActivityResponse)
+@router.patch("/{suggestion_id}/accept", response_model=List[ActivityResponse])
 def aceptar_sugerencia(
     suggestion_id: int,
     datos: SuggestionAccept,
     db: Session = Depends(get_db),
     _: object = Depends(require_role(["admin"])),
 ):
-    """Acepta la sugerencia: crea la actividad real y asigna al profesor."""
+    """Acepta la sugerencia: crea la(s) actividad(es) real(es) y asigna al profesor."""
     return servicio_sugerencias.aceptar_sugerencia(suggestion_id, datos.price, db)
 
 

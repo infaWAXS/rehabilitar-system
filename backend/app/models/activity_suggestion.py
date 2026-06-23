@@ -17,11 +17,13 @@ class ActivitySuggestion(Base):
     professor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False)
 
+    name = Column(String(120), nullable=True)               # nombre propuesto para la actividad
     specialization = Column(String(120), nullable=False)   # "tren superior"
     activity_type = Column(String(20), nullable=False)     # "fixed" | "individual"
     schedule = Column(String(200), nullable=True)           # clases fijas: "Lunes · 15:00-16:00"
-    specific_date = Column(Date, nullable=True)              # clases individuales
+    specific_date = Column(Date, nullable=True)              # fecha de referencia (individuales o primera fecha de las fijas)
     time_slot = Column(String(10), nullable=True)            # clases individuales: "15:00"
+    dates = Column(String(500), nullable=True)               # clases fijas: fechas concretas (mes+día), separadas por coma
     capacity = Column(Integer, nullable=False)
     description = Column(String(500), nullable=True)
     requirements = Column(String(300), nullable=True)

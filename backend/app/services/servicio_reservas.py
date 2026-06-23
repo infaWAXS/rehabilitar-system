@@ -9,6 +9,7 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.models.activity import Activity
 from app.exceptions.http_exceptions import user_not_found_exception
+from app.utils.credits import get_monthly_balance, spend_credit, grant_credit, was_paid_with_credit
 from database.connection import SessionLocal
 
 
@@ -16,11 +17,12 @@ from database.connection import SessionLocal
 # payment_method: subscription | full_payment | partial_payment | credit
 # Reglas de negocio (HU actividad fija/individual):
 #   - subscription, full_payment, credit  -> confirmada + pago completado
-#   - partial_payment (sena 50%)          -> pendiente  + pago parcial
+#   - partial_payment (sena 50-100%)      -> pendiente  + pago parcial
 def create_reservation(user_id: int, activity_id: int, reservation_type: str,
                        reservation_date: datetime, db: Session,
                        payment_method: str = "full_payment",
-                       test_scenario: str = "success"):
+                       test_scenario: str = "success",
+                       deposit_percent: int = None):
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
@@ -35,18 +37,20 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         raise HTTPException(status_code=400,
                             detail=f"Metodo de pago invalido. Debe ser uno de: {', '.join(valid_methods)}")
 
-    # Validar y descontar crédito si corresponde
+    # Validar disponibilidad de crédito (el descuento se registra luego de crear la reserva)
     if payment_method == "credit":
-        if user.credits <= 0:
-            raise HTTPException(status_code=400, detail="No tenés créditos disponibles para usar.")
-        user.credits -= 1
+        if get_monthly_balance(user_id, db) <= 0:
+            raise HTTPException(status_code=400, detail="No tenés créditos disponibles para usar este mes.")
 
-    # Consumir descuento pendiente por cancelación (solo pagos monetarios)
-    discount_applied = 0
-    if payment_method in ("full_payment", "partial_payment"):
-        if user.pending_discount_percent > 0:
-            discount_applied = user.pending_discount_percent
-            user.pending_discount_percent = 0
+    # % efectivamente abonado (solo relevante para pagos monetarios; se usa luego para
+    # calcular el reintegro exacto si el cliente cancela)
+    deposit_percent_val = None
+    if payment_method == "full_payment":
+        deposit_percent_val = 100
+    elif payment_method == "partial_payment":
+        deposit_percent_val = deposit_percent if deposit_percent is not None else 50
+        if not (50 <= deposit_percent_val <= 100):
+            raise HTTPException(status_code=400, detail="La seña debe ser un porcentaje entre 50 y 100.")
 
     # Simulación Mercado Pago para pagos monetarios (full y partial)
     if payment_method in ("full_payment", "partial_payment"):
@@ -71,12 +75,16 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         reservation_type=reservation_type,
         status=status,
         payment_status=payment_status_val,
-        reservation_date=reservation_date
+        reservation_date=reservation_date,
+        deposit_percent=deposit_percent_val,
     )
 
     db.add(new_reservation)
     db.commit()
     db.refresh(new_reservation)
+
+    if payment_method == "credit":
+        spend_credit(user_id, db, reservation_id=new_reservation.id)
 
     uid_copia = new_reservation.user_id
     aid_copia = new_reservation.activity_id
@@ -102,7 +110,7 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         "payment_status": new_reservation.payment_status,
         "reservation_date": new_reservation.reservation_date,
         "created_at": new_reservation.created_at,
-        "discount_applied": discount_applied,
+        "deposit_percent": new_reservation.deposit_percent,
     }
 
 
@@ -151,6 +159,7 @@ def get_user_reservations_enriched(user_id: int, db: Session):
             "reservation_type": reservation.reservation_type,
             "status": reservation.status,
             "payment_status": reservation.payment_status,
+            "deposit_percent": reservation.deposit_percent,
             "reservation_date": reservation.reservation_date,
             "created_at": reservation.created_at,
         })
@@ -188,15 +197,15 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
     Cancela una reserva aplicando la política según:
     - si el cliente es abonado o no
     - cuántas horas faltan para la clase
-    - cantidad de cancelaciones previas en el mes (solo para abonados en franja 24-48h)
+    - cantidad de cancelaciones en la franja 24-48h ya registradas en el mes (solo abonados)
 
     Resultados posibles:
-      credit           → abonado + > 48 h
-      discount_30      → abonado + 24-48 h, primera cancelación del mes
-      discount_20      → abonado + 24-48 h, segunda cancelación del mes
-      no_benefit       → abonado + < 24 h  | abonado + ≥ 3 cancelaciones del mes
-      deposit_returned → no abonado + > 24 h
-      no_refund        → no abonado + ≤ 24 h
+      credit           → abonado + > 48 h (sujeto a tope mensual de 3 créditos)
+      discount_20      → abonado + 24-48 h, 1ra vez en el mes → 20% para el próximo pago de suscripción
+      discount_30      → abonado + 24-48 h, 2da vez en el mes → 30% TOTAL (no acumulativo) para el próximo pago
+      no_benefit       → abonado + < 24 h  | abonado + 24-48h y 3ra vez en el mes (pierde el beneficio)
+      deposit_returned → no abonado + > 24 h → se reintegra el % exacto abonado (seña o total)
+      no_refund        → no abonado + ≤ 24 h → pierde la seña, sin reintegro
     """
     from datetime import datetime, date as date_cls
     from app.utils.subscriptions import is_abonado
@@ -221,45 +230,62 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
     abonado = is_abonado(user_id, db)
     user = db.query(User).filter(User.id == user_id).first()
 
-    # Contar cancelaciones previas del mes actual (para abonados en franja 24-48 h)
+    # Contar cancelaciones en la franja 24-48h ya registradas este mes (solo abonados)
     today = date_cls.today()
     inicio_mes = datetime(today.year, today.month, 1)
-    prev_cancellations = db.query(Reservation).filter(
+    discount_band_count = db.query(Reservation).filter(
         Reservation.user_id == user_id,
-        Reservation.status == "cancelled",
+        Reservation.cancellation_result.in_(["discount_20", "discount_30"]),
         Reservation.updated_at >= inicio_mes,
     ).count()
 
     # ── Reglas de negocio ──────────────────────────────────────────────────────
     if abonado:
         if hours_until > 48:
-            result = "credit"
-            message = "Turno cancelado. Se te otorgó un crédito para tu próxima clase."
-            user.credits += 1
+            if was_paid_with_credit(reservation.id, db):
+                result = "no_benefit"
+                message = "Turno cancelado. No se otorga crédito: esta clase fue reservada usando un crédito."
+            else:
+                actividad = db.query(Activity).filter(Activity.id == reservation.activity_id).first()
+                otorgado = grant_credit(
+                    user_id, db,
+                    activity_type=actividad.specialization if actividad else None,
+                    reservation_id=reservation.id,
+                    reason="cancellation_48h",
+                )
+                if otorgado:
+                    result = "credit"
+                    message = "Turno cancelado. Se te otorgó un crédito para tu próxima clase."
+                else:
+                    result = "no_benefit"
+                    message = "Turno cancelado. Ya alcanzaste el límite de 3 créditos este mes."
         elif hours_until >= 24:
-            if prev_cancellations == 0:
-                result = "discount_30"
-                message = "Turno cancelado. Tendrás un 30 % de descuento en tu próximo pago monetario."
-                user.pending_discount_percent = max(user.pending_discount_percent or 0, 30)
-            elif prev_cancellations == 1:
+            if discount_band_count == 0:
                 result = "discount_20"
-                message = "Turno cancelado. Tendrás un 20 % de descuento en tu próximo pago monetario."
-                user.pending_discount_percent = max(user.pending_discount_percent or 0, 20)
+                message = "Turno cancelado. Tendrás un 20% de descuento en el pago de tu próxima suscripción mensual."
+                user.pending_discount_percent = 20
+            elif discount_band_count == 1:
+                result = "discount_30"
+                message = "Turno cancelado. Tendrás un 30% de descuento (total, no acumulativo) en el pago de tu próxima suscripción mensual."
+                user.pending_discount_percent = 30
             else:
                 result = "no_benefit"
-                message = "Turno cancelado. No aplica descuento (ya cancelaste 2 o más veces este mes)."
+                message = "Turno cancelado. Perdiste el beneficio de descuento por cancelaciones repetidas este mes."
+                user.pending_discount_percent = 0
         else:
             result = "no_benefit"
-            message = "Turno cancelado. No aplica devolución: cancelaste con menos de 24 hs de anticipación."
+            message = "Turno cancelado. No recibís crédito ni devolución: cancelaste con menos de 24 hs de anticipación."
     else:
+        percent = reservation.deposit_percent or 100
         if hours_until > 24:
             result = "deposit_returned"
-            message = "Turno cancelado. Se te devuelve la seña."
+            message = f"Turno cancelado. Se te reintegra el {percent}% que habías abonado."
         else:
             result = "no_refund"
-            message = "Turno cancelado. No se devuelve la seña: cancelaste con menos de 24 hs de anticipación."
+            message = "Turno cancelado. No se reintegra lo abonado: cancelaste con menos de 24 hs de anticipación."
 
     reservation.status = "cancelled"
+    reservation.cancellation_result = result
     db.commit()
     db.refresh(reservation)
 

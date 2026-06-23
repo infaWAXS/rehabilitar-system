@@ -21,12 +21,15 @@ const PAGO_LABEL = {
 
 // Colores de resultado de cancelación
 const RESULTADO_ESTILO = {
-  credit:           { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8' },
-  discount_30:      { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d' },
-  discount_20:      { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d' },
-  no_benefit:       { bg: '#fefce8', border: '#fde68a', color: '#92400e' },
-  deposit_returned: { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d' },
-  no_refund:        { bg: '#fefce8', border: '#fde68a', color: '#92400e' },
+  credit:               { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8' },
+  discount_30:          { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d' },
+  discount_20:          { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d' },
+  no_benefit:           { bg: '#fefce8', border: '#fde68a', color: '#92400e' },
+  deposit_returned:     { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d' },
+  no_refund:            { bg: '#fefce8', border: '#fde68a', color: '#92400e' },
+  center_credit:        { bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8' },
+  center_credit_capped: { bg: '#fefce8', border: '#fde68a', color: '#92400e' },
+  center_refund:        { bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d' },
 };
 
 const s = {
@@ -299,7 +302,9 @@ export default function MisReservas() {
               <div style={s.badges}>
                 <span style={s.badge(estado.color, estado.bg)}>{estado.texto}</span>
                 <span style={s.badge('#6b7280', '#f3f4f6')}>
-                  Pago: {PAGO_LABEL[r.payment_status] || r.payment_status}
+                  Pago: {r.payment_status === 'partial' && r.deposit_percent
+                    ? `Seña (${r.deposit_percent}%)`
+                    : (PAGO_LABEL[r.payment_status] || r.payment_status)}
                 </span>
                 {r.status !== 'cancelled' && r.status !== 'completed' && (
                   <button
