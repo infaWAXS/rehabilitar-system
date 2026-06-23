@@ -12,7 +12,7 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
 from app.utils.subscriptions import is_abonado
-from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation, notify_activity_modified
+from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation, notify_activity_modified, notify_activity_assumed
 from database.connection import SessionLocal
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -609,46 +609,22 @@ def asumir_actividad(activity_id: int, current_user, db: Session) -> Activity:
     actividad.professor = nombre_completo
     db.commit()
     db.refresh(actividad)
-    return actividad
 
+    professor_id = current_user.id
 
-def asumir_actividad(activity_id: int, current_user, db: Session) -> Activity:
-    """Asigna al profesor autenticado a una actividad disponible."""
-    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
-    if not actividad:
-        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+    def _notificar_asuncion_async(activity_id: int, professor_id: int) -> None:
+        db_notif = SessionLocal()
+        try:
+            profesor = db_notif.query(User).filter(User.id == professor_id).first()
+            if profesor:
+                notify_activity_assumed(activity_id, profesor, db_notif)
+        except Exception:
+            pass
+        finally:
+            db_notif.close()
 
-    if actividad.status != "active":
-        raise HTTPException(status_code=400, detail="La actividad no está activa.")
+    Thread(target=_notificar_asuncion_async, args=(actividad.id, professor_id), daemon=True).start()
 
-    if actividad.professor:
-        raise HTTPException(status_code=409, detail="La actividad ya tiene profesor asignado.")
-
-    if not current_user.specialization:
-        raise HTTPException(status_code=400, detail="Tu perfil no tiene especialidad asignada.")
-
-    if current_user.specialization.strip().lower() != (actividad.specialization or "").strip().lower():
-        raise HTTPException(
-            status_code=409,
-            detail="No podés asumir esta actividad porque tu especialidad no coincide.",
-        )
-
-    nombre_completo = f"{current_user.name} {current_user.lastname}".strip()
-
-    actividad_propuesta = Activity(
-        room_id=actividad.room_id,
-        activity_type=actividad.activity_type,
-        schedule=actividad.schedule,
-        specific_date=actividad.specific_date,
-        time_slot=actividad.time_slot,
-        status="active",
-        professor=nombre_completo,
-    )
-    _validar_disponibilidad_profesor(actividad_propuesta, db)
-
-    actividad.professor = nombre_completo
-    db.commit()
-    db.refresh(actividad)
     return actividad
 
 

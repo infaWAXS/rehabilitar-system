@@ -23,5 +23,10 @@ class Reservation(Base):
     status = Column(String, nullable=False, default="pending")
     payment_status = Column(String, default="pending")  # "pending", "partial", "completed"
     reservation_date = Column(DateTime, nullable=False)
+    # % del precio abonado al reservar (50-100). None para subscription/credit, donde no aplica.
+    deposit_percent = Column(Integer, nullable=True)
+    # Resultado de la política de cancelación aplicada (credit, discount_20, discount_30,
+    # no_benefit, deposit_returned, no_refund, center_credit, center_refund). None si no se canceló.
+    cancellation_result = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -227,7 +227,8 @@ function InscribirActividad() {
   const [fecha, setFecha] = useState('');
   const [esAbonado, setEsAbonado] = useState(false);
   const [credits, setCredits] = useState(0);
-  const [pendingDiscount, setPendingDiscount] = useState(0);
+  const [creditsCap, setCreditsCap] = useState(3);
+  const [depositPercent, setDepositPercent] = useState(50);
   const [metodo, setMetodo] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
@@ -243,7 +244,7 @@ function InscribirActividad() {
       .then((data) => {
         setEsAbonado(data?.es_abonado === true);
         setCredits(data?.credits ?? 0);
-        setPendingDiscount(data?.pending_discount_percent ?? 0);
+        setCreditsCap(data?.credits_cap ?? 3);
       })
       .catch(() => {});
   }, []);
@@ -325,11 +326,8 @@ function InscribirActividad() {
   const cuposMostrar = cuposDisponibles ?? actividad?.capacity ?? 0;
   const precioBase = actividad?.price || 0;
   const descuento = inscriptionOptions?.has_age_discount && tipoReserva === 'fixed' ? precioBase * 0.2 : 0;
-  const precioConDescuento = precioBase - descuento;
-  const descuentoCancelacion = (metodo === 'full_payment' || metodo === 'partial_payment') && pendingDiscount > 0
-    ? Math.round(precioConDescuento * pendingDiscount / 100) : 0;
-  const precioFinal = precioConDescuento - descuentoCancelacion;
-  const sena = Math.round(precioFinal * 0.5);
+  const precioFinal = precioBase - descuento;
+  const sena = Math.round(precioFinal * depositPercent / 100);
   const montoAPagar = metodo === 'partial_payment' ? sena : precioFinal;
 
   const handleCancelar = () => navigate('/');
@@ -381,22 +379,19 @@ function InscribirActividad() {
         reservation_date: new Date(fecha).toISOString(),
         payment_method: paymentMethod,
         test_scenario: testScenario,
+        ...(paymentMethod === 'partial_payment' ? { deposit_percent: depositPercent } : {}),
       };
 
       const fn = tipoReserva === 'fixed' ? reserveFixed : reserveIndividual;
-      const data = await fn(payload);
-
-      const discountMsg = data?.discount_applied > 0
-        ? ` Se aplicó un ${data.discount_applied}% de descuento por cancelación previa.`
-        : '';
+      await fn(payload);
 
       if (paymentMethod === 'partial_payment') {
         setResultado({
           tipo: 'pendiente',
-          mensaje: `Tu reserva quedo en estado pendiente. Monto abonado: ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.${discountMsg}`,
+          mensaje: `Tu reserva quedo en estado pendiente. Monto abonado (${depositPercent}%): ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.`,
         });
       } else {
-        setResultado({ tipo: 'confirmada', mensaje: `Inscripcion confirmada. Tu lugar esta reservado.${discountMsg}` });
+        setResultado({ tipo: 'confirmada', mensaje: 'Inscripcion confirmada. Tu lugar esta reservado.' });
       }
       setPaso(3);
     } catch (err) {
@@ -513,15 +508,11 @@ function InscribirActividad() {
                   {esAbonado && (
                     <div style={{ fontSize: '13px', color: 'var(--color-texto)', marginBottom: '6px', opacity: !hayCupos ? 0.45 : 1 }}>
                       Créditos disponibles: 
-                      <strong>{credits}</strong>
-                      {credits === 0 && <span style={{ fontSize: '11px', color: 'var(--color-texto-suave)', marginLeft: '4px' }}></span>}
+                      <strong>{credits} / {creditsCap}</strong>
                       {!hayCupos && credits > 0 && <span style={{ fontSize: '11px', color: 'var(--color-texto-suave)', marginLeft: '4px' }}>(no aplica sin cupos)</span>}
                     </div>
-                  )}                  {pendingDiscount > 0 && (
-                    <div style={{ ...s.infoBox('green'), marginBottom: '8px', fontSize: '13px' }}>
-                      Tenés un <strong>{pendingDiscount}% de descuento</strong> acumulado por cancelación. Se aplicará automáticamente al abonar total o seña.
-                    </div>
-                  )}                  {inscriptionOptions?.has_age_discount && hayCupos && (
+                  )}
+                  {inscriptionOptions?.has_age_discount && hayCupos && (
                     <div style={{ ...s.infoBox('green'), marginBottom: '8px' }}>Tenés descuento por ser mayor de 65 años (20% off)</div>
                   )}
 
@@ -591,17 +582,27 @@ function InscribirActividad() {
                     </button>
                   )}
                   <button style={s.metodoBtn(metodo === 'full_payment')} onClick={() => setMetodo('full_payment')}>
-                    Abonar total - {formatPrecio(metodo === 'full_payment' ? precioFinal : precioConDescuento - (pendingDiscount > 0 ? Math.round(precioConDescuento * pendingDiscount / 100) : 0))}
-                    <div style={s.metodoBtnSub}>
-                      {pendingDiscount > 0 ? `Con ${pendingDiscount}% de descuento — Reserva confirmada al instante` : 'Reserva confirmada al instante'}
-                    </div>
+                    Abonar total - {formatPrecio(precioFinal)}
+                    <div style={s.metodoBtnSub}>Reserva confirmada al instante</div>
                   </button>
                   <button style={s.metodoBtn(metodo === 'partial_payment')} onClick={() => setMetodo('partial_payment')}>
-                    Abonar seña (50%) - {formatPrecio(metodo === 'partial_payment' ? sena : Math.round((precioConDescuento - (pendingDiscount > 0 ? Math.round(precioConDescuento * pendingDiscount / 100) : 0)) * 0.5))}
-                    <div style={s.metodoBtnSub}>
-                      {pendingDiscount > 0 ? `Con ${pendingDiscount}% de descuento — Reserva en estado pendiente` : 'Reserva en estado pendiente hasta completar el pago'}
-                    </div>
+                    Abonar seña - {formatPrecio(sena)} ({depositPercent}%)
+                    <div style={s.metodoBtnSub}>Elegí qué porcentaje abonar (mínimo 50%) — Reserva en estado pendiente hasta completar el pago</div>
                   </button>
+                  {metodo === 'partial_payment' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 4px 0' }}>
+                      <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-texto)' }}>Porcentaje a abonar:</label>
+                      <select
+                        value={depositPercent}
+                        onChange={(e) => setDepositPercent(Number(e.target.value))}
+                        style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--color-borde)', fontSize: '13px' }}
+                      >
+                        {[50, 60, 70, 80, 90, 100].map((p) => (
+                          <option key={p} value={p}>{p}%</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
                 </>
               )}
@@ -626,7 +627,7 @@ function InscribirActividad() {
                 <strong>Detalle del pago</strong><br />
                 Actividad: {actividad.name}<br />
                 Monto a pagar: <strong>{formatPrecio(montoAPagar)}</strong>
-                {metodo === 'partial_payment' && <><br /><span style={{ color: 'var(--color-texto-suave)', fontSize: '12px' }}>Seña del 50% - monto restante: {formatPrecio(precioFinal - sena)}</span></>}
+                {metodo === 'partial_payment' && <><br /><span style={{ color: 'var(--color-texto-suave)', fontSize: '12px' }}>Seña del {depositPercent}% - monto restante: {formatPrecio(precioFinal - sena)}</span></>}
               </div>
 
               {/* Selector de escenario MP (solo visible en desarrollo/testing) */}

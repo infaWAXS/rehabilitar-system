@@ -78,6 +78,11 @@ function SugerenciasPendientes() {
   const horarioDeTexto = (s) =>
     s.activity_type === 'fixed' ? s.schedule : `${s.specific_date} · ${s.time_slot}`;
 
+  const fechasDeTexto = (s) => {
+    if (s.activity_type !== 'fixed' || !Array.isArray(s.dates) || s.dates.length === 0) return null;
+    return `${s.dates.length} clase${s.dates.length !== 1 ? 's' : ''}: ${s.dates.join(', ')}`;
+  };
+
   const manejarRechazo = async (id) => {
     setProcesando((prev) => ({ ...prev, [id]: true }));
     try {
@@ -122,12 +127,14 @@ function SugerenciasPendientes() {
       {!cargando && sugerencias.map((sug) => (
         <div key={sug.id} style={s.card}>
           <div>
-            <p style={s.nombre}>{sug.specialization}</p>
+            <p style={s.nombre}>{sug.name || sug.specialization}</p>
+            <p style={s.dato}>Especialidad: {sug.specialization}</p>
             <p style={s.dato}>Profesor: {sug.professor_name}</p>
             <p style={s.dato}>Sala: {sug.room_name} · Cupos: {sug.capacity}</p>
             <p style={s.dato}>
               {sug.activity_type === 'fixed' ? 'Clase fija' : 'Clase individual'} — {horarioDeTexto(sug)}
             </p>
+            {fechasDeTexto(sug) && <p style={s.dato}>{fechasDeTexto(sug)}</p>}
             {mensajes[sug.id] && (
               <p style={mensajes[sug.id].tipo === 'ok' ? s.exito : s.error}>
                 {mensajes[sug.id].texto}
@@ -145,14 +152,18 @@ function SugerenciasPendientes() {
       {seleccionada && (
         <div style={s.modalOverlay}>
           <div style={s.modal}>
-            <p style={s.modalTitulo}>{seleccionada.specialization}</p>
+            <p style={s.modalTitulo}>{seleccionada.name || seleccionada.specialization}</p>
 
+            <p style={s.modalDato}><strong>Especialidad:</strong> {seleccionada.specialization}</p>
             <p style={s.modalDato}><strong>Profesor:</strong> {seleccionada.professor_name}</p>
             <p style={s.modalDato}><strong>Sala:</strong> {seleccionada.room_name}</p>
             <p style={s.modalDato}>
               <strong>Tipo:</strong> {seleccionada.activity_type === 'fixed' ? 'Clase fija' : 'Clase individual'}
             </p>
             <p style={s.modalDato}><strong>Horario:</strong> {horarioDeTexto(seleccionada)}</p>
+            {fechasDeTexto(seleccionada) && (
+              <p style={s.modalDato}><strong>Fechas:</strong> {fechasDeTexto(seleccionada)}</p>
+            )}
             <p style={s.modalDato}><strong>Cupos máximos:</strong> {seleccionada.capacity}</p>
             {seleccionada.description && (
               <p style={s.modalDato}><strong>Descripción:</strong> {seleccionada.description}</p>

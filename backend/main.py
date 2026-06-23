@@ -14,6 +14,7 @@ from app.models.attendance_qr import AttendanceQrCode
 from app.models.plan import Plan
 from app.models.user_plan import UserPlan
 from app.models.notification import Notification
+from app.models.credit_transaction import CreditTransaction
 
 from app.routes.rutas_autenticacion import router as auth_router
 from app.routes.rutas_usuarios import router as user_router
@@ -51,9 +52,6 @@ def _migrate(engine):
     from sqlalchemy import text
     with engine.connect() as conn:
         cols = [row[1] for row in conn.execute(text("PRAGMA table_info(users)"))]
-        if "credits" not in cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN credits INTEGER NOT NULL DEFAULT 0"))
-            conn.commit()
         if "notifications_enabled" not in cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN notifications_enabled BOOLEAN NOT NULL DEFAULT 1"))
             conn.commit()
@@ -61,11 +59,38 @@ def _migrate(engine):
         if "link" not in notif_cols:
             conn.execute(text("ALTER TABLE notifications ADD COLUMN link TEXT"))
             conn.commit()
+        reservation_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(reservations)"))]
+        if "deposit_percent" not in reservation_cols:
+            conn.execute(text("ALTER TABLE reservations ADD COLUMN deposit_percent INTEGER"))
+            conn.commit()
+        if "cancellation_result" not in reservation_cols:
+            conn.execute(text("ALTER TABLE reservations ADD COLUMN cancellation_result TEXT"))
+            conn.commit()
 
 _migrate(engine)
 
 # Cargar usuarios mock al arrancar (sólo crea los que no existen)
 seed_mock_users()
+
+# Tarea programada: cancela clases sin profesor asignado a <= 12 hs de su inicio
+# y otorga un crédito al abonado afectado.
+from apscheduler.schedulers.background import BackgroundScheduler
+from database.connection import SessionLocal
+from app.services.servicio_auto_cancelacion import auto_cancel_unstaffed_classes
+
+
+def _run_auto_cancel_job():
+    db = SessionLocal()
+    try:
+        auto_cancel_unstaffed_classes(db)
+    finally:
+        db.close()
+
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(_run_auto_cancel_job, "interval", minutes=15)
+scheduler.start()
+
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(user_router)
 app.include_router(client_router)

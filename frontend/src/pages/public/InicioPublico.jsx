@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getToken, getRole, getUserName, clearUserData, logout } from '../../services/authService';
 import { getActivities, getActivityById, getActivityAvailability } from '../../services/activitiesService';
 import { getMyReservations } from '../../services/reservationsService';
+import { getMyPlan } from '../../services/paymentsService';
 import apiClient from '../../services/apiClient';
 import FiltroActividades from './FiltroActividades';
 
@@ -101,6 +102,18 @@ const s = {
     fontSize: '14px',
     fontWeight: '700',
     textDecoration: 'none',
+  },
+  creditsBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '5px 12px',
+    borderRadius: '999px',
+    background: '#eff6ff',
+    border: '1px solid #bfdbfe',
+    color: '#1d4ed8',
+    fontSize: '13px',
+    fontWeight: '700',
   },
   /* Botón usuario (topbar) */
   userBtn: {
@@ -531,6 +544,7 @@ function InicioPublico() {
   const [notifications, setNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(true);
+  const [creditsInfo, setCreditsInfo] = useState(null);
   const dropdownRef = useRef(null);
   const notifRef = useRef(null);
 
@@ -581,6 +595,23 @@ function InicioPublico() {
         setActividadesInscritas(ids);
       })
       .catch(() => {});
+  }, [role]);
+
+  // Cargar saldo de créditos del abonado (solo clientes)
+  useEffect(() => {
+    if (role !== 'client') {
+      setCreditsInfo(null);
+      return;
+    }
+    getMyPlan()
+      .then((data) => {
+        if (data?.es_abonado) {
+          setCreditsInfo({ credits: data.credits ?? 0, cap: data.credits_cap ?? 3 });
+        } else {
+          setCreditsInfo(null);
+        }
+      })
+      .catch(() => setCreditsInfo(null));
   }, [role]);
 
   // Cargar notificaciones del sistema (solo clientes y profesores)
@@ -824,6 +855,12 @@ function InicioPublico() {
           {/* Autenticado: botón usuario con dropdown */}
           {estaLogueado && (
             <>
+              {creditsInfo && (
+                <span style={s.creditsBadge} title="Créditos disponibles este mes">
+                  <span role="img" aria-hidden>🎫</span>
+                  {creditsInfo.credits}/{creditsInfo.cap}
+                </span>
+              )}
               {puedeVerNotificaciones && (
                 <div style={s.notifWrapper} ref={notifRef}>
                   <button

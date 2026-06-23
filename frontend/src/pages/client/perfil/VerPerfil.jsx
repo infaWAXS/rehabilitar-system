@@ -194,9 +194,22 @@ export default function VerPerfil() {
                   </div>
                   {(planInfo.pending_discount_percent ?? 0) > 0 && (
                     <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#15803d', marginTop: '4px' }}>
-                      Tenés un <strong>{planInfo.pending_discount_percent}% de descuento</strong> pendiente por cancelación. Se aplicará automáticamente en tu próximo pago monetario.
+                      Tenés un <strong>{planInfo.pending_discount_percent}% de descuento</strong> pendiente por cancelación. Se aplicará automáticamente en el pago de tu próxima renovación de suscripción.
                     </div>
                   )}
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#1d4ed8', marginTop: '8px' }}>
+                    🎫 Créditos disponibles este mes: <strong>{planInfo.credits ?? 0} / {planInfo.credits_cap ?? 3}</strong>
+                    <div style={{ fontSize: '12px', color: '#1d4ed8', opacity: 0.85, marginTop: '4px' }}>
+                      Se ganan cancelando una clase con más de 48 hs de anticipación. El límite se renueva el día 1 de cada mes.
+                    </div>
+                    {planInfo.credits_by_type && Object.keys(planInfo.credits_by_type).length > 0 && (
+                      <div style={{ fontSize: '12px', color: '#1d4ed8', marginTop: '6px' }}>
+                        {Object.entries(planInfo.credits_by_type).map(([tipo, cantidad]) => (
+                          <span key={tipo} style={{ marginRight: '10px' }}>{tipo}: {cantidad}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

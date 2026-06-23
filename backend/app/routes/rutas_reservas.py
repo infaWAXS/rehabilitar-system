@@ -71,6 +71,7 @@ def inscribe_fixed_activity(
         db,
         request.payment_method or "full_payment",
         request.test_scenario or "success",
+        request.deposit_percent,
     )
 
 
@@ -89,6 +90,7 @@ def inscribe_individual_activity(
         db,
         request.payment_method or "full_payment",
         request.test_scenario or "success",
+        request.deposit_percent,
     )
 
 
