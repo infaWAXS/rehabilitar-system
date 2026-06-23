@@ -12,7 +12,7 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
 from app.utils.subscriptions import is_abonado
-from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation, notify_activity_modified, notify_activity_assumed
+from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation, notify_activity_modified, notify_activity_assumed, notify_activity_created
 from database.connection import SessionLocal
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -360,6 +360,22 @@ def crear_actividad(datos, db: Session) -> list:
     db.commit()
     for act in creadas:
         db.refresh(act)
+
+    if creadas and creadas[0].professor:
+        primera_id = creadas[0].id
+        total = len(creadas)
+
+        def _notif_creacion_async(aid: int, total_ocurrencias: int) -> None:
+            db_n = SessionLocal()
+            try:
+                notify_activity_created(aid, db_n, total_ocurrencias)
+            except Exception:
+                pass
+            finally:
+                db_n.close()
+
+        Thread(target=_notif_creacion_async, args=(primera_id, total), daemon=True).start()
+
     return creadas
 
 
@@ -427,10 +443,21 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
 
 
 def cancelar_actividad(activity_id: int, db: Session) -> None:
-    """Marca una actividad como cancelada (no la elimina físicamente)."""
+    """Marca una actividad como cancelada (no la elimina físicamente).
+    Solo se permite si no tiene clientes inscriptos (reservas activas)."""
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    hay_inscriptos = db.query(Reservation).filter(
+        Reservation.activity_id == activity_id,
+        Reservation.status.in_(["confirmed", "pending"]),
+    ).first() is not None
+    if hay_inscriptos:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede eliminar la actividad: tiene clientes inscriptos.",
+        )
 
     ahora = datetime.now()
 

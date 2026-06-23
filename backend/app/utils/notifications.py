@@ -152,10 +152,9 @@ def _send_email(to_email: str, subject: str, body: str) -> bool:
         return False
 
 def notify_activity_cancellation(activity_id: int, db: Session) -> None:
-    """Consulta reservas y usuarios y envía emails individuales informando la cancelación.
-
-    - Notifica a usuarios con reservas `pending` o `confirmed`.
-    - Notifica al profesor si se puede resolver a un `User` por nombre/apellido o registra el aviso.
+    """Notifica (email + in-app) al profesor cuando se elimina una actividad.
+    Solo se puede eliminar una actividad sin clientes inscriptos, por lo que no hace
+    falta avisar a ningún cliente.
     """
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
     if not actividad:
@@ -185,106 +184,59 @@ def notify_activity_cancellation(activity_id: int, db: Session) -> None:
     except Exception:
         when = actividad.schedule or str(actividad.specific_date) or "(horario no disponible)"
 
-    subject_clientes = f"Aviso para alumno: cancelación de {actividad.name or 'Actividad'}"
     subject_profesor = f"Aviso para profesor: cancelación de {actividad.name or 'Actividad'}"
 
-    reservas = (
-        db.query(Reservation)
-        .filter(
-            Reservation.activity_id == activity_id,
-            Reservation.status.in_(["confirmed", "pending"]),
-        )
-        .all()
-    )
+    if not actividad.professor:
+        return
 
-    # Enviar a cada cliente sin duplicar avisos (email + notificación in-app)
-    sent_emails: set[str] = set()
-    notified_user_ids: set[int] = set()
-    title_clientes = f"Actividad cancelada: {actividad.name or 'Actividad'}"
-    for r in reservas:
-        try:
-            usuario = db.query(User).filter(User.id == r.user_id).first()
-            if not usuario:
-                continue
-
-            if usuario.id in notified_user_ids:
-                logger.info("Usuario %s ya notificado sobre cancelación de actividad %s", usuario.id, activity_id)
-                continue
-
-            body = (
-                f"Hola {usuario.name} {usuario.lastname},\n\n"
-                f"Lamentamos informarte que la actividad '{actividad.name}' programada para {when} ha sido cancelada.\n\n"
-                "Si necesitás más información o querés reprogramar, por favor contactá a la administración.\n\n"
-                "Saludos cordiales."
-            )
-
-            if getattr(usuario, "email", None):
-                _send_email(usuario.email, subject_clientes, body)
-                sent_emails.add(usuario.email)
-            else:
-                logger.info("Usuario %s sin email; se omite el envío por correo.", r.user_id)
-
-            crear_notificacion(
-                usuario.id,
-                title_clientes,
-                f"La actividad '{actividad.name}' programada para {when} fue cancelada.",
-                db,
-            )
-            notified_user_ids.add(usuario.id)
-        except Exception:
-            logger.exception("Error notificando usuario %s sobre cancelación de actividad %s", r.user_id, activity_id)
-
-    # Notificar profesor
-    if actividad.professor:
-        prof_name = actividad.professor.strip()
-        logger.info("Cancelación actividad %s: profesor informado en actividad='%s'", activity_id, prof_name)
+    prof_name = actividad.professor.strip()
+    logger.info("Cancelación actividad %s: profesor informado en actividad='%s'", activity_id, prof_name)
+    profesor_usuario = None
+    try:
+        profesor_usuario = _resolve_professor_user(prof_name, db)
+    except Exception:
         profesor_usuario = None
-        try:
-            profesor_usuario = _resolve_professor_user(prof_name, db)
-        except Exception:
-            profesor_usuario = None
 
-        candidatos_profesor = _resolve_professor_candidates(prof_name, actividad, db)
-        if profesor_usuario and profesor_usuario not in candidatos_profesor:
-            candidatos_profesor.insert(0, profesor_usuario)
+    candidatos_profesor = _resolve_professor_candidates(prof_name, actividad, db)
+    if profesor_usuario and profesor_usuario not in candidatos_profesor:
+        candidatos_profesor.insert(0, profesor_usuario)
 
-        if not candidatos_profesor:
-            logger.info("Profesor '%s' no encontrado/sin email; no se pudo enviar notificación automática.", prof_name)
-        else:
-            # Notificación in-app para el profesor resuelto (o el primer candidato como fallback)
-            destinatario_app = profesor_usuario or candidatos_profesor[0]
-            if destinatario_app and destinatario_app.id not in notified_user_ids:
-                crear_notificacion(
-                    destinatario_app.id,
-                    f"Actividad cancelada: {actividad.name or 'Actividad'}",
-                    f"Te informamos que la actividad '{actividad.name}' programada para {when} fue cancelada.",
-                    db,
-                )
-                notified_user_ids.add(destinatario_app.id)
+    if not candidatos_profesor:
+        logger.info("Profesor '%s' no encontrado/sin email; no se pudo enviar notificación automática.", prof_name)
+        return
 
-            enviados_profesor = set()
-            for candidato in candidatos_profesor:
-                if not candidato or not getattr(candidato, "email", None):
-                    continue
-                if candidato.email in sent_emails or candidato.email in enviados_profesor:
-                    logger.info("Profesor ya notificado por email duplicado: %s", candidato.email)
-                    continue
+    # Notificación in-app para el profesor resuelto (o el primer candidato como fallback)
+    destinatario_app = profesor_usuario or candidatos_profesor[0]
+    if destinatario_app:
+        crear_notificacion(
+            destinatario_app.id,
+            f"Actividad cancelada: {actividad.name or 'Actividad'}",
+            f"Te informamos que la actividad '{actividad.name}' programada para {when} fue cancelada.",
+            db,
+        )
 
-                logger.info(
-                    "Profesor resuelto para actividad %s: user_id=%s email=%s",
-                    activity_id,
-                    candidato.id,
-                    candidato.email,
-                )
-                body = (
-                    f"Hola {candidato.name} {candidato.lastname},\n\n"
-                    f"Te informamos que la actividad '{actividad.name}' programada para {when} ha sido cancelada.\n\n"
-                    "Por favor, revisá tu agenda y coordiná cualquier aviso adicional que corresponda.\n\n"
-                    "Saludos cordiales."
-                )
-                if _send_email(candidato.email, subject_profesor, body):
-                    enviados_profesor.add(candidato.email)
-                    break
+    enviados_profesor = set()
+    for candidato in candidatos_profesor:
+        if not candidato or not getattr(candidato, "email", None):
+            continue
+        if candidato.email in enviados_profesor:
+            continue
+
+        logger.info(
+            "Profesor resuelto para actividad %s: user_id=%s email=%s",
+            activity_id,
+            candidato.id,
+            candidato.email,
+        )
+        body = (
+            f"Hola {candidato.name} {candidato.lastname},\n\n"
+            f"Te informamos que la actividad '{actividad.name}' programada para {when} ha sido cancelada.\n\n"
+            "Por favor, revisá tu agenda y coordiná cualquier aviso adicional que corresponda.\n\n"
+            "Saludos cordiales."
+        )
+        if _send_email(candidato.email, subject_profesor, body):
+            enviados_profesor.add(candidato.email)
+            break
 
 
 def _when_label(actividad: Activity) -> str:
@@ -783,8 +735,12 @@ def notify_class_cancelled_by_center(user_id: int, activity_id: int, credito_oto
 
 
 def notify_activity_assumed(activity_id: int, professor: User, db: Session) -> None:
-    """Notifica (email + in-app) a todos los administradores y al propio profesor
-    cuando este asume una actividad disponible."""
+    """Notifica (email + in-app) a todos los administradores, al propio profesor y a los
+    clientes inscriptos (reservas activas + lista de espera) cuando un profesor asume
+    una actividad disponible."""
+    from app.models.reservation import Reservation
+    from app.models.waitlist import Waitlist
+
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
     if not actividad:
         logger.warning("notify_activity_assumed: actividad %s no encontrada", activity_id)
@@ -792,6 +748,45 @@ def notify_activity_assumed(activity_id: int, professor: User, db: Session) -> N
 
     when = _when_label(actividad)
     nombre_profesor = f"{professor.name} {professor.lastname}".strip()
+
+    # Aviso a los clientes inscriptos (reservas activas + lista de espera)
+    ids_reservas = {
+        r.user_id for r in db.query(Reservation).filter(
+            Reservation.activity_id == activity_id,
+            Reservation.status.in_(["confirmed", "pending"]),
+        ).all()
+    }
+    ids_espera = {
+        w.user_id for w in db.query(Waitlist).filter(
+            Waitlist.activity_id == activity_id,
+            Waitlist.status == "waiting",
+        ).all()
+    }
+    for user_id in ids_reservas | ids_espera:
+        try:
+            usuario = db.query(User).filter(User.id == user_id).first()
+            if not usuario:
+                continue
+            subject_cliente = f"Profesor asignado: {actividad.name or 'Actividad'}"
+            body_email = (
+                f"Hola {usuario.name} {usuario.lastname},\n\n"
+                f"Te informamos que la actividad '{actividad.name}' programada para {when} "
+                f"ya tiene profesor/a asignado/a: {nombre_profesor}.\n\n"
+                "Saludos cordiales."
+            )
+            if getattr(usuario, "email", None):
+                _send_email(usuario.email, subject_cliente, body_email)
+            crear_notificacion(
+                user_id,
+                subject_cliente,
+                f"La actividad '{actividad.name}' ya tiene profesor/a asignado/a: {nombre_profesor}.",
+                db,
+            )
+        except Exception:
+            logger.exception(
+                "Error notificando al cliente %s sobre asignación de profesor en actividad %s",
+                user_id, activity_id,
+            )
 
     # Aviso a los administradores
     title_admin = f"Profesor asignado: {actividad.name or 'Actividad'}"
@@ -839,6 +834,46 @@ def notify_activity_assumed(activity_id: int, professor: User, db: Session) -> N
         logger.exception(
             "Error notificando al profesor %s sobre asignación a actividad %s",
             professor.id, activity_id,
+        )
+
+
+def notify_activity_created(activity_id: int, db: Session, total_ocurrencias: int = 1) -> None:
+    """Notifica (email + in-app) al profesor cuando el administrador crea una actividad
+    asignándolo directamente desde el alta."""
+    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not actividad or not actividad.professor:
+        return
+
+    profesor = _resolve_professor_user(actividad.professor, db)
+    if not profesor:
+        logger.info(
+            "notify_activity_created: profesor '%s' no encontrado/sin email para actividad %s",
+            actividad.professor, activity_id,
+        )
+        return
+
+    when = _when_label(actividad)
+    extra = f" (con {total_ocurrencias} clases programadas en total)" if total_ocurrencias > 1 else ""
+    subject = f"Nueva actividad asignada: {actividad.name or 'Actividad'}"
+    body_email = (
+        f"Hola {profesor.name} {profesor.lastname},\n\n"
+        f"Se creó la actividad '{actividad.name}' y fuiste asignado/a como profesor/a. "
+        f"Está programada para {when}{extra}.\n\n"
+        "Saludos cordiales."
+    )
+    try:
+        if getattr(profesor, "email", None):
+            _send_email(profesor.email, subject, body_email)
+        crear_notificacion(
+            profesor.id,
+            subject,
+            f"Fuiste asignado/a como profesor/a de la nueva actividad '{actividad.name}' programada para {when}{extra}.",
+            db,
+        )
+    except Exception:
+        logger.exception(
+            "Error notificando al profesor %s sobre la creación de la actividad %s",
+            profesor.id, activity_id,
         )
 
 
