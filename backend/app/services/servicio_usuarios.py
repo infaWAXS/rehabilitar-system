@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.activity import Activity
 
-from app.utils.security import hash_password, verify_password, create_access_token, verify_token
+from app.utils.security import hash_password, verify_password, create_access_token, verify_token, generate_temporary_password
 from app.exceptions.http_exceptions import email_already_exists_exception, unauthorized_exception, forbidden_exception, user_not_found_exception
 from database.connection import SessionLocal
 
@@ -69,9 +69,66 @@ def register_user(user_data, db: Session):
     db.refresh(new_user)
 
     return new_user
-   
-    
-#Valida si el email existe en la base de datos, si no existe, lanza una excepción HTTP 404. 
+
+
+# HU Crear cuenta (admin): el administrador NO define la contraseña. El sistema genera
+# una contraseña temporal, crea la cuenta y se la envía al usuario por mail para que la
+# cambie luego desde "Cambiar contraseña".
+def register_user_by_admin(user_data, db: Session):
+    existing_user = db.query(User).filter(
+        User.email == user_data.email
+    ).first()
+
+    if existing_user:
+        raise email_already_exists_exception()
+
+    role = getattr(user_data, "role", "client") or "client"
+    specialization = getattr(user_data, "specialization", None)
+
+    if role == "professor" and not specialization:
+        raise HTTPException(
+            status_code=400,
+            detail="Un profesor debe tener una especialidad asignada"
+        )
+
+    temp_password = generate_temporary_password()
+    hashed_password = hash_password(temp_password)
+
+    new_user = User(
+        name=user_data.name,
+        lastname=user_data.lastname,
+        email=user_data.email,
+        password=hashed_password,
+        role=role,
+        dni=getattr(user_data, "dni", None),
+        direccion=getattr(user_data, "direccion", None),
+        telefono=getattr(user_data, "telefono", None),
+        specialization=specialization,
+        birth_date=getattr(user_data, "birth_date", None),
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    user_id = new_user.id
+
+    def _enviar_credenciales_async(uid: int, temp_pw: str) -> None:
+        db_n = SessionLocal()
+        try:
+            from app.utils.notifications import notify_account_created_with_temp_password
+            notify_account_created_with_temp_password(uid, temp_pw, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_enviar_credenciales_async, args=(user_id, temp_password), daemon=True).start()
+
+    return new_user
+
+
+#Valida si el email existe en la base de datos, si no existe, lanza una excepción HTTP 404.
 #Si el email existe, verifica si la contraseña es correcta. 
 #Si la contraseña es incorrecta, lanza una excepción HTTP 401. 
 #Si la contraseña es correcta, genera un token de acceso JWT y lo devuelve en la respuesta.       

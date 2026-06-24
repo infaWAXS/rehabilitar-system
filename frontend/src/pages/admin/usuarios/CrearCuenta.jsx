@@ -5,13 +5,12 @@
 // E4: cuenta de admin creada → POST /users (role=admin) → cuenta activa
 // E5: email ya registrado → el backend retorna 400/409 → se muestra error
 // E6: profesor sin especialidad → validación frontend evita envío
-// E7: contraseña < 6 caracteres → validación frontend evita envío
-// TODO (sistema): enviar credenciales por email al usuario creado (backend pendiente)
+// El admin no define la contraseña: el backend genera una temporal y se la envía
+// al usuario por mail para que la cambie luego desde "Cambiar contraseña".
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
-import { register } from '../../../services/authService';
-import { adminUploadCertificate } from '../../../services/usersService';
+import { createUserByAdmin, adminUploadCertificate } from '../../../services/usersService';
 
 const ROLES = [
   { value: 'client',       label: 'Cliente' },
@@ -78,7 +77,7 @@ const s = {
   seccionLabel: { fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' },
 };
 
-const FORM_VACIO = { nombre: '', apellido: '', email: '', contrasena: '', dni: '', especializacion: '', fecha_nacimiento: '' };
+const FORM_VACIO = { nombre: '', apellido: '', email: '', dni: '', especializacion: '', fecha_nacimiento: '' };
 
 function CrearCuenta() {
   const [rolSeleccionado, setRolSeleccionado] = useState('client');
@@ -113,8 +112,6 @@ function CrearCuenta() {
     if (!form.nombre.trim()) nuevosErrores.nombre = 'Campo requerido';
     if (!form.apellido.trim()) nuevosErrores.apellido = 'Campo requerido';
     if (!form.email.trim()) nuevosErrores.email = 'Campo requerido';
-    if (!form.contrasena) nuevosErrores.contrasena = 'Campo requerido';
-    else if (form.contrasena.length < 6) nuevosErrores.contrasena = 'Mínimo 6 caracteres';
     if (!form.dni.trim()) nuevosErrores.dni = 'Campo requerido';
     else if (!/^\d{7,8}$/.test(form.dni.trim())) nuevosErrores.dni = 'Entre 7 y 8 dígitos numéricos';
     if (!form.fecha_nacimiento) nuevosErrores.fecha_nacimiento = 'Campo requerido';
@@ -136,11 +133,10 @@ function CrearCuenta() {
 
     setCargando(true);
     try {
-      const createdUser = await register({
+      const createdUser = await createUserByAdmin({
         name: form.nombre,
         lastname: form.apellido,
         email: form.email,
-        password: form.contrasena,
         role: rolSeleccionado,
         dni: form.dni.trim(),
         birth_date: form.fecha_nacimiento,
@@ -151,7 +147,7 @@ function CrearCuenta() {
           await adminUploadCertificate(createdUser.id, aptoFile);
         } catch (_) {}
       }
-      setExito('Cuenta creada exitosamente, credenciales enviadas.');
+      setExito('Cuenta creada exitosamente. Se envió una contraseña temporal al correo del usuario.');
       setForm(FORM_VACIO);
       setAptoFile(null);
     } catch (err) {
@@ -228,14 +224,8 @@ function CrearCuenta() {
                 {erroresCampos.email && <span style={s.errorCampo}>{erroresCampos.email}</span>}
               </div>
 
-              {/* Contraseña */}
-              <div style={s.campo}>
-                <label style={s.label}>
-                  Contraseña{' '}
-                  <span style={s.labelSub}>(mín. 6 caracteres)</span>
-                </label>
-                <input style={s.input} type="password" name="contrasena" value={form.contrasena} onChange={cambio} />
-                {erroresCampos.contrasena && <span style={s.errorCampo}>{erroresCampos.contrasena}</span>}
+              <div style={{ ...s.campo, fontSize: '12px', color: 'var(--color-texto-suave)' }}>
+                Se generará una contraseña temporal y se enviará por correo al usuario para que la cambie luego.
               </div>
 
               {/* DNI - obligatorio */}

@@ -570,6 +570,32 @@ def notify_account_reinstated(cliente_id: int, db: Session) -> None:
     crear_notificacion(cliente_id, "Cuenta reintegrada", "Tu cuenta fue reintegrada. Ya podés acceder a todas las funcionalidades.", db)
 
 
+def notify_account_created_with_temp_password(user_id: int, temp_password: str, db: Session) -> None:
+    """Notifica (email + in-app) al usuario recién creado por un administrador, indicándole
+    su contraseña temporal y que debe cambiarla desde 'Cambiar contraseña'."""
+    usuario = db.query(User).filter(User.id == user_id).first()
+    if not usuario:
+        return
+    subject = "Tu cuenta en Rehabilitar fue creada"
+    body_email = (
+        f"Hola {usuario.name} {usuario.lastname},\n\n"
+        "Un administrador creó tu cuenta en Rehabilitar. Tu contraseña temporal es:\n\n"
+        f"    {temp_password}\n\n"
+        "Por seguridad, te pedimos que ingreses con esta contraseña y la cambies "
+        "desde la sección 'Cambiar contraseña' apenas puedas.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(usuario, "email", None):
+        _send_email(usuario.email, subject, body_email)
+    crear_notificacion(
+        user_id,
+        "Cambiá tu contraseña",
+        "Tu cuenta fue creada por un administrador con una contraseña temporal (enviada por mail). "
+        "Te recomendamos cambiarla desde 'Cambiar contraseña'.",
+        db,
+    )
+
+
 def notify_reintegration_rejected(cliente_id: int, db: Session) -> None:
     """Notifica al cliente (email + in-app) que su solicitud de reintegro fue rechazada."""
     cliente = db.query(User).filter(User.id == cliente_id).first()
