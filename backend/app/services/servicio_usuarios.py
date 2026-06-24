@@ -464,6 +464,20 @@ def delete_user(user_id: int, db: Session):
 
             Thread(target=_notif_async, args=(uid_promovido, aid_promovido), daemon=True).start()
 
+    # Borrar registros dependientes con FK NOT NULL hacia el usuario (suscripciones,
+    # asistencias) para que el delete no falle por violación de integridad. Las
+    # notificaciones y movimientos de crédito no tienen FK NOT NULL pero se limpian
+    # igual para no dejar datos huérfanos.
+    from app.models.user_plan import UserPlan
+    from app.models.attendance import Attendance
+    from app.models.notification import Notification
+    from app.models.credit_transaction import CreditTransaction
+
+    db.query(UserPlan).filter(UserPlan.user_id == user_id).delete(synchronize_session=False)
+    db.query(Attendance).filter(Attendance.user_id == user_id).delete(synchronize_session=False)
+    db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
+    db.query(CreditTransaction).filter(CreditTransaction.user_id == user_id).delete(synchronize_session=False)
+
     db.delete(user)
     db.commit()
 
