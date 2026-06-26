@@ -26,6 +26,7 @@ import AptosFisicosAdmin from './pages/admin/clientes/AptosFisicosAdmin';
 
 // ── Admin: Actividades (Angel) ───────────────────────────
 import ListaActividades from './pages/admin/actividades/ListaActividades';
+import SugerenciasPendientes from './pages/admin/actividades/SugerenciasPendientes';
 import CrearActividad from './pages/admin/actividades/CrearActividad';
 import DetalleActividad from './pages/admin/actividades/DetalleActividad';
 import EditarActividad from './pages/admin/actividades/EditarActividad';
@@ -57,6 +58,7 @@ import ConfirmarAsistenciaQr from './pages/client/asistencias/ConfirmarAsistenci
 
 // ── Kinesiólogo (Nahuel) ─────────────────────────────────
 import MisActividadesProfesor from './pages/kinesiologist/actividades/MisActividades';
+import SugerirActividad from './pages/kinesiologist/actividades/SugerirActividad';
 import RegistrarAsistenciaProfesor from './pages/kinesiologist/asistencias/RegistrarAsistencia';
 
 function App() {
@@ -88,6 +90,7 @@ function App() {
 
         {/* Admin — Actividades */}
         <Route path="/admin/actividades" element={<ListaActividades />} />
+        <Route path="/admin/sugerencias" element={<SugerenciasPendientes />} />
         <Route path="/admin/actividades/crear" element={<CrearActividad />} />
         <Route path="/admin/actividades/editar/:id" element={<EditarActividad />} />
         <Route path="/admin/actividades/:id/lista-espera" element={<VerListaEsperaAdmin />} />
@@ -114,6 +117,7 @@ function App() {
 
         {/* Profesor (Kinesiólogo) */}
         <Route path="/profesor/actividades" element={<MisActividadesProfesor />} />
+        <Route path="/profesor/actividades/sugerir" element={<SugerirActividad />}/>
         <Route path="/profesor/actividades/:id/asistencias" element={<RegistrarAsistenciaProfesor />} />
 
         {/* Redirect por defecto */}

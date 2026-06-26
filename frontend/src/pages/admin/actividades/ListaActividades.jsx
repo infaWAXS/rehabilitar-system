@@ -126,7 +126,7 @@ function ListaActividades() {
       setConfirmTarget(null);
       cargar();
     } catch (err) {
-      setError('No se pudo cancelar la actividad.');
+      setError(err.message || 'No se pudo cancelar la actividad.');
       setConfirmVisible(false);
       setConfirmTarget(null);
     }

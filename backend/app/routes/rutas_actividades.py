@@ -74,6 +74,16 @@ def renunciar_actividad(
     return servicio_actividades.renunciar_actividad(activity_id, current_user, db)
 
 
+@router.patch("/{activity_id}/assume", response_model=ActivityResponse)
+def asumir_actividad(
+    activity_id: int,
+    db: Session = Depends(get_db),
+    current_user: object = Depends(require_role(["professor"])),
+):
+    """El profesor autenticado asume una actividad disponible."""
+    return servicio_actividades.asumir_actividad(activity_id, current_user, db)
+
+
 # HU Listar condiciones de cliente (Nahuel)
 # E1: hay inscriptos -> retorna lista con condicion de acceso por cliente
 # E2: sin inscriptos -> retorna lista vacia []

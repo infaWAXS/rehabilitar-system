@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from app.models.plan import Plan
 from app.models.user_plan import UserPlan
+from app.models.user import User
 
 
 # ── Ver planes ────────────────────────────────────────────────────────────────
@@ -31,6 +32,12 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
         raise HTTPException(status_code=404, detail="Plan no encontrado o inactivo.")
 
     if test_scenario == "success":
+        # Consumir el descuento acumulado por cancelación (beneficio del abonado para
+        # su próximo pago de suscripción)
+        user = db.query(User).filter(User.id == user_id).first()
+        descuento = (user.pending_discount_percent or 0) if user else 0
+        precio_final = float(plan.price) * (1 - descuento / 100) if descuento else float(plan.price)
+
         # Crear (o renovar) el UserPlan del usuario
         hoy = date.today()
         user_plan = UserPlan(
@@ -42,13 +49,21 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
             status="active",
         )
         db.add(user_plan)
+        if descuento and user:
+            user.pending_discount_percent = 0
         db.commit()
+
+        mensaje = f"Pago aprobado. Te suscribiste al plan '{plan.name}' en {specialization}."
+        if descuento:
+            mensaje += f" Se aplicó un {descuento}% de descuento por cancelación previa (pagaste ${precio_final:.2f} en lugar de ${float(plan.price):.2f})."
 
         return {
             "success": True,
-            "message": f"Pago aprobado. Te suscribiste al plan '{plan.name}' en {specialization}.",
+            "message": mensaje,
             "transaction_id": str(uuid.uuid4()),
             "status": "approved",
+            "price_paid": precio_final,
+            "discount_applied": descuento,
         }
     elif test_scenario == "insufficient_funds":
         return {

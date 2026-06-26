@@ -5,7 +5,7 @@ __pycache__/
 venv/
 
 # Variables de entorno
-.env
+.env.local
 
 # SQLite local
 database.db

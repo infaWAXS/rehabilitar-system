@@ -33,3 +33,5 @@ class PagoMercadoPagoResponse(BaseModel):
     message: str
     transaction_id: Optional[str] = None
     status: str  # "approved" | "rejected" | "error"
+    price_paid: Optional[float] = None
+    discount_applied: int = 0  # % de descuento por cancelación aplicado en este pago

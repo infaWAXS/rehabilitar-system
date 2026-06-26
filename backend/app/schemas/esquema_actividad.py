@@ -36,33 +36,10 @@ class ActivityCreate(BaseModel):
 
 
 class ActivityUpdate(BaseModel):
+    """Edición de actividad: solo se permite reasignar sala y/o profesor.
+    El resto de los datos (nombre, horario, precio, etc.) son fijos una vez creada."""
     room_id: Optional[int] = None
-    name: Optional[str] = None
-    specialization: Optional[str] = None
-    activity_type: Optional[str] = None
-    schedule: Optional[str] = None
-    specific_date: Optional[date] = None
-    time_slot: Optional[str] = None
     professor: Optional[str] = None   # None = sin profesor asignado
-    price: Optional[Decimal] = None
-    capacity: Optional[int] = None
-    description: Optional[str] = None
-    requirements: Optional[str] = None
-    status: Optional[str] = None
-
-    @field_validator("activity_type")
-    @classmethod
-    def validar_tipo(cls, v):
-        if v is not None and v not in ("fixed", "individual"):
-            raise ValueError("activity_type debe ser 'fixed' o 'individual'")
-        return v
-
-    @field_validator("status")
-    @classmethod
-    def validar_estado(cls, v):
-        if v is not None and v not in ("active", "cancelled"):
-            raise ValueError("status debe ser 'active' o 'cancelled'")
-        return v
 
 
 class ActivityResponse(BaseModel):

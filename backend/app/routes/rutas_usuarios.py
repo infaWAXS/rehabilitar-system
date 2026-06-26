@@ -7,11 +7,11 @@ import shutil
 
 from database.connection import get_db
 from app.models.user import User
-from app.schemas.esquema_usuario import ChangePasswordRequest, UpdateUserRequest, UserResponse, UserSearchRequest
+from app.schemas.esquema_usuario import ChangePasswordRequest, UpdateUserRequest, UserResponse, UserSearchRequest, AdminUserCreate
 from app.utils.dependencies import get_current_user, require_role
 
 
-from app.services.servicio_usuarios import change_medical_clearance_status, change_password, change_user_status, delete_user, get_all_users, get_user_by_id, search_users, modify_employee, update_user_info as update_user_info_service
+from app.services.servicio_usuarios import change_medical_clearance_status, change_password, change_user_status, delete_user, get_all_users, get_user_by_id, search_users, modify_employee, update_user_info as update_user_info_service, register_user_by_admin
 
 
 
@@ -25,6 +25,17 @@ router = APIRouter(
     prefix="/users",
     tags=["Usuarios"]
 )
+
+
+# HU Crear cuenta (admin): el admin no define la contraseña; el sistema genera una
+# contraseña temporal y se la envía al usuario por mail para que la cambie luego.
+@router.post("", response_model=UserResponse)
+def crear_cuenta_admin(
+    datos: AdminUserCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role(["admin"])),
+):
+    return register_user_by_admin(datos, db)
 
 
 #El usuario actualmente autenticado - AGUSTIN

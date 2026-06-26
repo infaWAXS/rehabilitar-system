@@ -82,6 +82,14 @@ def user_not_enrolled_exception():
     )
 
 
+def activity_session_not_active_exception():
+
+    return HTTPException(
+        status_code=409,
+        detail="La actividad no tiene una sesión activa en este momento"
+    )
+
+
 def qr_not_found_exception():
 
     return HTTPException(

@@ -1,8 +1,20 @@
 # # Responsable legacy: Francis y Agustin - hashing y JWT.
 import bcrypt
+import secrets
+import string
 
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
+
+
+def generate_temporary_password(length: int = 10) -> str:
+    """Genera una contraseña temporal segura (letras, números y algún símbolo)."""
+    alfabeto = string.ascii_letters + string.digits
+    contrasena = [secrets.choice(string.ascii_uppercase), secrets.choice(string.digits)]
+    contrasena += [secrets.choice(alfabeto) for _ in range(length - len(contrasena))]
+    secrets.SystemRandom().shuffle(contrasena)
+    return "".join(contrasena)
+
 
 def hash_password(password: str):
 
