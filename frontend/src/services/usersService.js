@@ -30,6 +30,15 @@ export function getUserById(userId) {
   return apiRequest(`/users/${userId}`);
 }
 
+// HU Crear cuenta (admin): crea la cuenta sin contraseña — el backend genera una
+// contraseña temporal y se la envía al usuario por mail.
+export function createUserByAdmin(data) {
+  return apiRequest('/users', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export function modifyUser(userId, data) {
   return apiRequest(`/users/${userId}/modify`, {
     method: 'PUT',

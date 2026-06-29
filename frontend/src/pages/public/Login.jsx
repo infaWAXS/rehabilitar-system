@@ -48,6 +48,7 @@ function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const mensajeExito = location.state?.mensaje || '';
+  const redirectTo = location.state?.redirectTo || '/';
   const [form, setForm] = useState({ email: '', contrasena: '' });
   const [fieldErrors, setFieldErrors] = useState({ email: '', contrasena: '' });
   const [error, setError] = useState('');
@@ -88,7 +89,7 @@ function Login() {
       }
 
       saveUserData(data);
-      navigate('/');
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('deshabilitada')) {

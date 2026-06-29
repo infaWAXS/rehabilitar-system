@@ -55,8 +55,40 @@ class UserCreate(BaseModel):
             raise ValueError("El DNI debe tener entre 7 y 8 dígitos")
         return value
     
-    
-    
+#Creación de cuenta por parte de un administrador: no incluye contraseña, ya que el
+#sistema genera una contraseña temporal y se la envía al usuario por mail.
+class AdminUserCreate(BaseModel):
+    name: str
+    lastname: str
+    email: EmailStr
+    dni: Optional[str] = None
+    direccion: Optional[str] = None
+    telefono: Optional[str] = None
+    role: Optional[str] = "client"           # client | admin | receptionist | professor
+    specialization: Optional[str] = None     # obligatorio si role == "professor"
+    birth_date: date
+
+    @field_validator("dni")
+    @classmethod
+    def validate_dni(cls, value):
+        if value is None:
+            return value
+        if not value.isdigit():
+            raise ValueError("El DNI debe contener solo números")
+        if len(value) < 7 or len(value) > 8:
+            raise ValueError("El DNI debe tener entre 7 y 8 dígitos")
+        return value
+
+    @field_validator("birth_date")
+    @classmethod
+    def validate_age(cls, value):
+        today = date.today()
+        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        if age < 18:
+            raise ValueError("El usuario debe ser mayor de 18 años")
+        return value
+
+
 #Inicio de sesion de usuario
 class UserLogin(BaseModel):
     email: EmailStr
@@ -97,6 +129,8 @@ class UserResponse(BaseModel):
     birth_date: Optional[date] = None
     
     plan_specialization: Optional[str] = None  # especialidad del plan del usuario (si tiene plan activo)
+
+    notifications_enabled: Optional[bool] = None
 
     class Config:
         from_attributes = True

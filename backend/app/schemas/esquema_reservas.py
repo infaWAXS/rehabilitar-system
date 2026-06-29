@@ -13,6 +13,7 @@ class ReservationCreate(BaseModel):
     reservation_date: datetime
     payment_method: Optional[str] = "full_payment"  # subscription | full_payment | partial_payment | credit
     test_scenario: Optional[str] = "success"        # Simulación MP: success | insufficient_funds | connection_error
+    deposit_percent: Optional[int] = None           # % a abonar (50-100), solo aplica a partial_payment
 
 
 class ReservationUpdate(BaseModel):
@@ -31,7 +32,7 @@ class ReservationResponse(BaseModel):
     payment_status: str
     reservation_date: datetime
     created_at: datetime
-    discount_applied: int = 0  # % de descuento por cancelación aplicado en este pago
+    deposit_percent: Optional[int] = None  # % abonado al reservar (solo full/partial payment)
 
     class Config:
         from_attributes = True
@@ -49,6 +50,7 @@ class ReservationConActividad(BaseModel):
     reservation_type: str
     status: str
     payment_status: str
+    deposit_percent: Optional[int] = None
     reservation_date: datetime
     created_at: datetime
 

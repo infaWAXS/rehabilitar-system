@@ -3,6 +3,7 @@ from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
 from datetime import datetime
+from threading import Thread
 import re
 
 from app.models.activity import Activity
@@ -11,6 +12,8 @@ from app.models.reservation import Reservation
 from app.models.user import User
 from app.schemas.esquema_reservas import ClientConditionResponse
 from app.utils.subscriptions import is_abonado
+from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation, notify_activity_modified, notify_activity_assumed, notify_activity_created
+from database.connection import SessionLocal
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
@@ -20,7 +23,51 @@ def _extraer_dias(schedule: Optional[str]) -> set[str]:
         return set()
     schedule_lower = schedule.lower()
     return {dia for dia in DIAS_SEMANA if dia.lower() in schedule_lower}
+def _solapa_en_profesor(propuesta: Activity, existente: Activity) -> bool:
+    """True si el mismo profesor tiene solapamiento horario en cualquier sala."""
+    if not propuesta.professor or not existente.professor:
+        return False
+    if propuesta.professor.strip().lower() != existente.professor.strip().lower():
+        return False
 
+    dias_propuesta = _dias_actividad(propuesta)
+    dias_existente = _dias_actividad(existente)
+    if not dias_propuesta or not dias_existente or dias_propuesta.isdisjoint(dias_existente):
+        return False
+
+    inicio_propuesta, fin_propuesta = _rango_horario(propuesta)
+    inicio_existente, fin_existente = _rango_horario(existente)
+    if None in (inicio_propuesta, fin_propuesta, inicio_existente, fin_existente):
+        return False
+
+    return inicio_propuesta < fin_existente and inicio_existente < fin_propuesta
+
+
+def _validar_disponibilidad_profesor(
+    actividad_propuesta: Activity,
+    db: Session,
+    excluir_activity_id: Optional[int] = None,
+) -> None:
+    if not actividad_propuesta.professor or actividad_propuesta.status != "active":
+        return
+
+    actividades_existentes = (
+        db.query(Activity)
+        .filter(
+            Activity.professor == actividad_propuesta.professor,
+            Activity.status == "active",
+        )
+        .all()
+    )
+
+    for existente in actividades_existentes:
+        if excluir_activity_id is not None and existente.id == excluir_activity_id:
+            continue
+        if _solapa_en_profesor(actividad_propuesta, existente):
+            raise HTTPException(
+                status_code=409,
+                detail=f"El profesor {actividad_propuesta.professor} ya tiene una actividad asignada en ese horario.",
+            )
 
 def _dia_desde_fecha(specific_date) -> Optional[str]:
     if not specific_date:
@@ -61,6 +108,22 @@ def _dias_actividad(activity: Activity) -> set[str]:
         dia = _dia_desde_fecha(activity.specific_date)
         return {dia} if dia else set()
     return _extraer_dias(activity.schedule)
+
+
+def _ya_paso(actividad: Activity, ahora: datetime) -> bool:
+    """True si la actividad ya comenzó o finalizó según su specific_date + horario."""
+    if not actividad.specific_date:
+        return False  # recurrente sin fecha puntual (legacy) -> siempre vigente
+
+    inicio, _ = _rango_horario(actividad)
+    if inicio is None:
+        return actividad.specific_date < ahora.date()
+
+    inicio_dt = datetime(
+        actividad.specific_date.year, actividad.specific_date.month, actividad.specific_date.day,
+        inicio // 60, inicio % 60,
+    )
+    return inicio_dt <= ahora
 
 
 def _solapa_en_sala(propuesta: Activity, existente: Activity) -> bool:
@@ -181,7 +244,9 @@ def listar_actividades(
     status: Optional[str] = "active",
     db: Session = None,
 ) -> List[Activity]:
-    """Lista actividades con filtros opcionales por sala, tipo y estado."""
+    """Lista actividades con filtros opcionales por sala, tipo y estado.
+    Cuando se filtra por status="active", excluye las que ya comenzaron o finalizaron.
+    """
     query = db.query(Activity)
     if room_id is not None:
         query = query.filter(Activity.room_id == room_id)
@@ -189,7 +254,14 @@ def listar_actividades(
         query = query.filter(Activity.activity_type == activity_type)
     if status is not None:
         query = query.filter(Activity.status == status)
-    return query.order_by(Activity.id).all()
+
+    actividades = query.order_by(Activity.id).all()
+
+    if status == "active":
+        ahora = datetime.now()
+        actividades = [a for a in actividades if not _ya_paso(a, ahora)]
+
+    return actividades
 
 
 def obtener_actividad(activity_id: int, db: Session) -> Activity:
@@ -288,83 +360,104 @@ def crear_actividad(datos, db: Session) -> list:
     db.commit()
     for act in creadas:
         db.refresh(act)
+
+    if creadas and creadas[0].professor:
+        primera_id = creadas[0].id
+        total = len(creadas)
+
+        def _notif_creacion_async(aid: int, total_ocurrencias: int) -> None:
+            db_n = SessionLocal()
+            try:
+                notify_activity_created(aid, db_n, total_ocurrencias)
+            except Exception:
+                pass
+            finally:
+                db_n.close()
+
+        Thread(target=_notif_creacion_async, args=(primera_id, total), daemon=True).start()
+
     return creadas
 
 
 def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
-    """Actualiza campos de una actividad validando capacidad y disponibilidad."""
+    """Edita una actividad existente. Solo se permite reasignar sala y/o profesor;
+    el resto de los datos (nombre, horario, precio, etc.) son fijos una vez creada."""
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
-    cambios = datos.model_dump(exclude_unset=True)
+    # Solo se consideran "cambios" los campos cuyo valor difiere del actual: el frontend
+    # siempre envía room_id y professor en el payload, aunque el usuario no los haya tocado.
+    enviado = datos.model_dump(exclude_unset=True)
+    cambios = {campo: valor for campo, valor in enviado.items() if valor != getattr(actividad, campo)}
+    profesor_anterior = actividad.professor
+    room_id_anterior = actividad.room_id
 
-    valores_propuestos = {
-        **{
-            "room_id": actividad.room_id,
-            "activity_type": actividad.activity_type,
-            "schedule": actividad.schedule,
-            "specific_date": actividad.specific_date,
-            "time_slot": actividad.time_slot,
-            "status": actividad.status,
-        },
-        **cambios,
-    }
+    if "room_id" in cambios:
+        sala_original = db.query(Room).filter(Room.id == actividad.room_id).first()
+        sala_nueva = db.query(Room).filter(Room.id == cambios["room_id"]).first()
+        if not sala_nueva:
+            raise HTTPException(status_code=404, detail="Sala no encontrada")
+        if sala_original and sala_nueva.capacity < sala_original.capacity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La sala elegida (cap. {sala_nueva.capacity}) no puede tener menos capacidad que la asignada originalmente (cap. {sala_original.capacity})",
+            )
 
     actividad_propuesta = Activity(
         id=actividad.id,
-        room_id=valores_propuestos["room_id"],
-        activity_type=valores_propuestos["activity_type"],
-        schedule=valores_propuestos["schedule"],
-        specific_date=valores_propuestos["specific_date"],
-        time_slot=valores_propuestos["time_slot"],
-        status=valores_propuestos["status"],
+        room_id=cambios.get("room_id", actividad.room_id),
+        professor=cambios.get("professor", actividad.professor),
+        activity_type=actividad.activity_type,
+        schedule=actividad.schedule,
+        specific_date=actividad.specific_date,
+        time_slot=actividad.time_slot,
+        status=actividad.status,
     )
-
-    if "capacity" in cambios:
-        sala = db.query(Room).filter(Room.id == valores_propuestos["room_id"]).first()
-        if cambios["capacity"] > sala.capacity:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Los cupos ({cambios['capacity']}) no pueden superar la capacidad de la sala ({sala.capacity})",
-            )
 
     _validar_disponibilidad_sala(actividad_propuesta, db, excluir_activity_id=actividad.id)
     _validar_disponibilidad_profesor(actividad_propuesta, db, excluir_activity_id=actividad.id)
-
     for campo, valor in cambios.items():
         setattr(actividad, campo, valor)
 
-    # Si cambia la fecha o el horario, sincronizar reservation_date en reservas activas
-    if "specific_date" in cambios or "time_slot" in cambios:
-        nueva_fecha = valores_propuestos["specific_date"]
-        nuevo_slot = valores_propuestos["time_slot"]
-        if nueva_fecha and nuevo_slot:
-            try:
-                hh, mm = nuevo_slot.split(":")
-                nueva_reservation_date = datetime(
-                    nueva_fecha.year, nueva_fecha.month, nueva_fecha.day,
-                    int(hh), int(mm),
-                )
-                reservas_activas = db.query(Reservation).filter(
-                    Reservation.activity_id == activity_id,
-                    Reservation.status.in_(["confirmed", "pending"]),
-                ).all()
-                for r in reservas_activas:
-                    r.reservation_date = nueva_reservation_date
-            except (ValueError, AttributeError):
-                pass  # Si el formato es inválido no bloqueamos la edición
-
     db.commit()
     db.refresh(actividad)
+
+    if cambios:
+        def _notif_edicion_async(aid: int, cam: dict, prof_ant: Optional[str], room_ant: Optional[int]) -> None:
+            db_n = SessionLocal()
+            try:
+                notify_activity_modified(aid, cam, prof_ant, room_ant, db_n)
+            except Exception:
+                pass
+            finally:
+                db_n.close()
+
+        Thread(
+            target=_notif_edicion_async,
+            args=(actividad.id, dict(cambios), profesor_anterior, room_id_anterior),
+            daemon=True,
+        ).start()
+
     return actividad
 
 
 def cancelar_actividad(activity_id: int, db: Session) -> None:
-    """Marca una actividad como cancelada (no la elimina físicamente)."""
+    """Marca una actividad como cancelada (no la elimina físicamente).
+    Solo se permite si no tiene clientes inscriptos (reservas activas)."""
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
     if not actividad:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    hay_inscriptos = db.query(Reservation).filter(
+        Reservation.activity_id == activity_id,
+        Reservation.status.in_(["confirmed", "pending"]),
+    ).first() is not None
+    if hay_inscriptos:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede eliminar la actividad: tiene clientes inscriptos.",
+        )
 
     ahora = datetime.now()
 
@@ -403,6 +496,19 @@ def cancelar_actividad(activity_id: int, db: Session) -> None:
 
     actividad.status = "cancelled"
     db.commit()
+
+    # Enviar notificaciones de cancelación en segundo plano para no frenar la UI
+    def _notificar_cancelacion_async(activity_id: int) -> None:
+        db_notif = SessionLocal()
+        try:
+            notify_activity_cancellation(activity_id, db_notif)
+        except Exception:
+            # No interrumpir la operación por fallos en notificaciones
+            pass
+        finally:
+            db_notif.close()
+
+    Thread(target=_notificar_cancelacion_async, args=(actividad.id,), daemon=True).start()
 
 
 def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity:
@@ -458,6 +564,74 @@ def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity
     actividad.professor = None
     db.commit()
     db.refresh(actividad)
+
+    def _notificar_renuncia_async(activity_id: int, prof_name: str) -> None:
+        db_notif = SessionLocal()
+        try:
+            notify_professor_resignation(activity_id, prof_name, db_notif)
+        except Exception:
+            pass
+        finally:
+            db_notif.close()
+
+    Thread(target=_notificar_renuncia_async, args=(actividad.id, nombre_completo), daemon=True).start()
+
+    return actividad
+
+
+def asumir_actividad(activity_id: int, current_user, db: Session) -> Activity:
+    """Asigna al profesor autenticado a una actividad disponible."""
+    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    if actividad.status != "active":
+        raise HTTPException(status_code=400, detail="La actividad no está activa.")
+
+    if actividad.professor:
+        raise HTTPException(status_code=409, detail="La actividad ya tiene profesor asignado.")
+
+    if not current_user.specialization:
+        raise HTTPException(status_code=400, detail="Tu perfil no tiene especialidad asignada.")
+
+    if current_user.specialization.strip().lower() != (actividad.specialization or "").strip().lower():
+        raise HTTPException(
+            status_code=409,
+            detail="No podés asumir esta actividad porque tu especialidad no coincide.",
+        )
+
+    nombre_completo = f"{current_user.name} {current_user.lastname}".strip()
+
+    actividad_propuesta = Activity(
+        room_id=actividad.room_id,
+        activity_type=actividad.activity_type,
+        schedule=actividad.schedule,
+        specific_date=actividad.specific_date,
+        time_slot=actividad.time_slot,
+        status="active",
+        professor=nombre_completo,
+    )
+    _validar_disponibilidad_profesor(actividad_propuesta, db)
+
+    actividad.professor = nombre_completo
+    db.commit()
+    db.refresh(actividad)
+
+    professor_id = current_user.id
+
+    def _notificar_asuncion_async(activity_id: int, professor_id: int) -> None:
+        db_notif = SessionLocal()
+        try:
+            profesor = db_notif.query(User).filter(User.id == professor_id).first()
+            if profesor:
+                notify_activity_assumed(activity_id, profesor, db_notif)
+        except Exception:
+            pass
+        finally:
+            db_notif.close()
+
+    Thread(target=_notificar_asuncion_async, args=(actividad.id, professor_id), daemon=True).start()
+
     return actividad
 
 

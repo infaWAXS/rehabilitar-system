@@ -4,12 +4,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getToken, getRole, getUserName, clearUserData, logout } from '../../services/authService';
 import { getActivities, getActivityById, getActivityAvailability } from '../../services/activitiesService';
 import { getMyReservations } from '../../services/reservationsService';
+import { getMyPlan } from '../../services/paymentsService';
+import apiClient from '../../services/apiClient';
 import FiltroActividades from './FiltroActividades';
 
 /* ── Menús por rol (no-admin) ──────────────────────────── */
 const MENUS_ROL = {
   client: [
     { label: 'Mis Reservas',        ruta: '/cliente/reservas' },
+    { label: 'Mis Suscripciones',   ruta: '/cliente/suscripciones' },
     { label: 'Mi Cuenta',           ruta: '/cliente/cuenta' },
     { label: 'Mi Perfil',           ruta: '/perfil' },
   ],
@@ -28,8 +31,9 @@ const MENUS_ROL = {
 const MENU_ADMIN = [
   { label: 'Usuarios',      ruta: '/admin/usuarios' },
   { label: 'Clientes',      ruta: '/admin/clientes' },
-  { label: 'Aptos Físicos', ruta: '/admin/clientes/aptos-fisicos' },
+  { label: 'Aptos Físicos', ruta: '/admin/aptos-fisicos' },
   { label: 'Actividades',   ruta: '/admin/actividades' },
+  { label: 'Sugerencias',    ruta: '/admin/sugerencias' },
 ];
 
 const s = {
@@ -99,6 +103,18 @@ const s = {
     fontWeight: '700',
     textDecoration: 'none',
   },
+  creditsBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '5px 12px',
+    borderRadius: '999px',
+    background: '#eff6ff',
+    border: '1px solid #bfdbfe',
+    color: '#1d4ed8',
+    fontSize: '13px',
+    fontWeight: '700',
+  },
   /* Botón usuario (topbar) */
   userBtn: {
     display: 'flex',
@@ -128,6 +144,62 @@ const s = {
   },
   dropdownWrapper: {
     position: 'relative',
+  },
+  notifWrapper: {
+    position: 'relative',
+  },
+  notifButton: {
+    position: 'relative',
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    color: 'var(--color-texto-suave)',
+    fontSize: '18px',
+    padding: '6px 8px',
+    borderRadius: '8px',
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    background: 'var(--color-acento)',
+    color: '#fff',
+    borderRadius: '999px',
+    padding: '2px 6px',
+    fontSize: '11px',
+    fontWeight: 700,
+  },
+  notifPanel: {
+    position: 'absolute',
+    top: 'calc(100% + 6px)',
+    right: 0,
+    width: '320px',
+    maxHeight: '340px',
+    overflowY: 'auto',
+    background: '#fff',
+    border: '1px solid var(--color-borde)',
+    borderRadius: '10px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+    zIndex: 210,
+  },
+  notifItem: {
+    padding: '10px 12px',
+    borderBottom: '1px solid rgba(0,0,0,0.05)',
+    fontSize: '13px',
+    cursor: 'pointer',
+  },
+  notifPrefRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    padding: '10px 12px',
+    borderBottom: '1px solid rgba(0,0,0,0.08)',
+    fontSize: '12px',
+    color: 'var(--color-texto-suave)',
+    position: 'sticky',
+    top: 0,
+    background: '#fff',
   },
   dropdown: {
     position: 'absolute',
@@ -460,27 +532,6 @@ const s = {
   },
 };
 
-function parseHoraMinutos(valor) {
-  if (!valor) return null;
-  const match = String(valor).match(/(\d{1,2}):(\d{2})/);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
-}
-
-function actividadSigueVigente(actividad) {
-  if (actividad.activity_type !== 'individual') return true;
-  if (!actividad.specific_date) return true;
-  const fechaActividad = new Date(`${actividad.specific_date}T00:00:00`);
-  const hoy = new Date();
-  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-  const minutosActividad = parseHoraMinutos(actividad.time_slot);
-  const minutosAhora = hoy.getHours() * 60 + hoy.getMinutes();
-  if (fechaActividad < inicioHoy) return false;
-  if (fechaActividad > inicioHoy) return true;
-  if (minutosActividad === null) return true;
-  return minutosActividad >= minutosAhora;
-}
-
 function InicioPublico() {
   const navigate = useNavigate();
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -490,7 +541,12 @@ function InicioPublico() {
   const [actividadDetalle, setActividadDetalle] = useState(null);
   const [actividadesInscritas, setActividadesInscritas] = useState(new Set());
   const [cuposMap, setCuposMap] = useState({});
+  const [notifications, setNotifications] = useState([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(true);
+  const [creditsInfo, setCreditsInfo] = useState(null);
   const dropdownRef = useRef(null);
+  const notifRef = useRef(null);
 
   const token   = getToken();
   const role    = getRole();   // 'admin' | 'client' | 'professor' | 'receptionist' | null
@@ -499,13 +555,14 @@ function InicioPublico() {
 
   const estaLogueado = !!token;
   const esAdmin      = role === 'admin';
+  const puedeVerNotificaciones = role === 'client' || role === 'professor' || role === 'admin';
   const tieneSidebar = estaLogueado && role !== 'client';
   const itemsSidebar = esAdmin ? MENU_ADMIN : (MENUS_ROL[role] || []);
 
   // Cargar actividades activas al montar
   useEffect(() => {
     getActivities({ status: 'active' })
-      .then((data) => setActividades((Array.isArray(data) ? data : []).filter(actividadSigueVigente)))
+      .then((data) => setActividades(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 
@@ -540,11 +597,82 @@ function InicioPublico() {
       .catch(() => {});
   }, [role]);
 
+  // Cargar saldo de créditos del abonado (solo clientes)
+  useEffect(() => {
+    if (role !== 'client') {
+      setCreditsInfo(null);
+      return;
+    }
+    getMyPlan()
+      .then((data) => {
+        if (data?.es_abonado) {
+          setCreditsInfo({ credits: data.credits ?? 0, cap: data.credits_cap ?? 3 });
+        } else {
+          setCreditsInfo(null);
+        }
+      })
+      .catch(() => setCreditsInfo(null));
+  }, [role]);
+
+  // Cargar notificaciones del sistema (solo clientes y profesores)
+  useEffect(() => {
+    if (!estaLogueado || !puedeVerNotificaciones) {
+      setNotifications([]);
+      return;
+    }
+
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await apiClient.get('/notifications');
+        if (!mounted) return;
+        setNotifications(Array.isArray(res.data) ? res.data : []);
+      } catch (_) {
+        setNotifications([]);
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [estaLogueado, puedeVerNotificaciones]);
+
+  // Cargar preferencia de notificaciones del sistema (solo clientes y profesores)
+  useEffect(() => {
+    if (!estaLogueado || !puedeVerNotificaciones) {
+      return;
+    }
+
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await apiClient.get('/notifications/preferences');
+        if (!mounted) return;
+        setNotifEnabled(res.data?.enabled ?? true);
+      } catch (_) {
+        // mantener valor por defecto
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [estaLogueado, puedeVerNotificaciones]);
+
+  const toggleNotifEnabled = async () => {
+    const siguiente = !notifEnabled;
+    setNotifEnabled(siguiente);
+    try {
+      await apiClient.put('/notifications/preferences', { enabled: siguiente });
+    } catch (_) {
+      setNotifEnabled(!siguiente);
+    }
+  };
+
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
     const handler = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setMenuAbierto(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -582,6 +710,7 @@ function InicioPublico() {
   };
 
   const opcionesMenu = MENUS_ROL[role] || [];
+  const noLeidas = notifications.filter((n) => !n.read).length;
 
   /* ── Contenido principal de la página ─────────────────── */
   const contenido = (
@@ -614,7 +743,7 @@ function InicioPublico() {
             <>
               <div style={s.cardTitle}>Hola, {nombre}</div>
               <p style={s.cardText}>Usá el menú arriba a la derecha para navegar.</p>
-              {role === 'client'       && <Link to="/cliente/reservas/inscribir"    style={s.cardLink}>Ver actividades →</Link>}
+              {role === 'client'       && <Link to="/cliente/reservas/"    style={s.cardLink}>Ver mis reservas →</Link>}
               {role === 'professor'    && <Link to="/profesor/actividades"     style={s.cardLink}>Mis actividades →</Link>}
               {role === 'receptionist' && <Link to="/recepcionista/actividades" style={s.cardLink}>Ver actividades →</Link>}
               {role === 'admin'        && <Link to="/admin/usuarios"            style={s.cardLink}>Gestión de usuarios →</Link>}
@@ -725,6 +854,53 @@ function InicioPublico() {
 
           {/* Autenticado: botón usuario con dropdown */}
           {estaLogueado && (
+            <>
+              {creditsInfo && (
+                <span style={s.creditsBadge} title="Créditos disponibles este mes">
+                  <span role="img" aria-hidden>🎫</span>
+                  {creditsInfo.credits}/{creditsInfo.cap}
+                </span>
+              )}
+              {puedeVerNotificaciones && (
+                <div style={s.notifWrapper} ref={notifRef}>
+                  <button
+                    aria-label="Notificaciones"
+                    style={s.notifButton}
+                    onClick={() => setNotifOpen((v) => !v)}
+                  >
+                    <span role="img" aria-hidden>🔔</span>
+                    {noLeidas > 0 && <span style={s.notifBadge}>{noLeidas}</span>}
+                  </button>
+
+                  {notifOpen && (
+                    <div style={s.notifPanel}>
+                      <div style={s.notifPrefRow}>
+                        <span>Notificaciones del sistema</span>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={notifEnabled} onChange={toggleNotifEnabled} />
+                        </label>
+                      </div>
+                      {notifications.length === 0 && (
+                        <div style={s.notifItem}>No hay notificaciones.</div>
+                      )}
+                      {notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          style={{ ...s.notifItem, background: n.read ? 'transparent' : 'rgba(0,0,0,0.03)' }}
+                          onClick={async () => {
+                            setNotifications((prev) => prev.map((p) => (p.id === n.id ? { ...p, read: true } : p)));
+                            try { await apiClient.post(`/notifications/${n.id}/read`); } catch (_) {}
+                          }}
+                        >
+                          <div style={{ fontWeight: n.read ? 500 : 700 }}>{n.title || 'Notificación'}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--color-texto-suave)' }}>{n.body || n.message}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
             <div style={s.dropdownWrapper} ref={dropdownRef}>
               <button style={s.userBtn} onClick={() => setMenuAbierto(v => !v)}>
                 <span style={s.userAvatar}>{inicial}</span>
@@ -750,6 +926,7 @@ function InicioPublico() {
                 </div>
               )}
             </div>
+            </>
           )}
         </div>
       </header>

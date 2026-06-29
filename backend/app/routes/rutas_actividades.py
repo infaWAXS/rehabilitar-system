@@ -28,12 +28,9 @@ def obtener_actividad(activity_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{activity_id}/availability", response_model=ActivityAvailabilityResponse)
-def obtener_disponibilidad_actividad(
-    activity_id: int,
-    date: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    return servicio_actividades.obtener_disponibilidad_actividad(activity_id, db, date)
+def obtener_disponibilidad_actividad(activity_id: int, db: Session = Depends(get_db)):
+    return servicio_actividades.obtener_disponibilidad_actividad(activity_id, db)
+
 
 
 @router.post("/", response_model=List[ActivityResponse], status_code=201)
@@ -75,6 +72,16 @@ def renunciar_actividad(
 ):
     """El profesor autenticado se da de baja de la actividad, dejando libre el cupo."""
     return servicio_actividades.renunciar_actividad(activity_id, current_user, db)
+
+
+@router.patch("/{activity_id}/assume", response_model=ActivityResponse)
+def asumir_actividad(
+    activity_id: int,
+    db: Session = Depends(get_db),
+    current_user: object = Depends(require_role(["professor"])),
+):
+    """El profesor autenticado asume una actividad disponible."""
+    return servicio_actividades.asumir_actividad(activity_id, current_user, db)
 
 
 # HU Listar condiciones de cliente (Nahuel)

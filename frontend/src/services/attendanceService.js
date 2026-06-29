@@ -28,3 +28,25 @@ export function deleteAttendanceComment(attendanceId) {
     method: 'DELETE',
   });
 }
+
+// Genera un código QR válido por 15 minutos para registrar asistencia a la actividad
+export function generateAttendanceQr(activityId) {
+  return apiRequest(`/attendances/qr/${activityId}`, { method: 'POST' });
+}
+
+// Registra la asistencia del usuario autenticado a partir de un código QR escaneado
+export function scanAttendanceQr(code) {
+  const qrCode = typeof code === 'string' ? decodeURIComponent(code).trim() : '';
+  if (!qrCode) {
+    throw new Error('Código QR inválido o ausente.');
+  }
+
+  return apiRequest('/attendances/qr/scan', {
+    method: 'POST',
+    body: JSON.stringify({ code: qrCode }),
+  });
+}
+
+export function getAttendanceSessionStatus(activityId) {
+  return apiRequest(`/attendances/session-status/${activityId}`);
+}

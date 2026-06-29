@@ -100,7 +100,8 @@ export default function MisSuscripciones() {
   const [cargando, setCargando]     = useState(true);
   const [errorCarga, setErrorCarga] = useState('');
   const [miPlan, setMiPlan]         = useState(null); // { id, name, coverage_type, end_date } o null
-  
+  const [pendingDiscount, setPendingDiscount] = useState(0);
+
   // Especialidades
   const [especialidadSeleccionada, setEspecialidadSeleccionada] = useState(ESPECIALIZACIONES[0]);
 
@@ -112,7 +113,10 @@ export default function MisSuscripciones() {
 
   const cargarMiPlan = useCallback(() => {
     getMyPlan()
-      .then((data) => setMiPlan(data.es_abonado ? data.plan : null))
+      .then((data) => {
+        setMiPlan(data.es_abonado ? data.plan : null);
+        setPendingDiscount(data.pending_discount_percent ?? 0);
+      })
       .catch(() => setMiPlan(null));
   }, []);
 
@@ -121,6 +125,7 @@ export default function MisSuscripciones() {
       .then(([planesData, miPlanData]) => {
         setPlanes(planesData);
         setMiPlan(miPlanData.es_abonado ? miPlanData.plan : null);
+        setPendingDiscount(miPlanData.pending_discount_percent ?? 0);
       })
       .catch(() => setErrorCarga('No se pudieron cargar los planes.'))
       .finally(() => setCargando(false));
@@ -213,8 +218,21 @@ export default function MisSuscripciones() {
             <div style={s.mpLogo}>💳</div>
             <div style={s.modalTitulo}>Pagar con Mercado Pago</div>
             <div style={s.modalSubtitulo}>
-              {planSeleccionado.name} · ${Number(planSeleccionado.price).toLocaleString('es-AR')}
+              {planSeleccionado.name} · {pendingDiscount > 0 ? (
+                <>
+                  <span style={{ textDecoration: 'line-through' }}>${Number(planSeleccionado.price).toLocaleString('es-AR')}</span>{' '}
+                  ${Math.round(Number(planSeleccionado.price) * (1 - pendingDiscount / 100)).toLocaleString('es-AR')}
+                </>
+              ) : (
+                <>${Number(planSeleccionado.price).toLocaleString('es-AR')}</>
+              )}
             </div>
+
+            {pendingDiscount > 0 && !resultado && (
+              <div style={s.alerta('success')}>
+                Tenés un <strong>{pendingDiscount}% de descuento</strong> acumulado por cancelación. Se aplicará automáticamente a este pago.
+              </div>
+            )}
 
             {resultado && (
               <div style={s.alerta(resultado.tipo)}>{resultado.mensaje}</div>

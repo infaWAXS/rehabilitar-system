@@ -24,7 +24,7 @@ class User(Base):
     medical_certificate_path = Column(String, nullable=True)
     medical_certificate_status = Column(String, default="none")
     failed_login_attempts = Column(Integer, default=0)
-    credits = Column(Integer, nullable=False, default=0, server_default='0')
+    notifications_enabled = Column(Boolean, nullable=False, default=True, server_default='1')
     pending_discount_percent = Column(Integer, nullable=False, default=0, server_default='0')
     created_at = Column(DateTime, server_default=func.now())
     birth_date = Column(Date, nullable=False)

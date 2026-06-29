@@ -38,3 +38,22 @@ class MarcarAsistenciaPorDNI(BaseModel):
 
 class ActualizarComentario(BaseModel):
     comment: str
+
+
+class QrCodeRespuesta(BaseModel):
+    code: str
+    activity_id: int
+    expires_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class EscanearQr(BaseModel):
+    code: str
+
+class EstadoSesionAsistenciaResponse(BaseModel):
+    activity_id: int
+    session_active: bool
+    status: str
+    restrictions_enforced: bool

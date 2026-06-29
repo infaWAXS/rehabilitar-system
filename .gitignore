@@ -5,7 +5,7 @@ __pycache__/
 venv/
 
 # Variables de entorno
-.env
+.env.local
 
 # SQLite local
 database.db
@@ -21,3 +21,5 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+claude.md

@@ -80,3 +80,27 @@ def user_not_enrolled_exception():
         status_code=403,
         detail="El cliente no se anotó para dicha clase"
     )
+
+
+def activity_session_not_active_exception():
+
+    return HTTPException(
+        status_code=409,
+        detail="La actividad no tiene una sesión activa en este momento"
+    )
+
+
+def qr_not_found_exception():
+
+    return HTTPException(
+        status_code=404,
+        detail="Código QR no encontrado"
+    )
+
+
+def qr_expired_exception():
+
+    return HTTPException(
+        status_code=410,
+        detail="El código QR expiró"
+    )
