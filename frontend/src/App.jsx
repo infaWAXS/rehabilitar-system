@@ -35,6 +35,9 @@ import EditarActividad from './pages/admin/actividades/EditarActividad';
 import RegistrarAsistenciaAdmin from './pages/admin/asistencias/RegistrarAsistencia';
 import VerListaEsperaAdmin from './pages/admin/VerListaEsperaAdmin';
 
+// ── Admin: Estadisticas (Nahuel) ────────────────────────
+import ReportesAdmin from './pages/admin/reportes/ReportesAdmin';
+
 // ── Cliente: Actividades (Angel) ─────────────────────────
 import ActividadesCliente from './pages/client/actividades/ActividadesCliente';
 
@@ -98,6 +101,9 @@ function App() {
 
         {/* Admin — Asistencias */}
         <Route path="/admin/asistencias" element={<RegistrarAsistenciaAdmin />} />
+
+        {/* Admin - Estadisticas */}
+        <Route path="/admin/reportes" element={<ReportesAdmin />} />
 
         {/* Recepcionista */}
         <Route path="/recepcionista/actividades" element={<ListaActividades />} />

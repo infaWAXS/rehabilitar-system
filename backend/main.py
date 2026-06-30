@@ -28,6 +28,7 @@ from app.routes.rutas_pagos import router as payment_router
 from app.routes.rutas_notificaciones import router as notification_router
 from app.routes.rutas_sugerencias import router as suggestion_router
 from database.seed_mock import seed as seed_mock_users
+from app.routes.rutas_reportes import router as reportes_router
 
 app = FastAPI()
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -102,6 +103,7 @@ app.include_router(attendance_router)
 app.include_router(payment_router)
 app.include_router(notification_router)
 app.include_router(suggestion_router)
+app.include_router(reportes_router)
 
 @app.get("/")
 def home():
