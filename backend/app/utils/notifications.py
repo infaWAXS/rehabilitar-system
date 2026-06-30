@@ -942,3 +942,107 @@ def notify_professor_resignation(activity_id: int, professor_name: str, db: Sess
                 "Error notificando al admin %s sobre renuncia en actividad %s",
                 admin.id, activity_id,
             )
+
+
+def notify_password_recovery_requested(user_email: str, recovery_link: str, token_expires_in_minutes: int, db: Session) -> None:
+    """Notifica (email) al usuario que solicitó recuperación de contraseña con el link de recuperación."""
+    import smtplib
+    import ssl
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    usuario = db.query(User).filter(User.email == user_email).first()
+    if not usuario:
+        return
+
+    subject = "Recupera tu contraseña en Rehabilitar"
+
+    # Crear email HTML con botón clickeable
+    html_body = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #2c3e50;">Recupera tu contraseña</h2>
+                <p>Hola {usuario.name} {usuario.lastname},</p>
+                <p>Recibimos tu solicitud de recuperación de contraseña. Hacé clic en el botón de abajo para restablecerla:</p>
+
+                <div style="margin: 30px 0; text-align: center;">
+                    <a href="{recovery_link}" style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                        Restablecer contraseña
+                    </a>
+                </div>
+
+                <p style="font-size: 12px; color: #7f8c8d;">
+                    O copia y pega este link en tu navegador:<br/>
+                    <span style="word-break: break-all; background-color: #ecf0f1; padding: 10px; display: block; margin-top: 10px; border-radius: 3px;">
+                        {recovery_link}
+                    </span>
+                </p>
+
+                <p style="color: #e74c3c; font-weight: bold;">⏰ Este link es válido por {token_expires_in_minutes} minutos.</p>
+
+                <hr style="border: none; border-top: 1px solid #ecf0f1; margin: 20px 0;">
+
+                <p style="font-size: 12px; color: #95a5a6;">
+                    Si no solicitaste la recuperación de contraseña, podés ignorar este mensaje.
+                </p>
+                <p style="font-size: 12px; color: #95a5a6;">
+                    Saludos cordiales,<br/>
+                    <strong>El equipo de Rehabilitar</strong>
+                </p>
+            </div>
+        </body>
+    </html>
+    """
+
+    # Versión texto plano para compatibilidad
+    text_body = (
+        f"Hola {usuario.name} {usuario.lastname},\n\n"
+        f"Recibimos tu solicitud de recuperación de contraseña. Hacé clic en el siguiente link para restablecerla:\n\n"
+        f"{recovery_link}\n\n"
+        f"⏰ Este link es válido por {token_expires_in_minutes} minutos.\n\n"
+        "Si no solicitaste la recuperación de contraseña, podés ignorar este mensaje.\n\n"
+        "Saludos cordiales.\n"
+        "El equipo de Rehabilitar"
+    )
+
+    cfg = _smtp_config()
+    if not cfg["enabled"]:
+        logger.info("SMTP deshabilitado; simulando envío a %s: %s", user_email, subject)
+        logger.debug("Email body: %s", text_body)
+        return
+
+    if not cfg["host"] or not cfg["port"]:
+        logger.warning("SMTP configurado incorrectamente (HOST/PORT faltantes). Simulando envío.")
+        logger.debug("Email to=%s subject=%s", user_email, subject)
+        return
+
+    try:
+        # Crear mensaje multipart (HTML + texto)
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = cfg["from"]
+        msg["To"] = user_email
+
+        # Agregar versión texto
+        msg.attach(MIMEText(text_body, "plain"))
+        # Agregar versión HTML (se usa si el cliente lo soporta)
+        msg.attach(MIMEText(html_body, "html"))
+
+        if cfg["use_ssl"]:
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=context) as server:
+                if cfg["user"] and cfg["password"]:
+                    server.login(cfg["user"], cfg["password"])
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
+                if cfg["use_tls"]:
+                    server.starttls()
+                if cfg["user"] and cfg["password"]:
+                    server.login(cfg["user"], cfg["password"])
+                server.send_message(msg)
+
+        logger.info("Email de recuperación enviado a %s", user_email)
+    except Exception as e:
+        logger.exception("Error enviando email de recuperación a %s: %s", user_email, e)

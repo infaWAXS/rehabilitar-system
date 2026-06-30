@@ -1,6 +1,6 @@
 // HU Recuperar contraseña - Responsable: Francis
 // Como usuario registrado quiero recuperar la contraseña para poder acceder a mi cuenta.
-// E1: email registrado → el sistema envía un link al mail ingresado (demo: el link se muestra en pantalla)
+// E1: email registrado → el sistema envía un link al mail ingresado con validez de 30 minutos
 // E2: email no registrado → el sistema informa que el mail no se encuentra registrado
 import React, { useState } from 'react';
 import LayoutPublico from '../../layouts/LayoutPublico';
@@ -37,17 +37,19 @@ const s = {
 function RecuperarContrasena() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
-  const [token, setToken] = useState('');
+  const [exito, setExito] = useState(false);
   const [cargando, setCargando] = useState(false);
 
   const enviar = async (e) => {
     e.preventDefault();
     setError('');
+    setExito(false);
     setCargando(true);
 
     try {
-      const data = await requestPasswordRecovery(email);
-      setToken(data.token || '');
+      await requestPasswordRecovery(email);
+      setExito(true);
+      setEmail('');
     } catch (err) {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('registrado') || msg.toLowerCase().includes('not found')) {
@@ -66,17 +68,14 @@ function RecuperarContrasena() {
         Ingresá tu correo y te enviaremos un enlace para restablecer tu contraseña.
       </p>
       {error && <div style={s.error}>{error}</div>}
-      {token ? (
+      {exito ? (
         <div style={s.exito}>
           <div style={{ fontWeight: '600', marginBottom: '8px' }}>
-            ¡Enlace generado! Hacé clic para restablecer tu contraseña:
+            ¡Enlace enviado!
           </div>
-          <a
-            href={`/restablecer-contrasena?token=${token}`}
-            style={{ color: '#16a34a', wordBreak: 'break-all', fontSize: '12px' }}
-          >
-            /restablecer-contrasena?token={token.slice(0, 40)}...
-          </a>
+          <p style={{ marginBottom: '0' }}>
+            Revisá tu correo electrónico.
+          </p>
         </div>
       ) : (
         <form onSubmit={enviar}>

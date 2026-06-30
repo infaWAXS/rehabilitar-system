@@ -336,24 +336,45 @@ def change_medical_clearance_status(user_id: int, status: str, db: Session):
 
 
 # Genera un token de recuperación de contraseña para el usuario con el email especificado.
-def request_password_recovery(email: str, db: Session):
+def request_password_recovery(email: str, http_request, db: Session):
+    from app.utils.security import PASSWORD_RECOVERY_TOKEN_EXPIRE_MINUTES
+    from app.utils.notifications import notify_password_recovery_requested
+
     user = db.query(User).filter(User.email == email).first()
-    
+
     if not user:
         raise HTTPException(
             status_code=404,
             detail="El correo no está registrado en el sistema"
         )
-    
+
     # Generar token con expiración de 30 minutos
     recovery_token = create_access_token(
-        data={"sub": user.email, "type": "recovery"}
+        data={"sub": user.email, "type": "recovery"},
+        expires_in_minutes=PASSWORD_RECOVERY_TOKEN_EXPIRE_MINUTES
     )
-    
+
+    # Extraer URL del frontend desde el header origin
+    frontend_url = http_request.headers.get("origin", "http://localhost:3000")
+
+    # Construir link de recuperación
+    recovery_link = f"{frontend_url}/restablecer-contrasena?token={recovery_token}"
+
+    # Enviar email con el link (en background)
+    user_id = user.id
+    def _enviar_recovery_async(uid: int, uemail: str, link: str, exp_mins: int) -> None:
+        db_n = SessionLocal()
+        try:
+            notify_password_recovery_requested(uemail, link, exp_mins, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_enviar_recovery_async, args=(user_id, user.email, recovery_link, PASSWORD_RECOVERY_TOKEN_EXPIRE_MINUTES), daemon=True).start()
+
     return {
-        "message": "Se ha enviado un enlace de recuperación a tu email",
-        "token": recovery_token,
-        "email": user.email
+        "message": "Se ha enviado un enlace de recuperación a tu email. El link es válido por 30 minutos."
     }
 
 
