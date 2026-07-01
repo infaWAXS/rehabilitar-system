@@ -247,6 +247,49 @@ export default function ReportesAdmin() {
             </div>
           </div>
 
+          {/* ── NUEVO APARTADO: MOTIVOS DE SANCIONES ────────────────────────── */}
+          <div style={s.seccionReporte}>
+            <h2 style={{ ...s.subtitulo, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🚫 Auditoría de Clientes Penalizados Vigentes
+            </h2>
+            <p style={s.label}>Listado detallado de los usuarios con suspensiones activas en el sistema, motivos de la sanción y fecha de vigencia.</p>
+            
+            <div style={s.wrapperTabla}>
+              <table style={s.tabla}>
+                <thead>
+                  <tr>
+                    <th style={{ ...s.th, background: '#fef2f2', color: '#991b1b' }}>Nombre Completo</th>
+                    <th style={{ ...s.th, background: '#fef2f2', color: '#991b1b' }}>Motivo de la Suspensión</th>
+                    <th style={{ ...s.th, background: '#fef2f2', color: '#991b1b', width: '180px' }}>Inicio de Suspensión</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reporte.sancionados && reporte.sancionados.length > 0 ? (
+                    reporte.sancionados.map((user, idx) => (
+                      <tr key={idx}>
+                        <td style={s.td}><strong>{user.nombre}</strong></td>
+                        <td style={{ ...s.td, color: 'var(--color-texto-suave)', fontSize: '13px', lineHeight: '1.4' }}>
+                          {user.motivo}
+                        </td>
+                        <td style={s.td}>
+                          <span style={{ display: 'inline-block', padding: '4px 8px', background: '#fee2e2', color: '#991b1b', borderRadius: '6px', fontSize: '12px', fontWeight: '700' }}>
+                            📅 {user.fecha_inicio}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="3" style={{ ...s.td, textAlign: 'center', color: 'var(--color-texto-suave)', padding: '24px' }}>
+                        No hay clientes con suspensiones activas en este período.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           {/* Mapa de Calor Horario Completo (Grid Multi-Horas) */}
           {reporte.mapa_calor && listaHorarios.length > 0 && (
             <div style={s.seccionReporte}>
