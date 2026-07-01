@@ -30,6 +30,8 @@ from app.routes.rutas_sugerencias import router as suggestion_router
 from database.seed_mock import seed as seed_mock_users
 from app.routes.rutas_reportes import router as reportes_router
 
+from seed_estadisticas import seed_estadisticas #para mockear estadisticas
+
 app = FastAPI()
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -72,6 +74,16 @@ _migrate(engine)
 
 # Cargar usuarios mock al arrancar (sólo crea los que no existen)
 seed_mock_users()
+
+#CARGAR DATA PARA ESTADISTICAS
+from database.connection import SessionLocal
+db_test = SessionLocal()
+try:
+    # Validamos si ya hay asistencias creadas para no duplicar datos infinitamente
+    if db_test.query(Attendance).count() == 0:
+        seed_estadisticas(db_test)
+finally:
+    db_test.close()
 
 # Tarea programada: cancela clases sin profesor asignado a <= 12 hs de su inicio
 # y otorga un crédito al abonado afectado.
