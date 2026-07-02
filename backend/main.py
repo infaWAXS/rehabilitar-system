@@ -27,6 +27,7 @@ from app.routes.rutas_asistencias import router as attendance_router
 from app.routes.rutas_pagos import router as payment_router
 from app.routes.rutas_notificaciones import router as notification_router
 from app.routes.rutas_sugerencias import router as suggestion_router
+from app.routes.rutas_auditoria import router as audit_router
 from database.seed_mock import seed as seed_mock_users
 
 app = FastAPI()
@@ -102,7 +103,7 @@ app.include_router(attendance_router)
 app.include_router(payment_router)
 app.include_router(notification_router)
 app.include_router(suggestion_router)
-
+app.include_router(audit_router)
 @app.get("/")
 def home():
     return {"message": "Backend funcionando"}

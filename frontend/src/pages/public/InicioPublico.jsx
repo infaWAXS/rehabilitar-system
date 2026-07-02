@@ -34,6 +34,7 @@ const MENU_ADMIN = [
   { label: 'Aptos Físicos', ruta: '/admin/aptos-fisicos' },
   { label: 'Actividades',   ruta: '/admin/actividades' },
   { label: 'Sugerencias',    ruta: '/admin/sugerencias' },
+  { label: 'Auditoría',     ruta: '/admin/auditoria' },
 ];
 
 const s = {

@@ -35,17 +35,17 @@ def aceptar_sugerencia(
     suggestion_id: int,
     datos: SuggestionAccept,
     db: Session = Depends(get_db),
-    _: object = Depends(require_role(["admin"])),
+    current_user: object = Depends(require_role(["admin"])),
 ):
     """Acepta la sugerencia: crea la(s) actividad(es) real(es) y asigna al profesor."""
-    return servicio_sugerencias.aceptar_sugerencia(suggestion_id, datos.price, db)
+    return servicio_sugerencias.aceptar_sugerencia(suggestion_id, datos.price, db, current_user)
 
 
 @router.patch("/{suggestion_id}/reject", response_model=SuggestionResponse)
 def rechazar_sugerencia(
     suggestion_id: int,
     db: Session = Depends(get_db),
-    _: object = Depends(require_role(["admin"])),
+    current_user: object = Depends(require_role(["admin"])),
 ):
     """Rechaza la sugerencia."""
-    return servicio_sugerencias.rechazar_sugerencia(suggestion_id, db)
+    return servicio_sugerencias.rechazar_sugerencia(suggestion_id, db, current_user)

@@ -16,6 +16,8 @@ from app.utils.notifications import (
     notify_activity_suggestion_rejected,
 )
 
+from app.models.audit_log import AuditAction, AuditResult, AuditType
+from app.services.servicio_auditoria import register_audit
 
 def _serializar_fechas(fechas: Optional[List[date_cls]]) -> Optional[str]:
     if not fechas:
@@ -79,6 +81,14 @@ def crear_sugerencia(datos: SuggestionCreate, current_user, db: Session) -> Sugg
         status="pending",
     )
     db.add(sugerencia)
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACTIVITY,
+        action=AuditAction.SUGGEST_ACTIVITY,
+        result=AuditResult.SUCCESS,
+        detail=f"Profesor {current_user.name} {current_user.lastname} hizo la sugerencia {sugerencia.name}.",
+    )
     db.commit()
     db.refresh(sugerencia)
 
@@ -107,7 +117,7 @@ def _obtener_sugerencia_pendiente(suggestion_id: int, db: Session) -> ActivitySu
     return sugerencia
 
 
-def aceptar_sugerencia(suggestion_id: int, price: Decimal, db: Session):
+def aceptar_sugerencia(suggestion_id: int, price: Decimal, db: Session, current_user):
     """
     Convierte la sugerencia en una Activity real, asigna al profesor
     y deja la clase disponible para que los clientes se inscriban.
@@ -131,9 +141,17 @@ def aceptar_sugerencia(suggestion_id: int, price: Decimal, db: Session):
         requirements=sugerencia.requirements,
     )
 
-    actividades = servicio_actividades.crear_actividad(datos_actividad, db)
+    actividades = servicio_actividades.crear_actividad(datos_actividad, db, current_user)
 
     sugerencia.status = "accepted"
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACTIVITY,
+        action=AuditAction.APPROVE_SUGGESTION,
+        result=AuditResult.SUCCESS,
+        detail=f"Administrador {current_user.name} {current_user.lastname} aceptó la sugerencia {sugerencia.id}.",
+    )
     db.commit()
 
     notify_activity_suggestion_accepted(sugerencia, db)
@@ -141,9 +159,17 @@ def aceptar_sugerencia(suggestion_id: int, price: Decimal, db: Session):
     return actividades
 
 
-def rechazar_sugerencia(suggestion_id: int, db: Session) -> SuggestionResponse:
+def rechazar_sugerencia(suggestion_id: int, db: Session, current_user) -> SuggestionResponse:
     sugerencia = _obtener_sugerencia_pendiente(suggestion_id, db)
     sugerencia.status = "rejected"
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACTIVITY,
+        action=AuditAction.REJECT_SUGGESTION,
+        result=AuditResult.SUCCESS,
+        detail=f"Administrador {current_user.name} {current_user.lastname} rechazó la sugerencia {sugerencia.id}.",
+    )
     db.commit()
     db.refresh(sugerencia)
 

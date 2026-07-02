@@ -32,7 +32,7 @@ async function apiRequest(path, options = {}) {
     const sep = url.includes('?') ? '&' : '?';
     url = `${url}${sep}token=${encodeURIComponent(token)}`;
   }
-
+  console.log(url);
   const response = await fetch(url, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...options.headers },

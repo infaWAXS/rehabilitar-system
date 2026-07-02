@@ -37,10 +37,10 @@ def obtener_disponibilidad_actividad(activity_id: int, db: Session = Depends(get
 def crear_actividad(
     datos: ActivityCreate,
     db: Session = Depends(get_db),
-    _: object = Depends(require_role(["admin"])),
+    current_user: object = Depends(require_role(["admin"])),
 ):
     """Solo administradores. Para actividades fijas con repetitions>1 crea varias en batch."""
-    return servicio_actividades.crear_actividad(datos, db)
+    return servicio_actividades.crear_actividad(datos, db, current_user)
 
 
 @router.patch("/{activity_id}", response_model=ActivityResponse)
@@ -48,20 +48,20 @@ def editar_actividad(
     activity_id: int,
     datos: ActivityUpdate,
     db: Session = Depends(get_db),
-    _: object = Depends(require_role(["admin"])),
+    current_user: object = Depends(require_role(["admin"])),
 ):
     """Actualiza campos de una actividad existente."""
-    return servicio_actividades.editar_actividad(activity_id, datos, db)
+    return servicio_actividades.editar_actividad(activity_id, datos, db, current_user)
 
 
 @router.delete("/{activity_id}", status_code=204)
 def cancelar_actividad(
     activity_id: int,
     db: Session = Depends(get_db),
-    _: object = Depends(require_role(["admin"])),
+    current_user: object = Depends(require_role(["admin"])),
 ):
     """Marca la actividad como cancelada (no la elimina fisicamente)."""
-    servicio_actividades.cancelar_actividad(activity_id, db)
+    servicio_actividades.cancelar_actividad(activity_id, db, current_user)
 
 
 @router.patch("/{activity_id}/resign", response_model=ActivityResponse)

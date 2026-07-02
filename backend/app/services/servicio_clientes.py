@@ -9,6 +9,9 @@ from app.utils.subscriptions import is_abonado
 from fastapi import HTTPException
 from datetime import datetime, timedelta
 from database.connection import SessionLocal
+from app.models.audit_log import AuditType, AuditAction, AuditResult
+from app.services.servicio_auditoria import register_audit
+
 
 
 def obtener_todos_los_clientes(db: Session, search: str = None, status: str = None):
@@ -175,7 +178,7 @@ def registrar_reintegro(cliente_id: int, motivo: str, db: Session):
     }
 
 
-def suspender_cliente(cliente_id: int, motivo: str, db: Session):
+def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: User):
     """HU: Suspender cuenta. Motivo obligatorio."""
     cliente = db.query(User).filter(User.id == cliente_id, User.role == "client").first()
     if not cliente:
@@ -185,6 +188,14 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session):
         raise HTTPException(status_code=400, detail="El cliente ya esta suspendido")
 
     cliente.account_status = "suspended"
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.SUSPEND_ACCOUNT,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} suspendió la cuenta del cliente {cliente.name} {cliente.lastname} ({cliente.id}). Motivo: {motivo}",
+    )
     db.commit()
     db.refresh(cliente)
 
@@ -208,7 +219,7 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session):
     }
 
 
-def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session):
+def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session, current_user: User):
     """HU: Reintegrar cuenta. Motivo opcional."""
     cliente = db.query(User).filter(User.id == cliente_id, User.role == "client").first()
     if not cliente:
@@ -218,6 +229,14 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session):
         raise HTTPException(status_code=400, detail="El cliente no esta suspendido")
 
     cliente.account_status = "active"
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.REINTEGRATE_ACCOUNT,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} reintegró la cuenta del cliente {cliente.name} {cliente.lastname} ({cliente.id}). Motivo: {motivo}",
+    )
     db.commit()
     db.refresh(cliente)
 
@@ -242,7 +261,7 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session):
     }
 
 
-def rechazar_reintegro(cliente_id: int, db: Session):
+def rechazar_reintegro(cliente_id: int, db: Session, current_user: User):
     """HU: Reintegrar cuenta - Escenario 3. El admin rechaza la solicitud de reintegro.
     La cuenta vuelve a estado 'suspended' y se notifica al cliente.
     """
@@ -258,6 +277,14 @@ def rechazar_reintegro(cliente_id: int, db: Session):
 
     # Mantiene la cuenta suspendida
     cliente.account_status = "suspended"
+    register_audit(
+        db=db,
+        user_id=cliente.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.DENY_REINTEGRATION,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} rechazó la solicitud de reintegro del cliente {cliente.name} {cliente.lastname} ({cliente.id}). La cuenta permanece suspendida.",
+    )
     db.commit()
     db.refresh(cliente)
 
