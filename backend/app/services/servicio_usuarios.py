@@ -13,7 +13,7 @@ from app.models.user import User
 from app.models.activity import Activity
 
 from app.utils.security import hash_password, verify_password, create_access_token, verify_token, generate_temporary_password
-from app.exceptions.http_exceptions import email_already_exists_exception, unauthorized_exception, forbidden_exception, user_not_found_exception
+from app.exceptions.http_exceptions import email_already_exists_exception, dni_already_exists_exception, unauthorized_exception, forbidden_exception, user_not_found_exception
 from database.connection import SessionLocal
 
 
@@ -45,6 +45,14 @@ def register_user(user_data, db: Session):
             detail="Un profesor debe tener una especialidad asignada"
         )
 
+    dni = getattr(user_data, "dni", None)
+    if dni:
+        existing_dni = db.query(User).filter(
+            User.dni == dni, User.role == role
+        ).first()
+        if existing_dni:
+            raise dni_already_exists_exception()
+
     hashed_password = hash_password(
         user_data.password
     )
@@ -55,7 +63,7 @@ def register_user(user_data, db: Session):
         email=user_data.email,
         password=hashed_password,
         role=role,
-        dni=getattr(user_data, "dni", None),
+        dni=dni,
         direccion=getattr(user_data, "direccion", None),
         telefono=getattr(user_data, "telefono", None),
         specialization=specialization,
@@ -91,6 +99,14 @@ def register_user_by_admin(user_data, db: Session):
             detail="Un profesor debe tener una especialidad asignada"
         )
 
+    dni = getattr(user_data, "dni", None)
+    if dni:
+        existing_dni = db.query(User).filter(
+            User.dni == dni, User.role == role
+        ).first()
+        if existing_dni:
+            raise dni_already_exists_exception()
+
     temp_password = generate_temporary_password()
     hashed_password = hash_password(temp_password)
 
@@ -100,7 +116,7 @@ def register_user_by_admin(user_data, db: Session):
         email=user_data.email,
         password=hashed_password,
         role=role,
-        dni=getattr(user_data, "dni", None),
+        dni=dni,
         direccion=getattr(user_data, "direccion", None),
         telefono=getattr(user_data, "telefono", None),
         specialization=specialization,
