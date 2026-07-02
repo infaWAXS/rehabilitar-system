@@ -76,8 +76,8 @@ function Registro() {
     } else {
       const hoy = new Date();
       const nacimiento = new Date(form.fecha_nacimiento);
-      const edad = hoy.getFullYear() - nacimiento.getFullYear() - 
-      ((hoy.getMonth(), hoy.getDate()) < (nacimiento.getMonth(), nacimiento.getDate()) ? 1 : 0);
+      const edad = hoy.getFullYear() - nacimiento.getFullYear() -
+        ((hoy.getMonth() * 100 + hoy.getDate()) < (nacimiento.getMonth() * 100 + nacimiento.getDate()) ? 1 : 0);
       if (edad < 18) errs.fecha_nacimiento = 'Debés ser mayor de 18 años para registrarte.';
     }
     if (Object.keys(errs).length > 0) {
@@ -122,7 +122,9 @@ function Registro() {
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
       const msg = err.message || '';
-      if (msg.toLowerCase().includes('ya existe') || msg.toLowerCase().includes('already') || msg.toLowerCase().includes('conflict')) {
+      if (msg.toLowerCase().includes('dni')) {
+        setError('Ya existe una cuenta con ese DNI.');
+      } else if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('correo') || msg.toLowerCase().includes('ya existe') || msg.toLowerCase().includes('already') || msg.toLowerCase().includes('conflict')) {
         setError('El correo ya se encuentra registrado en el sistema.');
       } else {
         setError(msg || 'No se pudo crear la cuenta. Intentá de nuevo.');

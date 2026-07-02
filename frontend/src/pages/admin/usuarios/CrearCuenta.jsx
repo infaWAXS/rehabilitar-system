@@ -152,7 +152,9 @@ function CrearCuenta() {
       setAptoFile(null);
     } catch (err) {
       const msg = err.message || '';
-      if (msg.toLowerCase().includes('ya existe') || msg.toLowerCase().includes('already') || msg.toLowerCase().includes('conflict')) {
+      if (msg.toLowerCase().includes('dni')) {
+        setError('Ya existe un usuario con ese DNI en este rol.');
+      } else if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('correo') || msg.toLowerCase().includes('ya existe') || msg.toLowerCase().includes('already') || msg.toLowerCase().includes('conflict')) {
         setError('El correo ya está registrado en el sistema.');
       } else if (msg.toLowerCase().includes('especialidad')) {
         setError('Un profesor debe tener una especialidad asignada.');

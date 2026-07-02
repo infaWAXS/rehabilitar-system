@@ -124,7 +124,10 @@ def change_professor_specialty_endpoint(
 def list_pending_medical(token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return db.query(User).filter(User.medical_certificate_status == "pending").all()
+    return db.query(User).filter(
+        User.medical_certificate_status == "pending",
+        User.is_deleted == False,
+    ).all()
 
 
 # Endpoint para obtener datos de un usuario específico (admin o el propio usuario) - Agustin
@@ -245,7 +248,7 @@ def admin_upload_certificate(user_id: int, token: str, file: UploadFile = File(.
     require_role(["admin"])(current_user)
 
     from app.exceptions.http_exceptions import user_not_found_exception
-    target = db.query(User).filter(User.id == user_id).first()
+    target = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
     if not target:
         raise user_not_found_exception()
 
@@ -278,31 +281,19 @@ def upload_dni_photo(token: str, file: UploadFile = File(...), db: Session = Dep
     return {"message": "Foto de DNI subida correctamente. Pendiente validación por sistema externo."}
 
 
-# Elimina la propia cuenta del usuario autenticado (hard delete) - Francis
+# Elimina la propia cuenta del usuario autenticado (baja logica) - Francis
 @router.delete("/me")
 def delete_my_account(token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
-    name = f"{current_user.name} {current_user.lastname}"
-    db.delete(current_user)
-    if current_user.role in ["admin", "receptionist", "professor"]:
-        register_audit(
-            db=db,
-            user_id=current_user.id,
-            type=AuditType.ACCOUNT,
-            action=AuditAction.DELETE,
-            result=AuditResult.SUCCESS,
-            detail=f"Usuario {current_user.name} {current_user.lastname} eliminó su propia cuenta."
-        )
-    db.commit()
-    return {"message": f"Cuenta de {name} eliminada correctamente"}
+    return delete_user(current_user.id, current_user.id, db)
 
 
-# Elimina una cuenta de usuario (admin, hard delete) - Francis
+# Elimina una cuenta de usuario (admin, baja logica) - Francis
 @router.delete("/{user_id}")
 def delete_user_endpoint(user_id: int, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return delete_user(user_id, db, current_user)
+    return delete_user(user_id, current_user.id, db)
 
 
 # Endpoint para listar clientes (usuarios con rol "client") - Francis
