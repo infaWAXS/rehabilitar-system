@@ -68,7 +68,7 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
                 type=AuditType.PAYMENT,
                 action=AuditAction.INDIVIDUAL,
                 result=AuditResult.ERROR,
-                detail=f"Pago rechazado por fondos insuficientes para el usuario {user.name} {user.lastname} para la actividad id {activity.name}'."
+                detail=f"Pago rechazado por fondos insuficientes para el usuario {user.name} {user.lastname} para la actividad {activity.name} (id {activity.id})."
             )
             db.commit()
             raise HTTPException(status_code=402, detail="Pago rechazado: fondos insuficientes en la cuenta.")
@@ -92,7 +92,7 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
             type=AuditType.PAYMENT,
             action=AuditAction.INDIVIDUAL,
             result=AuditResult.SUCCESS,
-            detail=f"Usuario {user.name} {user.lastname} pagó una reserva para la actividad {activity.name}. Pago: ${total:.2f}."
+            detail=f"Usuario {user.name} {user.lastname} pagó una reserva para la actividad {activity.name} (id {activity.id}). Pago: ${total:.2f}."
         )
 
     new_reservation = Reservation(
@@ -314,7 +314,7 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
                 type=AuditType.PAYMENT,
                 action=AuditAction.REFUND,
                 result=AuditResult.SUCCESS,
-                detail=f"Se hace un reintegro a {user.name} {user.lastname} de la actividad {activity.name} de {total_refund:.2f}.",
+                detail=f"Se hace un reintegro a {user.name} {user.lastname} de la actividad {activity.name} (id {activity.id}) de {total_refund:.2f}.",
             )
             result = "deposit_returned"
             message = f"Turno cancelado. Se te reintegra el {percent}% que habías abonado."

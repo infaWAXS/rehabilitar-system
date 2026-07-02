@@ -150,7 +150,7 @@ def aceptar_sugerencia(suggestion_id: int, price: Decimal, db: Session, current_
         type=AuditType.ACTIVITY,
         action=AuditAction.APPROVE_SUGGESTION,
         result=AuditResult.SUCCESS,
-        detail=f"Administrador {current_user.name} {current_user.lastname} aceptó la sugerencia {sugerencia.id}.",
+        detail=f"Administrador {current_user.name} {current_user.lastname} aceptó la sugerencia {sugerencia.name}.",
     )
     db.commit()
 
@@ -168,7 +168,7 @@ def rechazar_sugerencia(suggestion_id: int, db: Session, current_user) -> Sugges
         type=AuditType.ACTIVITY,
         action=AuditAction.REJECT_SUGGESTION,
         result=AuditResult.SUCCESS,
-        detail=f"Administrador {current_user.name} {current_user.lastname} rechazó la sugerencia {sugerencia.id}.",
+        detail=f"Administrador {current_user.name} {current_user.lastname} rechazó la sugerencia {sugerencia.name}.",
     )
     db.commit()
     db.refresh(sugerencia)

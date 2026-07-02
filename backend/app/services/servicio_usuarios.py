@@ -117,7 +117,7 @@ def register_user_by_admin(user_data, db: Session, current_user: User):
         type=AuditType.ACCOUNT,
         action=AuditAction.CREATE,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} creó la cuenta {new_user.email} (id:{new_user.id})"
+        detail=f"Admin {current_user.name} {current_user.lastname} creó la cuenta {new_user.email}"
     )
 
     db.commit()
@@ -254,7 +254,7 @@ def change_password(current_user: User, new_password: str, confirm_password: str
             db=db,
             user_id=current_user.id,
             type=AuditType.ACCOUNT,
-            action=AuditAction.UPDATE,
+            action=AuditAction.RESET_PASSWORD,
             result=AuditResult.SUCCESS,
             detail=f"Usuario {current_user.name} {current_user.lastname} cambió su contraseña."
         )
@@ -346,7 +346,7 @@ def change_user_status(user_id: int, status: str, db: Session, current_user: Use
         type=AuditType.ACCOUNT,
         action=AuditAction.UPDATE,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} cambió el estado de la cuenta de {user.name} {user.lastname} a {status}"
+        detail=f"Admin {current_user.name} {current_user.lastname} cambió el estado de la cuenta de {user.name} {user.lastname} (id {user.id}) a {status}"
     )
     db.commit()
 
@@ -376,7 +376,7 @@ def change_medical_clearance_status(user_id: int, status: str, db: Session, curr
         type=AuditType.ACCOUNT,
         action=AuditAction.UPDATE_MEDICAL_CERTIFICATE,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} cambió el estado del certificado médico de {user.name} {user.lastname} ({user.id}) a {status}"
+        detail=f"Admin {current_user.name} {current_user.lastname} cambió el estado del certificado médico de {user.name} {user.lastname} (id {user.id}) a {status}"
     )
 
     db.commit()
@@ -559,7 +559,7 @@ def delete_user(user_id: int, db: Session, current_user: User):
         type=AuditType.ACCOUNT,
         action=AuditAction.DELETE,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} eliminó la cuenta de {user.name} {user.lastname} ({user.id})"
+        detail=f"Admin {current_user.name} {current_user.lastname} eliminó la cuenta de {user.name} {user.lastname} (id {user.id})"
     )
     db.commit()
 
@@ -647,7 +647,7 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
         type=AuditType.ACCOUNT,
         action=AuditAction.UPDATE,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} modificó la información del usuario {employee.name} {employee.lastname} ({employee.id})"
+        detail=f"Admin {current_user.name} {current_user.lastname} modificó la información del usuario {employee.name} {employee.lastname} (id {employee.id})"
     )
     db.commit()
     db.refresh(employee)

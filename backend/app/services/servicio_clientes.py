@@ -194,7 +194,7 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: U
         type=AuditType.ACCOUNT,
         action=AuditAction.SUSPEND_ACCOUNT,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} suspendió la cuenta del cliente {cliente.name} {cliente.lastname} ({cliente.id}). Motivo: {motivo}",
+        detail=f"Admin {current_user.name} {current_user.lastname} suspendió la cuenta del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). Motivo: {motivo}",
     )
     db.commit()
     db.refresh(cliente)
@@ -235,7 +235,7 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session, cu
         type=AuditType.ACCOUNT,
         action=AuditAction.REINTEGRATE_ACCOUNT,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} reintegró la cuenta del cliente {cliente.name} {cliente.lastname} ({cliente.id}). Motivo: {motivo}",
+        detail=f"Admin {current_user.name} {current_user.lastname} reintegró la cuenta del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). Motivo: {motivo}",
     )
     db.commit()
     db.refresh(cliente)
@@ -283,7 +283,7 @@ def rechazar_reintegro(cliente_id: int, db: Session, current_user: User):
         type=AuditType.ACCOUNT,
         action=AuditAction.DENY_REINTEGRATION,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} rechazó la solicitud de reintegro del cliente {cliente.name} {cliente.lastname} ({cliente.id}). La cuenta permanece suspendida.",
+        detail=f"Admin {current_user.name} {current_user.lastname} rechazó la solicitud de reintegro del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). La cuenta permanece suspendida.",
     )
     db.commit()
     db.refresh(cliente)

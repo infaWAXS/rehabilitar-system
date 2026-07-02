@@ -437,7 +437,7 @@ def editar_actividad(activity_id: int, datos, db: Session, current_user) -> Acti
         type=AuditType.ACTIVITY,
         action=AuditAction.UPDATE,
         result=AuditResult.SUCCESS,
-        detail=f"Administrador {current_user.name} {current_user.lastname} actualizó la actividad '{actividad.name}', id {actividad.id}.",
+        detail=f"Administrador {current_user.name} {current_user.lastname} actualizó la actividad '{actividad.name}', (id {actividad.id}).",
     )
     db.commit()
     db.refresh(actividad)
@@ -478,8 +478,8 @@ def cancelar_actividad(activity_id: int, db: Session, current_user) -> None:
             user_id=current_user.id,
             type=AuditType.ACTIVITY,
             action=AuditAction.DELETE,
-            result=AuditResult.FAILURE,
-            detail=f"Administrador {current_user.name} {current_user.lastname} intentó cancelar la actividad '{actividad.name}' (id: {actividad.id}) pero tiene clientes inscriptos.",
+            result=AuditResult.ERROR,
+            detail=f"Administrador {current_user.name} {current_user.lastname} intentó cancelar la actividad '{actividad.name}' (id {actividad.id}) pero tiene clientes inscriptos.",
         )
         db.commit()
         raise HTTPException(
@@ -529,7 +529,7 @@ def cancelar_actividad(activity_id: int, db: Session, current_user) -> None:
         type=AuditType.ACTIVITY,
         action=AuditAction.DELETE,
         result=AuditResult.SUCCESS,
-        detail=f"Administrador {current_user.name} {current_user.lastname} canceló la actividad '{actividad.name}' (id: {actividad.id}).",
+        detail=f"Administrador {current_user.name} {current_user.lastname} canceló la actividad '{actividad.name}' (id {actividad.id}).",
     )
     db.commit()
 
@@ -604,7 +604,7 @@ def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity
         type=AuditType.ACTIVITY,
         action=AuditAction.RESIGN_ACTIVITY,
         result=AuditResult.SUCCESS,
-        detail=f"Profesor {current_user.name} {current_user.lastname} renunció a la actividad '{actividad.name}' (id: {actividad.id}).",
+        detail=f"Profesor {current_user.name} {current_user.lastname} renunció a la actividad '{actividad.name}' (id {actividad.id}).",
     )
     db.commit()
     db.refresh(actividad)
@@ -664,7 +664,7 @@ def asumir_actividad(activity_id: int, current_user, db: Session) -> Activity:
         type=AuditType.ACTIVITY,
         action=AuditAction.CLAIM_ACTIVITY,
         result=AuditResult.SUCCESS,
-        detail=f"Profesor {current_user.name} {current_user.lastname} asumió la actividad '{actividad.name}' (id: {actividad.id}).",
+        detail=f"Profesor {current_user.name} {current_user.lastname} asumió la actividad '{actividad.name}' (id {actividad.id}).",
     )
     db.commit()
     db.refresh(actividad)
