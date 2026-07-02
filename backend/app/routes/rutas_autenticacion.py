@@ -39,7 +39,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 @router.get("/users")
 def get_users(db: Session = Depends(get_db)):
 
-    users = db.query(User).all()
+    users = db.query(User).filter(User.is_deleted == False).all()
 
     return users
 

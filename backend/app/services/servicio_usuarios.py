@@ -2,6 +2,7 @@
 # Francis: resto de funciones de gestion de usuarios.
 from urllib import request
 from threading import Thread
+from datetime import datetime
 from sqlalchemy import or_
 
 from app.schemas.esquema_usuario import UserLogin
@@ -159,7 +160,8 @@ def login_user(request: UserLogin, db: Session):
 
 
     existing_user = db.query(User).filter(
-        User.email == request.email
+        User.email == request.email,
+        User.is_deleted == False,
     ).first()
 
     if not existing_user:
@@ -167,7 +169,7 @@ def login_user(request: UserLogin, db: Session):
             status_code=401,
             detail="Email invalido"
         )
-    
+
 
     if existing_user.account_status.lower() == "disabled":
 
@@ -273,7 +275,7 @@ def update_user_info(current_user: User, name: str, lastname: str, direccion: st
 #Permite filtrar por rol y estado de cuenta. Solo los admins pueden acceder a esta ruta.
 def get_all_users(db: Session, role: str = None, status: str = None):
 
-    query = db.query(User)
+    query = db.query(User).filter(User.is_deleted == False)
 
     if role:
         query = query.filter(User.role == role)
@@ -287,7 +289,8 @@ def get_all_users(db: Session, role: str = None, status: str = None):
 #Devuelve la información de un usuario específico por su ID.
 def get_user_by_id(user_id: int, db: Session):
     user = db.query(User).filter(
-        User.id == user_id
+        User.id == user_id,
+        User.is_deleted == False,
     ).first()
 
     if not user:
@@ -299,9 +302,10 @@ def get_user_by_id(user_id: int, db: Session):
 
 #Cambia el estado de la cuenta de un usuario (activo o deshabilitado). Solo los admins pueden realizar esta acción.
 def change_user_status(user_id: int, status: str, db: Session):
-    
+
     user = db.query(User).filter(
-        User.id == user_id
+        User.id == user_id,
+        User.is_deleted == False,
     ).first()
 
     if not user:
@@ -322,7 +326,8 @@ def change_user_status(user_id: int, status: str, db: Session):
 def change_medical_clearance_status(user_id: int, status: str, db: Session):
 
     user = db.query(User).filter(
-        User.id == user_id
+        User.id == user_id,
+        User.is_deleted == False,
     ).first()
 
     if not user:
@@ -356,7 +361,7 @@ def request_password_recovery(email: str, http_request, db: Session):
     from app.utils.security import PASSWORD_RECOVERY_TOKEN_EXPIRE_MINUTES
     from app.utils.notifications import notify_password_recovery_requested
 
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == email, User.is_deleted == False).first()
 
     if not user:
         raise HTTPException(
@@ -416,11 +421,11 @@ def reset_password(token: str, new_password: str, confirm_password: str, db: Ses
             detail="Token inválido o expirado"
         )
     
-    user = db.query(User).filter(User.email == email).first()
-    
+    user = db.query(User).filter(User.email == email, User.is_deleted == False).first()
+
     if not user:
         raise user_not_found_exception()
-    
+
     hashed_password = hash_password(new_password)
     user.password = hashed_password
     user.account_status = "active"
@@ -434,13 +439,20 @@ def reset_password(token: str, new_password: str, confirm_password: str, db: Ses
     }
 
 
-# Elimina permanentemente una cuenta de usuario (hard delete).
-def delete_user(user_id: int, db: Session):
+# Elimina una cuenta de usuario mediante baja logica (soft delete): el registro
+# no se borra de la base de datos, se marca is_deleted=True y se registra quien
+# y cuando la elimino (deleted_by/deleted_at) para poder auditarla despues.
+# deleted_by_id es el id de quien ejecuta la baja (el propio usuario si es
+# autoeliminacion, o el admin si la elimina desde el panel).
+def delete_user(user_id: int, deleted_by_id: int, db: Session):
     from app.models.reservation import Reservation
     from app.models.waitlist import Waitlist
     from app.services.servicio_lista_espera import promote_next_waitlist_entry
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.is_deleted == False,
+    ).first()
 
     if not user:
         raise user_not_found_exception()
@@ -501,21 +513,13 @@ def delete_user(user_id: int, db: Session):
 
             Thread(target=_notif_async, args=(uid_promovido, aid_promovido), daemon=True).start()
 
-    # Borrar registros dependientes con FK NOT NULL hacia el usuario (suscripciones,
-    # asistencias) para que el delete no falle por violación de integridad. Las
-    # notificaciones y movimientos de crédito no tienen FK NOT NULL pero se limpian
-    # igual para no dejar datos huérfanos.
-    from app.models.user_plan import UserPlan
-    from app.models.attendance import Attendance
-    from app.models.notification import Notification
-    from app.models.credit_transaction import CreditTransaction
+    # Baja logica: se conserva el registro (y sus datos relacionados: suscripciones,
+    # asistencias, notificaciones, movimientos de credito) para auditoria. Ya no
+    # hace falta borrarlos a mano porque no hay un delete fisico que viole FKs.
+    user.is_deleted = True
+    user.deleted_at = datetime.utcnow()
+    user.deleted_by = deleted_by_id
 
-    db.query(UserPlan).filter(UserPlan.user_id == user_id).delete(synchronize_session=False)
-    db.query(Attendance).filter(Attendance.user_id == user_id).delete(synchronize_session=False)
-    db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
-    db.query(CreditTransaction).filter(CreditTransaction.user_id == user_id).delete(synchronize_session=False)
-
-    db.delete(user)
     db.commit()
 
     return {"message": f"Cuenta de {name} eliminada correctamente"}
@@ -523,7 +527,7 @@ def delete_user(user_id: int, db: Session):
 
 # Busca usuarios por nombre, email o DNI con filtros opcionales.
 def search_users(db: Session, search: str = None, role: str = None, status: str = None, roles: list = None):
-    query = db.query(User)
+    query = db.query(User).filter(User.is_deleted == False)
 
     if search:
         query = query.filter(
@@ -554,7 +558,7 @@ def search_users(db: Session, search: str = None, role: str = None, status: str 
 #              actividades (Angel) esté disponible.
 # Escenario 4: cancelación — comportamiento del frontend, no requiere lógica de backend.
 def modify_employee(employee_id: int, name: str = None, lastname: str = None, email: str = None, specialization: str = None, direccion: str = None, telefono: str = None, db: Session = None, birth_date = None):
-    employee = db.query(User).filter(User.id == employee_id).first()
+    employee = db.query(User).filter(User.id == employee_id, User.is_deleted == False).first()
 
     if not employee:
         raise user_not_found_exception()
@@ -606,7 +610,8 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
 def get_public_staff(db: Session, search: str = None, specialization: str = None):
     query = db.query(User).filter(
         User.role.in_(["professor", "receptionist"]),
-        User.account_status == "active"
+        User.account_status == "active",
+        User.is_deleted == False,
     )
 
     if search:
@@ -630,7 +635,8 @@ def get_staff_specializations(db: Session) -> list:
         .filter(
             User.role == "professor",
             User.specialization.isnot(None),
-            User.account_status == "active"
+            User.account_status == "active",
+            User.is_deleted == False,
         )
         .distinct()
         .all()

@@ -24,9 +24,10 @@ def get_current_user( token: str, db: Session = Depends(get_db)):
     
         
     user = db.query(User).filter(
-        User.email == email
+        User.email == email,
+        User.is_deleted == False,
     ).first()
-    
+
     if not user:
         raise user_not_found_exception()
 
