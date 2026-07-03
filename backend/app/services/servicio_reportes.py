@@ -14,24 +14,40 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
     datetime_inicio = datetime.combine(fecha_inicio, datetime.min.time())
     datetime_fin = datetime.combine(fecha_fin, datetime.max.time())
 
-    # ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────
     # 1. RESUMEN GLOBAL FIJO
     # ──────────────────────────────────────────────────────────────────────────
     primer_cliente = db.query(User).order_by(User.created_at.asc()).first()
     fecha_inicio_sistema = primer_cliente.created_at if primer_cliente else None
 
+    # [MANTENIDO PARA EL HUB] Totales absolutos actuales de la base de datos
     clientes_totales = db.query(func.count(User.id)).filter(
         User.role == "client"
     ).scalar() or 0
 
+    profesores_totales = db.query(func.count(User.id)).filter(
+        User.role == "professor"
+    ).scalar() or 0
+
+    # [NUEVO PARA CLIENTES REPORTE] Nuevos registros creados estrictamente en el rango
+    nuevos_registros = db.query(func.count(User.id)).filter(
+        User.role == "client",
+        User.created_at.between(datetime_inicio, datetime_fin)
+    ).scalar() or 0
+
+    # [NUEVO PARA CLIENTES REPORTE] Clientes suspendidos en este rango temporal
+    # Nota: Usamos created_at de una tabla de auditoría o el deshabilitado del usuario según tu modelo
+    clientes_suspendidos_rango = db.query(func.count(User.id)).filter(
+        User.role == "client",
+        User.account_status == "disabled",
+        User.created_at.between(datetime_inicio, datetime_fin) 
+    ).scalar() or 0
+
+    # Ingresos y ausentismo (Ya estaban correctamente segmentados por rango)
     ingresos_totales = db.query(func.sum(Plan.price)).\
         join(UserPlan, UserPlan.plan_id == Plan.id).\
         filter(UserPlan.start_date.between(fecha_inicio, fecha_fin)).\
         scalar() or 0.0
-
-    profesores_totales = db.query(func.count(User.id)).filter(
-        User.role == "professor"
-    ).scalar() or 0
 
     total_asistencias = db.query(func.count(Attendance.id)).filter(Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
     total_ausentes = db.query(func.count(Attendance.id)).filter(Attendance.status == 'absent', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
@@ -386,14 +402,24 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
 
     return {
         "fecha_inicio_sistema": fecha_inicio_sistema.strftime("%Y-%m-%d") if fecha_inicio_sistema else None,
-        "resumen": {"clientes_totales": clientes_totales, "ingresos_totales": float(ingresos_totales), "profesores_totales": profesores_totales, "tasa_ausentismo": tasa_ausentismo},
-        "clase": clases_lista, "sancionados": sancionados_lista, "ocupacion_aulas": aulas_lista, "profesores_mayor_concurrencia": profesores_lista,
+        "resumen": {
+            "clientes_totales": clientes_totales, 
+            "profesores_totales": profesores_totales,
+            "nuevos_registros": nuevos_registros, 
+            "clientes_suspendidos_rango": clientes_suspendidos_rango,
+            "ingresos_totales": float(ingresos_totales), 
+            "tasa_ausentismo": tasa_ausentismo
+        },
+        "clase": clases_lista, 
+        "sancionados": sancionados_lista, 
+        "ocupacion_aulas": aulas_lista, 
+        "profesores_mayor_concurrencia": profesores_lista,
         "evolucion_temporal": {
             "granularidad": "meses",
             "datos": cronologia_lista
         },
         "mapa_calor": mapa_calor_datos,
-        "mapa_infraestructura": mapa_infraestructura_datos  # <── Agregado acá
+        "mapa_infraestructura": mapa_infraestructura_datos
     }
     
     

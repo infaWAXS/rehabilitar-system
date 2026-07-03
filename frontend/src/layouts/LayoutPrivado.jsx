@@ -13,6 +13,7 @@ const menus = {
     { label: 'Aptos Físicos', ruta: '/admin/aptos-fisicos' },
     { label: 'Actividades',   ruta: '/admin/actividades' },
     { label: 'Sugerencias',   ruta: '/admin/sugerencias' },
+    { label: 'Estadísticas',   ruta: '/admin/reportes'}
   ],
   profesor: [
     { label: 'Actividades', ruta: '/profesor/actividades' },
