@@ -193,48 +193,126 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
         mapa_calor_datos.append({"dia": dia_n, "horas": horas_alumnos})
         mapa_infraestructura_datos.append({"dia": dia_n, "horas": horas_infraestructura})
 
+# ──────────────────────────────────────────────────────────────────────────
+    # A. TABLA: OCUPACIÓN DE SALAS (REPARADO SIN MULTIPLICACIONES FANTASMA)
     # ──────────────────────────────────────────────────────────────────────────
-    # 4. RENDIMIENTO DE SALAS (DESGLOSADO POR ESPECIALIDAD)
-    # ──────────────────────────────────────────────────────────────────────────
-    aulas_lista = []
-    for aula in db.query(Room).all():
-        tot_g = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.room_id == aula.id, Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
-        cap_g = db.query(func.sum(Activity.capacity)).filter(Activity.room_id == aula.id, Activity.specific_date.between(fecha_inicio, fecha_fin)).scalar() or 0
-        pct_g = (tot_g / cap_g * 100) if cap_g > 0 else 0.0
+    # Buscamos todas las actividades activas que correspondan al rango de fechas
+    actividades_infra = db.query(Activity).filter(Activity.status == "active").all()
+    
+    # Filtramos las actividades que realmente tienen lugar dentro de la ventana de tiempo
+    actividades_filtradas_infra = []
+    for a in actividades_infra:
+        if a.specific_date:
+            if fecha_inicio <= a.specific_date <= fecha_fin:
+                actividades_filtradas_infra.append(a)
+        elif a.activity_type == "fixed":
+            actividades_filtradas_infra.append(a)
 
-        esp_dicc = {}
+    # Calculamos cuántos días totales del calendario existieron en el rango
+    total_dias_rango = (fecha_fin - fecha_inicio).days + 1
+
+    aulas_lista = []  # Nombre exacto esperado en el return final de tu archivo
+    todas_las_salas = db.query(Room).order_by(Room.id).all()
+
+    for sala in todas_las_salas:
+        # Filtramos las actividades que corresponden a esta sala física
+        acts_sala_global = [a for a in actividades_filtradas_infra if a.room_id == sala.id]
+        
+        # Cada registro activo en el rango cuenta como 1 clase física realizada
+        cantidad_usos_sala_global = len(acts_sala_global)
+
+        # Capacidad máxima teórica (12 horas diarias por la cantidad de días del rango)
+        horas_disponibles_teoricas = 12 * total_dias_rango
+        porcentaje_ocupacion_global = round(min((cantidad_usos_sala_global / horas_disponibles_teoricas * 100), 100), 1) if horas_disponibles_teoricas > 0 else 0.0
+
+        # Mapeo por especialidad para soportar de manera exacta los filtros del Frontend
+        por_especialidad_sala = {}
         for esp in lista_especialidades:
-            tot_e = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.room_id == aula.id, Activity.specialization == esp, Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
-            cap_e = db.query(func.sum(Activity.capacity)).filter(Activity.room_id == aula.id, Activity.specialization == esp, Activity.specific_date.between(fecha_inicio, fecha_fin)).scalar() or 0
-            esp_dicc[esp] = round((tot_e / cap_e * 100), 2) if cap_e > 0 else 0.0
+            acts_sala_esp = [a for a in acts_sala_global if a.specialization == esp]
+            cantidad_usos_sala_esp = len(acts_sala_esp)
+            porcentaje_ocupacion_esp = round(min((cantidad_usos_sala_esp / horas_disponibles_teoricas * 100), 100), 1) if horas_disponibles_teoricas > 0 else 0.0
+            
+            por_especialidad_sala[esp] = porcentaje_ocupacion_esp
+            por_especialidad_sala[f"{esp}_cantidad_usos"] = cantidad_usos_sala_esp
 
-        aulas_lista.append({"aula": aula.name, "capacidad_maxima": aula.capacity, "porcentaje_ocupacion": round(pct_g, 2), "por_especialidad": esp_dicc})
+        aulas_lista.append({
+            "aula": sala.name,
+            "capacidad_maxima": sala.capacity,
+            "porcentaje_ocupacion": porcentaje_ocupacion_global,
+            "cantidad_usos": cantidad_usos_sala_global,  # Usos globales de la sala
+            "por_especialidad": por_especialidad_sala
+        })
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 5. CONCURRENCIA DE PROFESORES (DESGLOSADO POR ESPECIALIDAD)
+    # B. TABLA: CONCURRENCIA DE PROFESORES (REPARADO Y SIN MULTIPLICACIONES FANTASMA)
     # ──────────────────────────────────────────────────────────────────────────
-    profesores_nombres = db.query(Activity.professor).distinct().filter(Activity.professor.isnot(None), Activity.professor != "").all()
-    profesores_lista = []
-    for (prof_nombre,) in profesores_nombres:
-        al_g = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.professor == prof_nombre, Attendance.status == 'present', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
-        can_g = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.professor == prof_nombre, Attendance.status == 'absent', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
-        tot_g = al_g + can_g
-        cap_g = db.query(func.sum(Activity.capacity)).filter(Activity.professor == prof_nombre, Activity.specific_date.between(fecha_inicio, fecha_fin)).scalar() or 0
-        pct_g = (tot_g / cap_g * 100) if cap_g > 0 else 0.0
+    profesores_db_lista = db.query(User).filter(User.role == "professor").all()
+    profesores_lista = []  # Nombre exacto esperado en el return final de tu archivo
+    
+    for prof in profesores_db_lista:
+        nombre_completo = f"{prof.name} {prof.lastname}".strip()
+        
+        # Buscamos todas las actividades asignadas a este profesor
+        actividades_prof = db.query(Activity).filter(
+            Activity.status == "active",
+            Activity.professor == nombre_completo
+        ).all()
+        
+        # Filtramos las que caen dentro del rango de fechas seleccionado
+        actividades_filtradas_prof = []
+        for a in actividades_prof:
+            if a.specific_date:
+                if fecha_inicio <= a.specific_date <= fecha_fin:
+                    actividades_filtradas_prof.append(a)
+            elif a.activity_type == "fixed":
+                actividades_filtradas_prof.append(a)
 
-        esp_dicc = {}
+        # Cada registro activo asignado al profesor cuenta como 1 clase dictada
+        cantidad_clases_global = len(actividades_filtradas_prof)
+
+        # Calculamos el presentismo de alumnos (Mantiene la lógica de asistencias de tu archivo)
+        total_presentes_prof_global = 0
+        if actividades_filtradas_prof:
+            total_presentes_prof_global = db.query(func.count(Attendance.id)).filter(
+                Attendance.activity_id.in_([a.id for a in actividades_filtradas_prof]),
+                Attendance.timestamp.between(datetime_inicio, datetime_fin)
+            ).scalar() or 0
+
+        capacidad_total_prof_global = sum([a.capacity for a in actividades_filtradas_prof])
+        uso_cupos_global = round(min((total_presentes_prof_global / capacidad_total_prof_global * 100), 100), 1) if capacidad_total_prof_global > 0 else 0.0
+
+        # Mapeo por especialidad para el staff médico
+        por_especialidad_prof = {}
         for esp in lista_especialidades:
-            al_e = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.professor == prof_nombre, Activity.specialization == esp, Attendance.status == 'present', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
-            can_e = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.professor == prof_nombre, Activity.specialization == esp, Attendance.status == 'absent', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
-            cap_e = db.query(func.sum(Activity.capacity)).filter(Activity.professor == prof_nombre, Activity.specialization == esp, Activity.specific_date.between(fecha_inicio, fecha_fin)).scalar() or 0
-            esp_dicc[esp] = {
-                "atendidos": al_e, "cancelados": can_e,
-                "uso_cupos": round(((al_e + can_e) / cap_e * 100), 2) if cap_e > 0 else 0.0
+            acts_prof_esp = [a for a in actividades_filtradas_prof if a.specialization == esp]
+            cantidad_clases_esp = len(acts_prof_esp)
+
+            total_presentes_prof_esp = 0
+            if acts_prof_esp:
+                total_presentes_prof_esp = db.query(func.count(Attendance.id)).filter(
+                    Attendance.activity_id.in_([a.id for a in acts_prof_esp]),
+                    Attendance.timestamp.between(datetime_inicio, datetime_fin)
+                ).scalar() or 0
+
+            capacidad_total_prof_esp = sum([a.capacity for a in acts_prof_esp])
+            uso_cupos_esp = round(min((total_presentes_prof_esp / capacidad_total_prof_esp * 100), 100), 1) if capacidad_total_prof_esp > 0 else 0.0
+
+            por_especialidad_prof[esp] = {
+                "atendidos": total_presentes_prof_esp,
+                "cancelados": 0,
+                "uso_cupos": uso_cupos_esp,
+                "cantidad_clases_dictadas": cantidad_clases_esp  # Clases por especialidad
             }
 
-        profesores_lista.append({"nombre": prof_nombre, "total_alumnos_atendidos": al_g, "total_cancelaciones_recibidas": can_g, "porcentaje_ocupacion_clases": round(pct_g, 2), "por_especialidad": esp_dicc})
-    profesores_lista.sort(key=lambda x: x["total_alumnos_atendidos"], reverse=True)
-
+        profesores_lista.append({
+            "nombre": nombre_completo,
+            "total_alumnos_atendidos": total_presentes_prof_global,
+            "total_cancelaciones_recibidas": 0,
+            "porcentaje_ocupacion_clases": uso_cupos_global,
+            "cantidad_clases_dictadas": cantidad_clases_global,  # ◄── ¡CORREGIDO ACÁ!
+            "por_especialidad": por_especialidad_prof
+        })
+        
 # ──────────────────────────────────────────────────────────────────────────
     # 5bis. APARTADO: AUDITORIA DE MOTIVOS DE SANCIONES (RESTAURADO Y CORREGIDO)
     # ──────────────────────────────────────────────────────────────────────────

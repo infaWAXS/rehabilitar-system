@@ -340,7 +340,7 @@ export default function ReportesAdmin() {
                 Ocupación de Salas
                 {filtroEspecialidad && <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span>}
               </h2>
-              <div style={s.wrapperTabla}>
+<div style={s.wrapperTabla}>
                 <table style={s.tabla}>
                   <thead>
                     <tr>
@@ -352,17 +352,36 @@ export default function ReportesAdmin() {
                   <tbody>
                     {salasOrdenadas.map((a, i) => {
                       const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0.0) : a.porcentaje_ocupacion;
-                      // CORREGIDO: Enmascara con opacidad si esa sala no se usa para la especialidad seleccionada
+                      const usosRender = filtroEspecialidad ? (a.por_especialidad?.[`${filtroEspecialidad}_cantidad_usos`] ?? 0) : a.cantidad_usos;
                       const matchesFiltro = !filtroEspecialidad || pctRender > 0;
                       
                       return (
                         <tr key={i} style={{ opacity: matchesFiltro ? 1 : 0.25, transition: 'opacity 0.2s', background: filtroEspecialidad && matchesFiltro ? '#f0fdf4' : 'transparent' }}>
                           <td style={s.td}>{a.aula}</td>
                           <td style={s.td}>{a.capacidad_maxima} alumnos</td>
-                          <td style={s.td}><span style={s.badgePorcentaje}>{pctRender}%</span></td>
+                          <td style={s.td}>
+                            <span style={s.badgePorcentaje}>{pctRender}%</span>
+                            <span style={{ fontSize: '12px', color: 'var(--color-texto-suave)', marginLeft: '12px', fontWeight: '500' }}>
+                              ({usosRender} {usosRender === 1 ? 'uso' : 'usos'})
+                            </span>
+                          </td>
                         </tr>
                       );
                     })}
+
+                    {/* ── NUEVA FILA: TOTAL CLASES REALIZADAS EN SALAS ── */}
+                    <tr style={{ background: '#f8fafc', borderTop: '2px solid var(--color-borde)', fontWeight: 'bold' }}>
+                      <td style={{ ...s.td, color: 'var(--color-primario-oscuro)' }}><strong>Clases realizadas</strong></td>
+                      <td style={s.td}>-</td>
+                      <td style={s.td}>
+                        <span style={{ ...s.badgePorcentaje, background: 'var(--color-primario-suave)', color: 'var(--color-primario-oscuro)' }}>
+                          {salasOrdenadas.reduce((acc, a) => {
+                            const usos = filtroEspecialidad ? (a.por_especialidad?.[`${filtroEspecialidad}_cantidad_usos`] ?? 0) : (a.cantidad_usos ?? 0);
+                            return acc + usos;
+                          }, 0)} totales
+                        </span>
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -373,7 +392,7 @@ export default function ReportesAdmin() {
                 Concurrencia de Profesores
                 {filtroEspecialidad && <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span>}
               </h2>
-              <div style={s.wrapperTabla}>
+<div style={s.wrapperTabla}>
                 <table style={s.tabla}>
                   <thead>
                     <tr>
@@ -388,7 +407,7 @@ export default function ReportesAdmin() {
                       const atendidos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.atendidos ?? 0) : p.total_alumnos_atendidos;
                       const cancelados = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cancelados ?? 0) : p.total_cancelaciones_recibidas;
                       const cupos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.uso_cupos ?? 0.0) : p.porcentaje_ocupacion_clases;
-                      // CORREGIDO: Enmascara con opacidad si el profesor no da clases en esta especialidad
+                      const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
                       const matchesFiltro = !filtroEspecialidad || cupos > 0;
                       
                       return (
@@ -396,10 +415,30 @@ export default function ReportesAdmin() {
                           <td style={s.td}><strong>{p.nombre}</strong></td>
                           <td style={s.td}>{atendidos}</td>
                           <td style={s.td}>{cancelados}</td>
-                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#eff6ff', color: '#1d4ed8' }}>{cupos}%</span></td>
+                          <td style={s.td}>
+                            <span style={{ ...s.badgePorcentaje, background: '#eff6ff', color: '#1d4ed8' }}>{cupos}%</span>
+                            <span style={{ fontSize: '12px', color: 'var(--color-texto-suave)', marginLeft: '8px', display: 'block', marginTop: '2px', fontWeight: '500' }}>
+                              {clasesDictadas} {clasesDictadas === 1 ? 'clase dada' : 'clases dadas'}
+                            </span>
+                          </td>
                         </tr>
                       );
                     })}
+
+                    {/* ── NUEVA FILA: TOTAL CLASES REALIZADAS EN PROFESORES ── */}
+                    <tr style={{ background: '#f8fafc', borderTop: '2px solid var(--color-borde)', fontWeight: 'bold' }}>
+                      <td style={{ ...s.td, color: 'var(--color-primario-oscuro)' }}><strong>Clases realizadas</strong></td>
+                      <td style={s.td}>-</td>
+                      <td style={s.td}>-</td>
+                      <td style={s.td}>
+                        <span style={{ ...s.badgePorcentaje, background: '#e0f2fe', color: '#0369a1' }}>
+                          {profesoresOrdenados.reduce((acc, p) => {
+                            const clases = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : (p.cantidad_clases_dictadas ?? 0);
+                            return acc + clases;
+                          }, 0)} totales
+                        </span>
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
