@@ -33,11 +33,10 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
     plan = db.query(Plan).filter(Plan.id == plan_id, Plan.status == "active").first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado o inactivo.")
-
+    user = db.query(User).filter(User.id == user_id).first()
     if test_scenario == "success":
         # Consumir el descuento acumulado por cancelación (beneficio del abonado para
         # su próximo pago de suscripción)
-        user = db.query(User).filter(User.id == user_id).first()
         descuento = (user.pending_discount_percent or 0) if user else 0
         precio_final = float(plan.price) * (1 - descuento / 100) if descuento else float(plan.price)
 
