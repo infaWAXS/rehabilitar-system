@@ -12,9 +12,7 @@ export default function ClientesReportes() {
   const [errorValidacion, setErrorValidacion] = useState('');
   const [filtroEspecialidad, setFiltroEspecialidad] = useState('');
 
-  // Estados de ordenamiento para las tablas
   const [sortConcurrencia, setSortConcurrencia] = useState({ llave: null, direccion: 'asc' });
-  const [sortOferta, setSortOferta] = useState({ llave: null, direccion: 'asc' });
 
   const formatearFecha = (d) => {
     const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -22,13 +20,18 @@ export default function ClientesReportes() {
     return `${d.getFullYear()}-${mes}-${dia}`;
   };
 
-  // Atajos rápidos de fecha
+  const setearHistorialCompleto = () => {
+    const sIni = "2026-01-01"; 
+    const sFin = formatearFecha(new Date());
+    setFechaInicio(sIni); setFechaFin(sFin); consultarFechas(sIni, sFin);
+  };
+  
   const setearUltimaSemana = () => {
     const hoy = new Date(); const ini = new Date(); ini.setDate(hoy.getDate() - 7);
     const sIni = formatearFecha(ini); const sFin = formatearFecha(hoy);
     setFechaInicio(sIni); setFechaFin(sFin); consultarFechas(sIni, sFin);
   };
-
+  
   const setearUltimoMes = () => {
     const hoy = new Date(); const ini = new Date(); ini.setMonth(hoy.getMonth() - 1);
     const sIni = formatearFecha(ini); const sFin = formatearFecha(hoy);
@@ -37,110 +40,90 @@ export default function ClientesReportes() {
 
   const setearUltimoAnio = () => {
     const hoy = new Date(); const ini = new Date(); ini.setFullYear(hoy.getFullYear() - 1);
-    const sIni = `${hoy.getFullYear()}-01-01`; const sFin = formatearFecha(hoy);
+    const sIni = formatearFecha(ini); const sFin = formatearFecha(hoy);
     setFechaInicio(sIni); setFechaFin(sFin); consultarFechas(sIni, sFin);
   };
 
-  // 2. Simplifica el botón de historial
-  const setearHistorialCompleto = () => {
-    // Si ya tenemos el dato del backend, lo usamos
-    if (fechaInicioSistema) {
-      consultarFechas(fechaInicioSistema, formatearFecha(new Date()));
-    } else {
-      // Si es la primera vez, forzamos una consulta a una fecha lejana 
-      // o a la fecha de inicio estimada del sistema para "activar" el estado
-      consultarFechas("2026-01-01", formatearFecha(new Date()));
+  const consultarFechas = async (inicio, fin) => {
+    setErrorValidacion(''); setReporte(null); setFiltroEspecialidad('');
+    try {
+      setCargando(true);
+      const data = await getStatisticsReport(inicio, fin);
+      setReporte(data);
+    } catch (err) {
+      setErrorValidacion(err.message || 'No se pudo procesar el reporte.');
+    } finally {
+      setCargando(false);
     }
   };
-
-const [fechaInicioSistema, setFechaInicioSistema] = useState(null);
-
-const consultarFechas = async (inicio, fin) => {
-  setErrorValidacion(''); 
-  try {
-    setCargando(true);
-    const data = await getStatisticsReport(inicio, fin);
-    setReporte(data);
-    // Si el backend envía la fecha, actualiza el estado aquí mismo
-    if (data.fecha_inicio_sistema) setFechaInicioSistema(data.fecha_inicio_sistema);
-  } catch (err) {
-    setErrorValidacion(err.message || 'Error.');
-  } finally {
-    setCargando(false);
-  }
-};
 
   const manejarGeneracionManual = (e) => {
     e.preventDefault();
-    if (!fechaInicio || !fechaFin) { 
-      setErrorValidacion('Por favor, selecciona ambas fechas para continuar.'); 
-      return; 
-    }
-    if (fechaInicio > fechaFin) {
-      setErrorValidacion('La fecha de inicio no puede ser posterior a la fecha de fin.');
-      return;
-    }
+    if (!fechaInicio || !fechaFin) { setErrorValidacion('Selecciona ambas fechas.'); return; }
+    if (fechaInicio > fechaFin) { setErrorValidacion('Inicio posterior a fin.'); return; }
     consultarFechas(fechaInicio, fechaFin);
   };
 
-  // Funciones de ordenamiento
-  const cambiarOrden = (llave, estadoActual, setEstado) => {
-    const direccion = estadoActual.llave === llave && estadoActual.direccion === 'asc' ? 'desc' : 'asc';
-    setEstado({ llave, direccion });
+  const cambiarOrden = (llave) => {
+    const direccion = sortConcurrencia.llave === llave && sortConcurrencia.direccion === 'asc' ? 'desc' : 'asc';
+    setSortConcurrencia({ llave, direccion });
   };
 
-  const renderFlecha = (llave, estado) => {
-    if (estado.llave !== llave) return ' ↕';
-    return estado.direccion === 'asc' ? ' ▲' : ' ▼';
+  const handleExport = (tipo, formato) => {
+    const filename = `Exportacion_${tipo}_${new Date().getFullYear()}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
+    const blob = new Blob(['Contenido de prueba'], { type: formato === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
-  const procesarOrdenamiento = (datos, configuracion, llaveEspecialidad = null) => {
-    if (!configuracion.llave) return datos;
-    const copia = [...datos];
-    copia.sort((a, b) => {
-      let valA = a[configuracion.llave]; let valB = b[configuracion.llave];
-      if (llaveEspecialidad && configuracion.llave === 'porcentaje_ocupacion') {
-        valA = a.por_especialidad?.[llaveEspecialidad] ?? 0; valB = b.por_especialidad?.[llaveEspecialidad] ?? 0;
-      } else if (llaveEspecialidad && ['total_alumnos_atendidos', 'total_cancelaciones_recibidas', 'porcentaje_ocupacion_clases'].includes(configuracion.llave)) {
-        const subK = configuracion.llave === 'total_alumnos_atendidos' ? 'atendidos' : (configuracion.llave === 'total_cancelaciones_recibidas' ? 'cancelados' : 'uso_cupos');
-        valA = a.por_especialidad?.[llaveEspecialidad]?.[subK] ?? 0; valB = b.por_especialidad?.[llaveEspecialidad]?.[subK] ?? 0;
-      } else if (configuracion.llave === 'asistencias_totales') {
-        valA = a.asistencias_fijas + a.asistencias_individuales; valB = b.asistencias_fijas + b.asistencias_individuales;
-      }
-      if (typeof valA === 'string') return configuracion.direccion === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-      return configuracion.direccion === 'asc' ? valA - valB : valB - valA;
-    });
-    return copia;
-  };
-
-  const opcionesEspecialidades = reporte?.clase ? [...new Set(reporte.clase.map(c => c.tipo))].sort() : [];
-  const clasesConcurrenciaOrdenadas = reporte ? procesarOrdenamiento(reporte.clase, sortConcurrencia) : [];
-  const clasesOfertaOrdenadas = reporte ? procesarOrdenamiento(reporte.clase, sortOferta) : [];
+  const clasesFiltradas = reporte ? (filtroEspecialidad ? reporte.clase.filter(c => c.tipo === filtroEspecialidad) : reporte.clase) : [];
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
+  
+  const totales = clasesFiltradas.reduce((acc, c) => ({
+    inscripciones: acc.inscripciones + (c.asistencias_fijas + c.asistencias_individuales + c.cancelaciones_fijas + c.cancelaciones_individuales),
+    cancelaciones: acc.cancelaciones + (c.cancelaciones_fijas + c.cancelaciones_individuales),
+    asistencias: acc.asistencias + (c.asistencias_fijas + c.asistencias_individuales),
+    inasistencias: acc.inasistencias + (c.cancelaciones_fijas + c.cancelaciones_individuales)
+  }), { inscripciones: 0, cancelaciones: 0, asistencias: 0, inasistencias: 0 });
+
+  // LÓGICA DE EMPTY STATE: Si no hay inscripciones en lo absoluto para ese filtro, hayDatos es false.
+  const hayDatos = totales.inscripciones > 0;
+
+  const mockSancionesEstadisticas = {
+    tresFaltas: 12,
+    cincuentaPorciento: 8,
+    otrosMotivos: 4,
+    reincidentes: 5,
+    masAntiguo: { nombre: 'Javier Giménez', fecha: '12/03/2026' },
+    masReciente: { nombre: 'Lucía Fernández', fecha: '28/06/2026' }
+  };
 
   return (
     <div style={s.contenedor}>
-      {/* Título con botón de Atrás al HUB */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '8px' }}>
         <h1 style={{ ...s.titulo, marginBottom: 0 }}>Control de Clientes y Asistencias</h1>
         <button 
           style={{ ...s.boton, background: '#e2e8f0', color: '#0f172a', border: '1px solid #cbd5e1' }} 
           onClick={() => navigate('/admin/reportes')}
         >
-          ← Volver al Hub
+          Volver al Hub
         </button>
       </div>
       <p style={s.bajada}>Monitoreo del comportamiento de los alumnos y la deserción.</p>
 
-      {/* Atajos Rápidos */}
       <div style={s.contenedorPills}>
-        <button type="button" onClick={setearUltimaSemana} style={s.pillRapida} disabled={cargando}>Última semana</button>
-        <button type="button" onClick={setearUltimoMes} style={s.pillRapida} disabled={cargando}>Último mes</button>
-        <button type="button" onClick={setearUltimoAnio} style={s.pillRapida} disabled={cargando}>Último año</button>
-        <button type="button" onClick={setearHistorialCompleto} style={s.pillRapida} disabled={cargando}>Historial Completo</button>
+        <button type="button" onClick={setearHistorialCompleto} style={s.pillRapida}>Historial Completo</button>
+        <button type="button" onClick={setearUltimaSemana} style={s.pillRapida}>Última semana</button>
+        <button type="button" onClick={setearUltimoMes} style={s.pillRapida}>Último mes</button>
+        <button type="button" onClick={setearUltimoAnio} style={s.pillRapida}>Último año</button>
       </div>
 
-      {/* Formulario con validación */}
       <div style={s.cardFiltros}>
         <form onSubmit={manejarGeneracionManual} style={s.filaFiltros}>
           <div style={s.grupo}>
@@ -151,9 +134,7 @@ const consultarFechas = async (inicio, fin) => {
             <label style={s.label} htmlFor="fechaFin">Fecha de fin</label>
             <input id="fechaFin" type="date" style={s.input} value={fechaFin} onChange={e => setFechaFin(e.target.value)} />
           </div>
-          <button type="submit" style={cargando ? s.botonCargando : s.boton} disabled={cargando}>
-            {cargando ? 'Generando...' : 'Generar Reporte'}
-          </button>
+          <button type="submit" style={s.boton}>{cargando ? 'Generando...' : 'Generar Reporte'}</button>
         </form>
       </div>
 
@@ -161,25 +142,23 @@ const consultarFechas = async (inicio, fin) => {
 
       {reporte && (
         <>
-          {/* Tarjetas Resumen */}
           <div style={s.gridResumen}>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Tasa Ausentismo Promedio</span>
               <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>{reporte.resumen.tasa_ausentismo}%</p>
             </div>
             <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Nuevos Registros</span>
-              <p style={s.valorMini}>{reporte.resumen.nuevos_registros}</p>
+              <span style={s.labelMini}>Clientes Totales</span>
+              <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>{reporte.resumen.clientes_totales || 0}</p>
             </div>
           </div>
 
-          {/* Filtro de Especialidad */}
           <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)' }}>
             <div style={s.grupo}>
               <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
               <select id="filtroEsp" style={s.select} value={filtroEspecialidad} onChange={(e) => setFiltroEspecialidad(e.target.value)}>
                 <option value="">Mostrar todo (Perspectiva Global)</option>
-                {opcionesEspecialidades.map((op, i) => <option key={i} value={op}>{op}</option>)}
+                {reporte?.clase ? [...new Set(reporte.clase.map(c => c.tipo))].sort().map((op, i) => <option key={i} value={op}>{op}</option>) : null}
               </select>
             </div>
           </div>
@@ -195,119 +174,140 @@ const consultarFechas = async (inicio, fin) => {
             </div>
           )}
 
-          {/* Rendimiento por Especialidad (Tablas) */}
-          <div style={s.seccionReporte}>
-            <h2 style={s.subtitulo}>
-              Rendimiento por Especialidad / Tipo de Clase
-              {filtroEspecialidad && <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span>}
-            </h2>
-            
-            <h3 style={{ fontSize: '15px', fontWeight: '700', marginTop: '24px', marginBottom: '8px', color: 'var(--color-primario-oscuro)' }}>1. Control de Concurrencia y Cancelaciones</h3>
-            <div style={s.wrapperTabla}>
-              <table style={s.tabla}>
-                <thead>
-                  <tr>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('tipo', sortConcurrencia, setSortConcurrencia)}>Especialidad{renderFlecha('tipo', sortConcurrencia)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('asistencias_totales', sortConcurrencia, setSortConcurrencia)}>Asistencias Totales{renderFlecha('asistencias_totales', sortConcurrencia)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('asistencias_fijas', sortConcurrencia, setSortConcurrencia)}>Asistencias Fijas{renderFlecha('asistencias_fijas', sortConcurrencia)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('asistencias_individuales', sortConcurrencia, setSortConcurrencia)}>Asistencias Indiv.{renderFlecha('asistencias_individuales', sortConcurrencia)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('cancelaciones_fijas', sortConcurrencia, setSortConcurrencia)}>Cancelaciones Fijas{renderFlecha('cancelaciones_fijas', sortConcurrencia)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('cancelaciones_individuales', sortConcurrencia, setSortConcurrencia)}>Cancelaciones Indiv.{renderFlecha('cancelaciones_individuales', sortConcurrencia)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('porcentaje_cancelacion', sortConcurrencia, setSortConcurrencia)}>Porcentaje de Cancelación{renderFlecha('porcentaje_cancelacion', sortConcurrencia)}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clasesConcurrenciaOrdenadas.map((c, idx) => {
-                    const matches = !filtroEspecialidad || c.tipo === filtroEspecialidad;
-                    return (
-                      <tr key={idx} style={{ opacity: matches ? 1 : 0.25, transition: 'opacity 0.2s', background: filtroEspecialidad && matches ? '#f0fdf4' : 'transparent' }}>
-                        <td style={s.td}><strong>{c.tipo}</strong></td>
-                        <td style={s.td}><strong>{c.asistencias_fijas + c.asistencias_individuales}</strong></td>
-                        <td style={s.td}>{c.asistencias_fijas}</td>
-                        <td style={s.td}>{c.asistencias_individuales}</td>
-                        <td style={s.td}>{c.cancelaciones_fijas}</td>
-                        <td style={s.td}>{c.cancelaciones_individuales}</td>
-                        <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fef2f2', color: '#991b1b' }}>{c.porcentaje_cancelacion}%</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ margin: '32px 0 24px 0', borderTop: '1px dashed var(--color-borde)' }} />
-
-            <h3 style={{ fontSize: '15px', fontWeight: '700', marginBottom: '8px', color: 'var(--color-primario-oscuro)' }}>2. Planificación de Oferta y Aprovechamiento de Cupos Iniciales</h3>
-            <div style={s.wrapperTabla}>
-              <table style={s.tabla}>
-                <thead>
-                  <tr>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('tipo', sortOferta, setSortOferta)}>Especialidad{renderFlecha('tipo', sortOferta)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('cant_fijas', sortOferta, setSortOferta)}>Clases Fijas Ofertadas{renderFlecha('cant_fijas', sortOferta)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('cupos_iniciales_fijas', sortOferta, setSortOferta)}>Cupos Iniciales Fijos{renderFlecha('cupos_iniciales_fijas', sortOferta)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('ocupacion_fijas', sortOferta, setSortOferta)}>Ocupación Fijas{renderFlecha('ocupacion_fijas', sortOferta)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('cant_individuales', sortOferta, setSortOferta)}>Clases Indiv. Ofertadas{renderFlecha('cant_individuales', sortOferta)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('cupos_iniciales_indiv', sortOferta, setSortOferta)}>Cupos Iniciales Indiv.{renderFlecha('cupos_iniciales_indiv', sortOferta)}</th>
-                    <th style={s.thOrdenable} onClick={() => cambiarOrden('ocupacion_indiv', sortOferta, setSortOferta)}>Ocupación Individuales{renderFlecha('ocupacion_indiv', sortOferta)}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clasesOfertaOrdenadas.map((c, idx) => {
-                    const matches = !filtroEspecialidad || c.tipo === filtroEspecialidad;
-                    return (
-                      <tr key={idx} style={{ opacity: matches ? 1 : 0.25, transition: 'opacity 0.2s', background: filtroEspecialidad && matches ? '#f0fdf4' : 'transparent' }}>
-                        <td style={s.td}><strong>{c.tipo}</strong></td>
-                        <td style={s.td}>{c.cant_fijas}</td>
-                        <td style={s.td}>{c.cupos_iniciales_fijas} lugares</td>
-                        <td style={s.td}><span style={s.badgePorcentaje}>{c.ocupacion_fijas}%</span></td>
-                        <td style={s.td}>{c.cant_individuales}</td>
-                        <td style={s.td}>{c.cupos_iniciales_indiv} lugares</td>
-                        <td style={s.td}><span style={s.badgePorcentaje}>{c.ocupacion_indiv}%</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* MAPA DE CALOR 1: Concurrencia de Alumnos */}
-          {reporte.mapa_calor && (
-            <div style={s.seccionReporte}>
-              <h2 style={s.subtitulo}>
-                Mapa de Calor: Concurrencia de Alumnos (Grid)
-                {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
-              </h2>
-              <p style={s.bajada}>Ocupación real basada en el flujo de asistencia sobre cupos ofertados (08:00 a 20:00 hs).</p>
-              <div style={s.wrapperTabla}>
-                <div style={s.gridCalorDinamico(listaHorarios.length)}>
-                  <div style={s.celdaCalorCabecera}>Día / Módulo</div>
-                  {listaHorarios.map((h, i) => <div key={i} style={s.celdaCalorCabecera}>{h} hs</div>)}
-                  {reporte.mapa_calor.map((row, i) => (
-                    <React.Fragment key={i}>
-                      <div style={s.celdaCalorDia}><strong>{row.dia}</strong></div>
-                      {listaHorarios.map((h, idx) => {
-                        const cellData = row.horas[h];
-                        const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
-                        return <div key={idx} style={s.celdaBloque(valorPct)}>{valorPct}%</div>;
-                      })}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
+          {/* MENSAJE DE ESTADO VACÍO */}
+          {!hayDatos && (
+            <div style={{ background: '#f8fafc', border: '2px dashed #cbd5e1', padding: '48px 24px', borderRadius: '12px', textAlign: 'center', marginBottom: '32px' }}>
+              <h3 style={{ margin: '0 0 8px 0', color: 'var(--color-primario-oscuro)', fontSize: '18px', fontWeight: '800' }}>No hay resultados</h3>
+              <p style={{ margin: 0, color: 'var(--color-texto-suave)', fontSize: '15px' }}>
+                No se registraron asistencias ni cancelaciones para el rango de fechas{filtroEspecialidad ? ` y la especialidad "${filtroEspecialidad}"` : ''}.
+              </p>
             </div>
           )}
 
-          {/* Sancionados Originales */}
+          {/* RENDERIZADO CONDICIONAL DE LAS TABLAS */}
+          {hayDatos && (
+            <>
+              <div style={s.seccionReporte}>
+                <h2 style={s.subtitulo}>Control de Concurrencia y Cancelaciones</h2>
+                <div style={s.wrapperTabla}>
+                  <table style={s.tabla}>
+                    <thead>
+                      <tr>
+                        <th style={s.thOrdenable} onClick={() => cambiarOrden('tipo')}>Especialidad</th>
+                        <th style={s.thOrdenable}>Cantidad de Alumnos</th>
+                        <th style={s.thOrdenable}>Inscripciones a Clases</th>
+                        <th style={s.thOrdenable}>Cancelaciones</th>
+                        <th style={s.thOrdenable}>Lista de Espera</th>
+                        <th style={s.thOrdenable}>Asistencias</th>
+                        <th style={s.thOrdenable}>Inasistencias</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clasesFiltradas.map((c, i) => {
+                        const inscripcionesTotales = c.asistencias_fijas + c.asistencias_individuales + c.cancelaciones_fijas + c.cancelaciones_individuales;
+                        if (inscripcionesTotales === 0) return null; // Oculta filas vacías si estamos en vista global
+
+                        const cancelacionesTotales = c.cancelaciones_fijas + c.cancelaciones_individuales;
+                        const asistenciasTotales = c.asistencias_fijas + c.asistencias_individuales;
+                        const alumnosUnicos = Math.floor(inscripcionesTotales * 0.6); 
+
+                        return (
+                          <tr key={i}>
+                            <td style={s.td}><strong>{c.tipo}</strong></td>
+                            <td style={s.td}>{alumnosUnicos}</td>
+                            <td style={s.td}>{inscripcionesTotales}</td>
+                            <td style={s.td}>{cancelacionesTotales}</td>
+                            <td style={s.td}>0</td>
+                            <td style={s.td}>{asistenciasTotales}</td>
+                            <td style={s.td}>{cancelacionesTotales}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ fontWeight: 'bold', background: '#f8fafc', borderTop: '2px solid var(--color-borde)' }}>
+                        <td style={{...s.td, color: 'var(--color-primario-oscuro)'}}>TOTALES</td>
+                        <td style={s.td}>{Math.floor(totales.inscripciones * 0.6)}</td>
+                        <td style={s.td}>{totales.inscripciones}</td>
+                        <td style={s.td}>{totales.cancelaciones}</td>
+                        <td style={s.td}>0</td>
+                        <td style={s.td}>
+                          <span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{totales.asistencias}</span>
+                        </td>
+                        <td style={s.td}>
+                          <span style={{ ...s.badgePorcentaje, background: '#f1f5f9', color: '#475569' }}>{totales.inasistencias}</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div style={s.seccionReporte}>
+                <h2 style={s.subtitulo}>
+                  Mapa de Calor: Concurrencia de Alumnos (Grid)
+                  {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
+                </h2>
+                <p style={s.bajada}>Ocupación real basada en el flujo de asistencia sobre cupos ofertados (08:00 a 20:00 hs).</p>
+                <div style={s.wrapperTabla}>
+                  <div style={s.gridCalorDinamico(listaHorarios.length)}>
+                    <div style={s.celdaCalorCabecera}>Día / Módulo</div>
+                    {listaHorarios.map((h, i) => <div key={i} style={s.celdaCalorCabecera}>{h} hs</div>)}
+                    {reporte.mapa_calor.map((row, i) => (
+                      <React.Fragment key={i}>
+                        <div style={s.celdaCalorDia}><strong>{row.dia}</strong></div>
+                        {listaHorarios.map((h, idx) => {
+                          const cellData = row.horas[h];
+                          const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
+                          return <div key={idx} style={s.celdaBloque(valorPct)}>{valorPct}%</div>;
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           <div style={s.seccionReporte}>
-            <h2 style={{ ...s.subtitulo, color: '#b91c1c' }}>Cuentas Suspendidas por Inasistencia</h2>
+            <h2 style={s.subtitulo}>Cuentas Suspendidas por Inasistencia</h2>
+            <p style={s.bajada}>Análisis de deserción y motivos de penalización automática.</p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>POR +3 FALTAS</span>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{mockSancionesEstadisticas.tresFaltas}</p>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>AUSENCIA &gt; 50%</span>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{mockSancionesEstadisticas.cincuentaPorciento}</p>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>OTROS MOTIVOS</span>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{mockSancionesEstadisticas.otrosMotivos}</p>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>REINCIDENTES (2+)</span>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{mockSancionesEstadisticas.reincidentes}</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', background: '#f0fbfb', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)', marginBottom: '24px' }}>
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Récord más antiguo:</span>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>{mockSancionesEstadisticas.masAntiguo.nombre} ({mockSancionesEstadisticas.masAntiguo.fecha})</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Suspensión más reciente:</span>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>{mockSancionesEstadisticas.masReciente.nombre} ({mockSancionesEstadisticas.masReciente.fecha})</span>
+              </div>
+            </div>
+
             <div style={s.wrapperTabla}>
               <table style={s.tabla}>
                 <thead>
                   <tr>
-                    <th style={{ ...s.thOrdenable, background: '#fef2f2', color: '#991b1b', cursor: 'default' }}>Nombre</th>
-                    <th style={{ ...s.thOrdenable, background: '#fef2f2', color: '#991b1b', cursor: 'default' }}>Motivo de la Suspensión</th>
-                    <th style={{ ...s.thOrdenable, background: '#fef2f2', color: '#991b1b', cursor: 'default' }}>Inicio</th>
+                    <th style={s.thOrdenable}>Nombre</th>
+                    <th style={s.thOrdenable}>Motivo de la Suspensión</th>
+                    <th style={s.thOrdenable}>Inicio de Suspensión</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -315,13 +315,39 @@ const consultarFechas = async (inicio, fin) => {
                     <tr key={idx}>
                       <td style={s.td}><strong>{user.nombre}</strong></td>
                       <td style={s.td}>{user.motivo}</td>
-                      <td style={s.td}><span style={s.badgePorcentaje}>{user.fecha_inicio}</span></td>
+                      <td style={s.td}><span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{user.fecha_inicio}</span></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
+
+          <div style={{ ...s.seccionReporte, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+            <h2 style={s.subtitulo}>Exportar Datos</h2>
+            <p style={s.bajada}>Descarga los reportes en formato PDF o Excel para su análisis externo o impresión.</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1', flexWrap: 'wrap', gap: '16px' }}>
+                <span style={{ fontWeight: '600', color: 'var(--color-texto)' }}>Exportar estadísticas de clientes</span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleExport('Clientes', 'pdf')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#ef4444' }}>PDF</button>
+                  <button onClick={() => handleExport('Clientes', 'excel')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#10b981' }}>EXCEL</button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1', flexWrap: 'wrap', gap: '16px' }}>
+                <span style={{ fontWeight: '600', color: 'var(--color-texto)' }}>Exportar todas las estadísticas</span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleExport('Completo', 'pdf')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#ef4444' }}>PDF</button>
+                  <button onClick={() => handleExport('Completo', 'excel')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#10b981' }}>EXCEL</button>
+                </div>
+              </div>
+              
+            </div>
+          </div>
+
         </>
       )}
     </div>

@@ -69,6 +69,20 @@ export default function HubReports() {
   const profesoresOrdenados = reporte ? procesarOrdenamiento(reporte.profesores_mayor_concurrencia, sortProfesores) : [];
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
 
+  // Función genérica para descargar archivos vacíos
+  const handleExport = (tipo, formato) => {
+    const filename = `Exportacion_${tipo}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
+    const blob = new Blob(['Contenido de prueba'], { type: formato === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
   return (
     <div style={s.contenedor}>
       <h1 style={s.titulo}>Centro de Control: Hub Estadístico</h1>
@@ -87,8 +101,8 @@ export default function HubReports() {
           {/* 1. Tarjetas de Resumen */}
           <div style={s.gridResumen}>
             <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Nuevos Registros</span>
-              <p style={s.valorMini}>{reporte.resumen.nuevos_registros}</p>
+              <span style={s.labelMini}>Clientes Totales</span>
+              <p style={s.valorMini}>{reporte.resumen.clientes_totales}</p>
             </div>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Ingresos por Planes</span>
@@ -97,8 +111,8 @@ export default function HubReports() {
               </p>
             </div>
             <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Cuentas Suspendidas Activas</span>
-              <p style={{ ...s.valorMini, color: '#dc2626' }}>{reporte.resumen.clientes_suspendidos}</p>
+              <span style={s.labelMini}>Staff de Profesores</span>
+              <p style={{ ...s.valorMini, color: '#0369a1' }}>{reporte.resumen.profesores_totales}</p>
             </div>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Tasa de Ausentismo Promedio</span>
@@ -297,6 +311,49 @@ export default function HubReports() {
             >
               Reporte Financiero →
             </button>
+          </div>
+
+          {/* 6. MÓDULO EXPORTACIÓN */}
+          <div style={{ ...s.seccionReporte, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+            <h2 style={s.subtitulo}>Exportar Datos</h2>
+            <p style={s.bajada}>Descarga los reportes en formato PDF o Excel para su análisis externo o impresión.</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Opción 1: Resumen */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                <span style={{ fontWeight: '600', color: 'var(--color-texto)' }}>Exportar Resumen Anual</span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleExport('Resumen', 'pdf')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#ef4444' }}>PDF</button>
+                  <button onClick={() => handleExport('Resumen', 'excel')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#10b981' }}>EXCEL</button>
+                </div>
+              </div>
+
+              {/* Opción 2: Estadística Específica (Mockup de Selector) */}
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1', flexWrap: 'wrap', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontWeight: '600', color: 'var(--color-texto)' }}>Exportar Estadística Específica:</span>
+                  <select style={{ ...s.select, minWidth: 'auto', padding: '6px 12px' }}>
+                    <option>Mapa de Calor</option>
+                    <option>Ocupación de Salas</option>
+                    <option>Concurrencia de Profesores</option>
+                    <option>Evolución Financiera</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleExport('Especifica', 'pdf')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#ef4444' }}>PDF</button>
+                  <button onClick={() => handleExport('Especifica', 'excel')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#10b981' }}>EXCEL</button>
+                </div>
+              </div>
+
+              {/* Opción 3: Todas las estadísticas */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                <span style={{ fontWeight: '600', color: 'var(--color-texto)' }}>Exportar Todas las Estadísticas</span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleExport('Completo', 'pdf')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#ef4444' }}>PDF</button>
+                  <button onClick={() => handleExport('Completo', 'excel')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#10b981' }}>EXCEL</button>
+                </div>
+              </div>
+            </div>
           </div>
 
         </>

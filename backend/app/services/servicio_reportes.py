@@ -20,9 +20,8 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
     primer_cliente = db.query(User).order_by(User.created_at.asc()).first()
     fecha_inicio_sistema = primer_cliente.created_at if primer_cliente else None
 
-    nuevos_registros = db.query(func.count(User.id)).filter(
-        User.role == "client",
-        User.created_at.between(datetime_inicio, datetime_fin)
+    clientes_totales = db.query(func.count(User.id)).filter(
+        User.role == "client"
     ).scalar() or 0
 
     ingresos_totales = db.query(func.sum(Plan.price)).\
@@ -30,9 +29,8 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
         filter(UserPlan.start_date.between(fecha_inicio, fecha_fin)).\
         scalar() or 0.0
 
-    clientes_suspendidos = db.query(func.count(User.id)).filter(
-        User.role == "client",
-        User.account_status == "disabled"
+    profesores_totales = db.query(func.count(User.id)).filter(
+        User.role == "professor"
     ).scalar() or 0
 
     total_asistencias = db.query(func.count(Attendance.id)).filter(Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
@@ -388,7 +386,7 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
 
     return {
         "fecha_inicio_sistema": fecha_inicio_sistema.strftime("%Y-%m-%d") if fecha_inicio_sistema else None,
-        "resumen": {"nuevos_registros": nuevos_registros, "ingresos_totales": float(ingresos_totales), "clientes_suspendidos": clientes_suspendidos, "tasa_ausentismo": tasa_ausentismo},
+        "resumen": {"clientes_totales": clientes_totales, "ingresos_totales": float(ingresos_totales), "profesores_totales": profesores_totales, "tasa_ausentismo": tasa_ausentismo},
         "clase": clases_lista, "sancionados": sancionados_lista, "ocupacion_aulas": aulas_lista, "profesores_mayor_concurrencia": profesores_lista,
         "evolucion_temporal": {
             "granularidad": "meses",
