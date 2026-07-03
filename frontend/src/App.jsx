@@ -37,6 +37,11 @@ import VerListaEsperaAdmin from './pages/admin/VerListaEsperaAdmin';
 
 // ── Admin: Estadisticas (Nahuel) ────────────────────────
 import ReportesAdmin from './pages/admin/reportes/ReportesAdmin';
+import HubReports from './pages/admin/reportes/HubReports';
+import FinanzasReportes from './pages/admin/reportes/FinanzasReportes';
+import ClientesReportes from './pages/admin/reportes/ClientesReportes';
+import SalasReportes from './pages/admin/reportes/SalasReportes';
+import StaffReportes from './pages/admin/reportes/StaffReportes';
 
 // ── Cliente: Actividades (Angel) ─────────────────────────
 import ActividadesCliente from './pages/client/actividades/ActividadesCliente';
@@ -103,7 +108,12 @@ function App() {
         <Route path="/admin/asistencias" element={<RegistrarAsistenciaAdmin />} />
 
         {/* Admin - Estadisticas */}
-        <Route path="/admin/reportes" element={<ReportesAdmin />} />
+        <Route path="/admin/reportes2" element={<ReportesAdmin />} />
+        <Route path="/admin/reportes" element={<HubReports />} />
+        <Route path="/admin/reportes/finanzas" element={<FinanzasReportes />} />
+        <Route path="/admin/reportes/clientes" element={<ClientesReportes />} />
+        <Route path="/admin/reportes/salas" element={<SalasReportes />} />
+        <Route path="/admin/reportes/staff" element={<StaffReportes />} />
 
         {/* Recepcionista */}
         <Route path="/recepcionista/actividades" element={<ListaActividades />} />

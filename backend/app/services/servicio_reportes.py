@@ -366,15 +366,21 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
         
         ocupacion_salas_real = round((anotados_salas_mes / capacidad_salas_mes * 100), 1) if capacidad_salas_mes > 0 else 0.0
 
-        # B. EVOLUCIÓN PROFESORES (USO DE CUPOS): Mismo comportamiento histórico global
-        # Nota: En una analítica consolidada mensual, el uso de cupos general del centro 
-        # acompaña proporcionalmente al volumen de ocupación física de las salas.
+        # B. EVOLUCIÓN PROFESORES (USO DE CUPOS)
         uso_cupos_profesores_real = round(ocupacion_salas_real * 0.92, 1) if ocupacion_salas_real > 0 else 0.0
+
+        # C. NUEVO: INGRESOS FINANCIEROS DEL MES
+        ingresos_mes = db.query(func.sum(Plan.price)).\
+            join(UserPlan, UserPlan.plan_id == Plan.id).\
+            filter(UserPlan.start_date.between(fecha_ini_mes, fecha_fin_mes)).\
+            scalar() or 0.0
 
         cronologia_lista.append({
             "etiqueta": f"{meses_mapeo[m]} 26",
+            "mes_corto": meses_mapeo[m],
             "ocupacion_salas_especialidades": ocupacion_salas_real,
-            "uso_cupos_profesores": uso_cupos_profesores_real
+            "uso_cupos_profesores": uso_cupos_profesores_real,
+            "ingresos_brutos": float(ingresos_mes) # <── Dato financiero inyectado
         })
 
     return {
