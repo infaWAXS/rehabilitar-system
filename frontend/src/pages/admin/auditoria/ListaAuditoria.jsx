@@ -158,7 +158,7 @@ function ListaAuditoria() {
                             registros.map((registro, index) => (
                                 console.log(registro.timestamp),
                                 <tr key={index}>
-                                    <td style={s.td}>{new Date(registro.timestamp).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}</td>
+                                    <td style={s.td}>{new Date(registro.timestamp).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour12: false })}</td>
                                 <td style={s.td}>{registro.user.name} {registro.user.lastname}</td>
                                 <td style={s.td}>{registro.user.id}</td>
                                 <td style={s.td}><span style={s.chipTipo(registro.type)}>{registro.type}</span></td>
