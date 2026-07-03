@@ -17,6 +17,9 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
     # ──────────────────────────────────────────────────────────────────────────
     # 1. RESUMEN GLOBAL FIJO
     # ──────────────────────────────────────────────────────────────────────────
+    primer_cliente = db.query(User).order_by(User.created_at.asc()).first()
+    fecha_inicio_sistema = primer_cliente.created_at if primer_cliente else None
+
     nuevos_registros = db.query(func.count(User.id)).filter(
         User.role == "client",
         User.created_at.between(datetime_inicio, datetime_fin)
@@ -384,6 +387,7 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
         })
 
     return {
+        "fecha_inicio_sistema": fecha_inicio_sistema.strftime("%Y-%m-%d") if fecha_inicio_sistema else None,
         "resumen": {"nuevos_registros": nuevos_registros, "ingresos_totales": float(ingresos_totales), "clientes_suspendidos": clientes_suspendidos, "tasa_ausentismo": tasa_ausentismo},
         "clase": clases_lista, "sancionados": sancionados_lista, "ocupacion_aulas": aulas_lista, "profesores_mayor_concurrencia": profesores_lista,
         "evolucion_temporal": {

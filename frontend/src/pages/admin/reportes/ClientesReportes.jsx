@@ -37,24 +37,38 @@ export default function ClientesReportes() {
 
   const setearUltimoAnio = () => {
     const hoy = new Date(); const ini = new Date(); ini.setFullYear(hoy.getFullYear() - 1);
-    const sIni = formatearFecha(ini); const sFin = formatearFecha(hoy);
+    const sIni = `${hoy.getFullYear()}-01-01`; const sFin = formatearFecha(hoy);
     setFechaInicio(sIni); setFechaFin(sFin); consultarFechas(sIni, sFin);
   };
 
-  const consultarFechas = async (inicio, fin) => {
-    setErrorValidacion(''); 
-    setReporte(null); 
-    setFiltroEspecialidad('');
-    try {
-      setCargando(true);
-      const data = await getStatisticsReport(inicio, fin);
-      setReporte(data);
-    } catch (err) {
-      setErrorValidacion(err.message || 'No se pudo procesar el reporte.');
-    } finally {
-      setCargando(false);
+  // 2. Simplifica el botón de historial
+  const setearHistorialCompleto = () => {
+    // Si ya tenemos el dato del backend, lo usamos
+    if (fechaInicioSistema) {
+      consultarFechas(fechaInicioSistema, formatearFecha(new Date()));
+    } else {
+      // Si es la primera vez, forzamos una consulta a una fecha lejana 
+      // o a la fecha de inicio estimada del sistema para "activar" el estado
+      consultarFechas("2026-01-01", formatearFecha(new Date()));
     }
   };
+
+const [fechaInicioSistema, setFechaInicioSistema] = useState(null);
+
+const consultarFechas = async (inicio, fin) => {
+  setErrorValidacion(''); 
+  try {
+    setCargando(true);
+    const data = await getStatisticsReport(inicio, fin);
+    setReporte(data);
+    // Si el backend envía la fecha, actualiza el estado aquí mismo
+    if (data.fecha_inicio_sistema) setFechaInicioSistema(data.fecha_inicio_sistema);
+  } catch (err) {
+    setErrorValidacion(err.message || 'Error.');
+  } finally {
+    setCargando(false);
+  }
+};
 
   const manejarGeneracionManual = (e) => {
     e.preventDefault();
@@ -123,6 +137,7 @@ export default function ClientesReportes() {
         <button type="button" onClick={setearUltimaSemana} style={s.pillRapida} disabled={cargando}>Última semana</button>
         <button type="button" onClick={setearUltimoMes} style={s.pillRapida} disabled={cargando}>Último mes</button>
         <button type="button" onClick={setearUltimoAnio} style={s.pillRapida} disabled={cargando}>Último año</button>
+        <button type="button" onClick={setearHistorialCompleto} style={s.pillRapida} disabled={cargando}>Historial Completo</button>
       </div>
 
       {/* Formulario con validación */}
