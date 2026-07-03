@@ -1,68 +1,160 @@
 import React, { useState } from 'react';
 import { getStatisticsReport } from '../../../services/reportsService';
 import { s } from './reportesStyles';
+import ReportesHeader from './components/ReportesHeader';
+import ReportesExportar from './components/ReportesExportar';
+import ReportesEmptyState from './components/ReportesEmptyState';
 
 export default function StaffReportes() {
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [reporte, setReporte] = useState(null);
+  const [cargando, setCargando] = useState(false);
+  const [errorValidacion, setErrorValidacion] = useState('');
   const [filtroEspecialidad, setFiltroEspecialidad] = useState('');
+  const [sortProfesores, setSortProfesores] = useState({ llave: null, direccion: 'asc' });
 
-  const consultarFechas = async (e) => {
+  const consultarFechas = async (inicio, fin) => {
+    setErrorValidacion(''); setReporte(null); setFiltroEspecialidad('');
+    try {
+      setCargando(true);
+      const data = await getStatisticsReport(inicio, fin);
+      setReporte(data);
+    } catch (err) {
+      setErrorValidacion(err.message || 'No se pudo procesar el reporte.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const manejarGeneracionManual = (e) => {
     e.preventDefault();
-    const data = await getStatisticsReport(fechaInicio, fechaFin);
-    setReporte(data);
+    if (!fechaInicio || !fechaFin) { setErrorValidacion('Selecciona ambas fechas.'); return; }
+    if (fechaInicio > fechaFin) { setErrorValidacion('Inicio posterior a fin.'); return; }
+    consultarFechas(fechaInicio, fechaFin);
+  };
+
+  const cambiarOrden = (llave) => {
+    const direccion = sortProfesores.llave === llave && sortProfesores.direccion === 'asc' ? 'desc' : 'asc';
+    setSortProfesores({ llave, direccion });
+  };
+
+  const procesarOrdenamiento = (datos, configuracion, llaveEspecialidad = null) => {
+    if (!configuracion.llave) return datos;
+    const copia = [...datos];
+    copia.sort((a, b) => {
+      let valA = a[configuracion.llave]; let valB = b[configuracion.llave];
+      if (llaveEspecialidad && configuracion.llave === 'porcentaje_ocupacion_clases') {
+        valA = a.por_especialidad?.[llaveEspecialidad]?.uso_cupos ?? 0; 
+        valB = b.por_especialidad?.[llaveEspecialidad]?.uso_cupos ?? 0;
+      } else if (llaveEspecialidad && configuracion.llave === 'total_alumnos_atendidos') {
+        valA = a.por_especialidad?.[llaveEspecialidad]?.atendidos ?? 0; 
+        valB = b.por_especialidad?.[llaveEspecialidad]?.atendidos ?? 0;
+      } else if (llaveEspecialidad && configuracion.llave === 'total_cancelaciones_recibidas') {
+        valA = a.por_especialidad?.[llaveEspecialidad]?.cancelados ?? 0; 
+        valB = b.por_especialidad?.[llaveEspecialidad]?.cancelados ?? 0;
+      }
+      if (typeof valA === 'string') return configuracion.direccion === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      return configuracion.direccion === 'asc' ? valA - valB : valB - valA;
+    });
+    return copia;
   };
 
   const opcionesEspecialidades = reporte?.clase ? [...new Set(reporte.clase.map(c => c.tipo))].sort() : [];
+  const profesoresOrdenados = reporte ? procesarOrdenamiento(reporte.profesores_mayor_concurrencia, sortProfesores, filtroEspecialidad) : [];
+  
+  const totalClasesDictadas = profesoresOrdenados.reduce((acc, p) => {
+    const clases = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : (p.cantidad_clases_dictadas ?? 0);
+    return acc + clases;
+  }, 0);
+  
+  const hayDatos = totalClasesDictadas > 0;
 
   return (
     <div style={s.contenedor}>
-      <h1 style={s.titulo}>Concurrencia y Performance de Profesores</h1>
-      
-      <div style={s.cardFiltros}>
-        <form onSubmit={consultarFechas} style={s.filaFiltros}>
-          <div style={s.grupo}><input type="date" style={s.input} value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} /></div>
-          <div style={s.grupo}><input type="date" style={s.input} value={fechaFin} onChange={e => setFechaFin(e.target.value)} /></div>
-          <button type="submit" style={s.boton}>Ver Staff</button>
-        </form>
-      </div>
+      <ReportesHeader 
+        titulo="Concurrencia y Performance de Profesores"
+        bajada="Auditoría del personal médico, carga de trabajo y rendimiento por cupos."
+        fechaInicio={fechaInicio} setFechaInicio={setFechaInicio}
+        fechaFin={fechaFin} setFechaFin={setFechaFin}
+        manejarSubmit={manejarGeneracionManual}
+        cargando={cargando} errorValidacion={errorValidacion} consultarFechas={consultarFechas}
+      />
 
       {reporte && (
-        <div style={s.seccionReporte}>
-          <div style={{ marginBottom: '24px' }}>
-             <select style={s.select} value={filtroEspecialidad} onChange={(e) => setFiltroEspecialidad(e.target.value)}>
-                <option value="">Todos los profesores</option>
-                {opcionesEspecialidades.map(op => <option key={op} value={op}>{op}</option>)}
-             </select>
+        <>
+          <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)' }}>
+            <div style={s.grupo}>
+              <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
+              <select id="filtroEsp" style={s.select} value={filtroEspecialidad} onChange={(e) => setFiltroEspecialidad(e.target.value)}>
+                <option value="">Mostrar todo (Perspectiva Global)</option>
+                {opcionesEspecialidades.map((op, i) => <option key={i} value={op}>{op}</option>)}
+              </select>
+            </div>
           </div>
 
-          <table style={s.tabla}>
-            <thead>
-              <tr>
-                <th style={s.thOrdenable}>Kinesiólogo</th>
-                <th style={s.thOrdenable}>Alumnos Atendidos</th>
-                <th style={s.thOrdenable}>Uso de Cupos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reporte.profesores_mayor_concurrencia?.map((p, i) => {
-                const atendidos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.atendidos ?? 0) : p.total_alumnos_atendidos;
-                const cupos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.uso_cupos ?? 0) : p.porcentaje_ocupacion_clases;
-                const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
-                const matches = !filtroEspecialidad || cupos > 0;
-                
-                return (
-                  <tr key={i} style={{ opacity: matches ? 1 : 0.25, background: filtroEspecialidad && matches ? '#f0fdf4' : 'transparent' }}>
-                    <td style={s.td}><strong>{p.nombre}</strong></td>
-                    <td style={s.td}>{atendidos}</td>
-                    <td style={s.td}><span style={{...s.badgePorcentaje, background: '#eff6ff', color: '#1d4ed8'}}>{cupos}%</span> ({clasesDictadas} clases)</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+          <div style={s.seccionReporte}>
+            <h2 style={s.subtitulo}>
+              Concurrencia de Profesores
+              {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
+            </h2>
+            
+            {hayDatos ? (
+              <div style={s.wrapperTabla}>
+                <table style={s.tabla}>
+                  <thead>
+                    <tr>
+                      <th style={s.thOrdenable} onClick={() => cambiarOrden('nombre')}>Kinesiólogo</th>
+                      <th style={s.thOrdenable} onClick={() => cambiarOrden('total_alumnos_atendidos')}>Alumnos Atendidos</th>
+                      <th style={s.thOrdenable} onClick={() => cambiarOrden('total_cancelaciones_recibidas')}>Ausencias</th>
+                      <th style={s.thOrdenable} onClick={() => cambiarOrden('porcentaje_ocupacion_clases')}>Uso de Cupos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profesoresOrdenados.map((p, i) => {
+                      const atendidos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.atendidos ?? 0) : p.total_alumnos_atendidos;
+                      const cancelados = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cancelados ?? 0) : p.total_cancelaciones_recibidas;
+                      const cupos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.uso_cupos ?? 0.0) : p.porcentaje_ocupacion_clases;
+                      const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
+                      
+                      const matchesFiltro = !filtroEspecialidad || clasesDictadas > 0;
+                      if (!matchesFiltro && filtroEspecialidad) return null;
+
+                      return (
+                        <tr key={i} style={{ background: filtroEspecialidad ? '#f0fdf4' : 'transparent' }}>
+                          <td style={s.td}><strong>{p.nombre}</strong></td>
+                          <td style={s.td}>{atendidos}</td>
+                          <td style={s.td}>{cancelados}</td>
+                          <td style={s.td}>
+                            <span style={{ ...s.badgePorcentaje, background: '#eff6ff', color: '#1d4ed8' }}>{cupos}%</span>
+                            <span style={{ fontSize: '12px', color: 'var(--color-texto-suave)', marginLeft: '8px', display: 'block', marginTop: '2px', fontWeight: '500' }}>
+                              {clasesDictadas} {clasesDictadas === 1 ? 'clase dada' : 'clases dadas'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    <tr style={{ background: '#f8fafc', borderTop: '2px solid var(--color-borde)', fontWeight: 'bold' }}>
+                      <td style={{ ...s.td, color: 'var(--color-primario-oscuro)' }}><strong>Clases realizadas</strong></td>
+                      <td style={s.td}>-</td>
+                      <td style={s.td}>-</td>
+                      <td style={s.td}>
+                        <span style={{ ...s.badgePorcentaje, background: '#e0f2fe', color: '#0369a1' }}>
+                          {totalClasesDictadas} totales
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <ReportesEmptyState entidad="clases dictadas por los profesionales" filtroEspecialidad={filtroEspecialidad} />
+            )}
+          </div>
+
+          <ReportesExportar tipoReporte="Staff" />
+        </>
       )}
     </div>
   );
