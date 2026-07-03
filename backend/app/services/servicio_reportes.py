@@ -76,30 +76,64 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
         })
 
 # ──────────────────────────────────────────────────────────────────────────
-    # 3. MATRIZ DE MAPAS DE CALOR (ALUMNOS Y USO DE INFRAESTRUCTURA DE AULAS)
+    # 3. MATRIZ DE MAPAS DE CALOR (CONCURRENCIA Y PROMEDIO TEMPORAL DE INFRAESTRUCTURA)
     # ──────────────────────────────────────────────────────────────────────────
-    total_aulas_existentes = db.query(func.count(Room.id)).scalar() or 1
+    TOTAL_AULAS_SEED = 7 
     
     mapa_calor_datos = []
-    mapa_infraestructura_datos = [] # <── Nueva matriz independiente
+    mapa_infraestructura_datos = []
+
+    # 1. PRECOMPUTO: Contar cuántas ocurrencias reales de cada día de la semana hay en el rango
+    # Esto nos da el denominador temporal exacto (ej: cuántos lunes reales ocurrieron entre las fechas)
+    ocurrencias_dias_rango = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0}
+    from datetime import timedelta
+    fecha_aux = fecha_inicio
+    while fecha_aux <= fecha_fin:
+        ocurrencias_dias_rango[fecha_aux.weekday()] += 1
+        fecha_aux += timedelta(days=1)
 
     for dia_n in dias_semana_nombres:
         idx_dia = mapeo_dias_index[dia_n]
+        # Evitamos división por cero si el rango de fechas es más corto que una semana
+        total_dias_especificos = max(1, ocurrencias_dias_rango[idx_dia])
+        
         horas_alumnos = {}
         horas_infraestructura = {}
         
         for hora in horarios_establecimiento:
             h_limpia = hora.split(":")[0].lstrip("0")
             
-            # Buscamos actividades programadas en este módulo de hora
-            q_global = db.query(Activity).filter(Activity.status == "active", or_(Activity.time_slot.like(f"%{h_limpia}%"), Activity.schedule.like(f"%{h_limpia}%"))).all()
-            acts_g = [a for a in q_global if (a.specific_date and a.specific_date.weekday() == idx_dia) or (a.schedule and dia_n in a.schedule) or (a.activity_type == "fixed")]
+            # Aseguramos el formato de dos dígitos para comparar cadenas exactas ("08", "14", "18")
+            h_dos_digitos = f"{int(hora.split(':')[0]):02d}"
             
-            # A. MAPA 1: CONCURRENCIA DE ALUMNOS (Existente)
+            # Buscamos actividades que EMPIECEN exactamente con esa hora en el time_slot o en el schedule
+            q_global = db.query(Activity).filter(
+                Activity.status == "active", 
+                or_(
+                    Activity.time_slot.like(f"{h_dos_digitos}:%"), 
+                    Activity.schedule.like(f"% {h_dos_digitos}:%")
+                )
+            ).all()
+            
+            # Filtramos las clases que ocurren dentro del rango de fechas y coinciden con el día de la semana
+            acts_g = []
+            for a in q_global:
+                if a.specific_date:
+                    if fecha_inicio <= a.specific_date <= fecha_fin and a.specific_date.weekday() == idx_dia:
+                        acts_g.append(a)
+                elif a.schedule and dia_n in a.schedule:
+                    acts_g.append(a)
+                elif a.activity_type == "fixed":
+                    acts_g.append(a)
+            
+            # A. MAPA 1: CONCURRENCIA DE ALUMNOS (Mantiene lógica actual)
             cap_g = sum([a.capacity for a in acts_g])
             val_g = 0.0
             if cap_g > 0:
-                anot_g = db.query(func.count(Attendance.id)).filter(Attendance.activity_id.in_([a.id for a in acts_g]), Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
+                anot_g = db.query(func.count(Attendance.id)).filter(
+                    Attendance.activity_id.in_([a.id for a in acts_g]), 
+                    Attendance.timestamp.between(datetime_inicio, datetime_fin)
+                ).scalar() or 0
                 val_g = round(min((anot_g / cap_g * 100), 100), 1)
 
             horas_alumnos[hora] = {"general": val_g}
@@ -108,16 +142,54 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
                 cap_e = sum([a.capacity for a in acts_e])
                 val_e = 0.0
                 if cap_e > 0:
-                    anot_e = db.query(func.count(Attendance.id)).filter(Attendance.activity_id.in_([a.id for a in acts_e]), Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
+                    anot_e = db.query(func.count(Attendance.id)).filter(
+                        Attendance.activity_id.in_([a.id for a in acts_e]), 
+                        Attendance.timestamp.between(datetime_inicio, datetime_fin)
+                    ).scalar() or 0
                     val_e = round(min((anot_e / cap_e * 100), 100), 1)
                 horas_alumnos[hora][esp] = val_e
 
-            # B. MAPA 2: USO DE INFRAESTRUCTURA DE AULAS (Nuevo - Ignora especialidad)
-            # Contamos cuántas aulas distintas están ocupadas por clases en este horario
-            aulas_ocupadas_modulo = len(set([a.room_id for a in acts_g if a.room_id]))
-            pct_infra = round(min((aulas_ocupadas_modulo / total_aulas_existentes * 100), 100), 1)
-            horas_infraestructura[hora] = pct_infra
+          # ──────────────────────────────────────────────────────────────────
+            # B. MAPA 2: VERDADERO PROMEDIO TEMPORAL DE INFRAESTRUCTURA (POR AGENDA)
+            # ──────────────────────────────────────────────────────────────────
+            suma_aulas_ocupadas_periodo = 0
+            
+            fecha_iteracion = fecha_inicio
+            while fecha_iteracion <= fecha_fin:
+                if fecha_iteracion.weekday() == idx_dia:
+                    # Contamos cuántas aulas ÚNICAS tienen clases programadas y ACTIVAS en este día calendario y hora
+                    aulas_ocupadas_este_dia = 0
+                    aulas_usadas_set = set()
+                    
+                    for act in acts_g:
+                        # Caso 1: Es una actividad individual agendada para este día exacto
+                        if act.activity_type == "individual" and act.specific_date == fecha_iteracion:
+                            if act.status == "active":
+                                aulas_usadas_set.add(act.room_id)
+                                
+                        # Caso 2: Es una clase fija/recurrente asignada a este día de la semana
+                        elif act.activity_type == "fixed":
+                            # Si tiene specific_date, validamos que coincida el día exacto
+                            if act.specific_date and act.specific_date == fecha_iteracion:
+                                if act.status == "active":
+                                    aulas_usadas_set.add(act.room_id)
+                            # Si es un molde legacy sin fecha específica, se asume activa para su día asignado
+                            elif not act.specific_date:
+                                if act.status == "active":
+                                    aulas_usadas_set.add(act.room_id)
+                    
+                    # Eliminamos los valores None y sumamos la cantidad de salas ocupadas reales
+                    aulas_ocupadas_este_dia = len([rid for rid in aulas_usadas_set if rid])
+                    suma_aulas_ocupadas_periodo += aulas_ocupadas_este_dia
+                    
+                fecha_iteracion += timedelta(days=1)
 
+            # Promedio diario de salas bloqueadas en el período seleccionado
+            promedio_aulas_diarias = suma_aulas_ocupadas_periodo / total_dias_especificos
+            
+            # Porcentaje final basado en las 7 salas fijas de la seed
+            pct_infra_temporal = round((promedio_aulas_diarias / TOTAL_AULAS_SEED * 100), 1)
+            horas_infraestructura[hora] = min(pct_infra_temporal, 100.0)
         mapa_calor_datos.append({"dia": dia_n, "horas": horas_alumnos})
         mapa_infraestructura_datos.append({"dia": dia_n, "horas": horas_infraestructura})
 

@@ -307,14 +307,14 @@ export default function ReportesAdmin() {
             </div>
           )}
 
-          {/* MAPA DE CALOR 2: Uso de Infraestructura de Aulas (NUEVO) */}
+          {/* MAPA DE CALOR 2: Ocupación de Infraestructura (Aulas) */}
           {reporte.mapa_infraestructura && (
             <div style={s.seccionReporte}>
               <h2 style={s.subtitulo}>
                 Mapa de Calor: Ocupación de Infraestructura (Aulas)
                 <span style={s.badgeGlobalTitulo}>Global (Fijo)</span>
               </h2>
-              <p style={s.bajada}>Porcentaje de espacios físicos (salas) comprometidos con clases asignadas del total del centro, sin importar especialidad.</p>
+              <p style={s.bajada}>Porcentaje de espacios físicos utilizados en base a las clases dadas en el rango de fechas seleccionado (sobre las 7 salas fijas del centro).</p>
               <div style={s.wrapperTabla}>
                 <div style={s.gridCalorDinamico(listaHorarios.length)}>
                   <div style={s.celdaCalorCabecera}>Día / Módulo</div>
