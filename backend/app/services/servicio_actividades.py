@@ -15,6 +15,9 @@ from app.utils.subscriptions import is_abonado
 from app.utils.notifications import notify_activity_cancellation, notify_professor_resignation, notify_activity_modified, notify_activity_assumed, notify_activity_created
 from database.connection import SessionLocal
 
+from app.models.audit_log import AuditAction, AuditResult, AuditType
+from app.services.servicio_auditoria import register_audit
+
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
 
@@ -308,7 +311,7 @@ def obtener_disponibilidad_actividad(activity_id: int, db: Session, date: str = 
     }
 
 
-def crear_actividad(datos, db: Session) -> list:
+def crear_actividad(datos, db: Session, current_user) -> list:
     """Crea una o varias actividades (batch para fijas con repeticiones o lista de fechas).
     Devuelve siempre una lista de Activity."""
     from datetime import timedelta
@@ -357,6 +360,14 @@ def crear_actividad(datos, db: Session) -> list:
         db.flush()
         creadas.append(act)
 
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACTIVITY,
+        action=AuditAction.CREATE,
+        result=AuditResult.SUCCESS,
+        detail=f"Administrador {current_user.name} {current_user.lastname} creó la actividad '{datos.name}' con {len(creadas)} ocurrencias.",
+    )
     db.commit()
     for act in creadas:
         db.refresh(act)
@@ -379,7 +390,7 @@ def crear_actividad(datos, db: Session) -> list:
     return creadas
 
 
-def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
+def editar_actividad(activity_id: int, datos, db: Session, current_user) -> Activity:
     """Edita una actividad existente. Solo se permite reasignar sala y/o profesor;
     el resto de los datos (nombre, horario, precio, etc.) son fijos una vez creada."""
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
@@ -420,6 +431,14 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
     for campo, valor in cambios.items():
         setattr(actividad, campo, valor)
 
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACTIVITY,
+        action=AuditAction.UPDATE,
+        result=AuditResult.SUCCESS,
+        detail=f"Administrador {current_user.name} {current_user.lastname} actualizó la actividad '{actividad.name}', (id {actividad.id}).",
+    )
     db.commit()
     db.refresh(actividad)
 
@@ -442,7 +461,7 @@ def editar_actividad(activity_id: int, datos, db: Session) -> Activity:
     return actividad
 
 
-def cancelar_actividad(activity_id: int, db: Session) -> None:
+def cancelar_actividad(activity_id: int, db: Session, current_user) -> None:
     """Marca una actividad como cancelada (no la elimina físicamente).
     Solo se permite si no tiene clientes inscriptos (reservas activas)."""
     actividad = db.query(Activity).filter(Activity.id == activity_id).first()
@@ -454,6 +473,15 @@ def cancelar_actividad(activity_id: int, db: Session) -> None:
         Reservation.status.in_(["confirmed", "pending"]),
     ).first() is not None
     if hay_inscriptos:
+        register_audit(
+            db=db,
+            user_id=current_user.id,
+            type=AuditType.ACTIVITY,
+            action=AuditAction.DELETE,
+            result=AuditResult.ERROR,
+            detail=f"Administrador {current_user.name} {current_user.lastname} intentó cancelar la actividad '{actividad.name}' (id {actividad.id}) pero tiene clientes inscriptos.",
+        )
+        db.commit()
         raise HTTPException(
             status_code=400,
             detail="No se puede eliminar la actividad: tiene clientes inscriptos.",
@@ -495,6 +523,14 @@ def cancelar_actividad(activity_id: int, db: Session) -> None:
                         )
 
     actividad.status = "cancelled"
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACTIVITY,
+        action=AuditAction.DELETE,
+        result=AuditResult.SUCCESS,
+        detail=f"Administrador {current_user.name} {current_user.lastname} canceló la actividad '{actividad.name}' (id {actividad.id}).",
+    )
     db.commit()
 
     # Enviar notificaciones de cancelación en segundo plano para no frenar la UI
@@ -562,6 +598,14 @@ def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity
                         )
 
     actividad.professor = None
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACTIVITY,
+        action=AuditAction.RESIGN_ACTIVITY,
+        result=AuditResult.SUCCESS,
+        detail=f"Profesor {current_user.name} {current_user.lastname} renunció a la actividad '{actividad.name}' (id {actividad.id}).",
+    )
     db.commit()
     db.refresh(actividad)
 
@@ -614,6 +658,14 @@ def asumir_actividad(activity_id: int, current_user, db: Session) -> Activity:
     _validar_disponibilidad_profesor(actividad_propuesta, db)
 
     actividad.professor = nombre_completo
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACTIVITY,
+        action=AuditAction.CLAIM_ACTIVITY,
+        result=AuditResult.SUCCESS,
+        detail=f"Profesor {current_user.name} {current_user.lastname} asumió la actividad '{actividad.name}' (id {actividad.id}).",
+    )
     db.commit()
     db.refresh(actividad)
 

@@ -1,5 +1,5 @@
 # Responsable legacy: Francis + Agustin - modulo de usuarios y autenticacion.
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database.connection import Base
@@ -28,6 +28,12 @@ class User(Base):
     pending_discount_percent = Column(Integer, nullable=False, default=0, server_default='0')
     created_at = Column(DateTime, server_default=func.now())
     birth_date = Column(Date, nullable=False)
+
+    # Baja logica: el registro nunca se borra fisicamente, solo se marca is_deleted
+    # y se conserva quien y cuando la elimino para fines de auditoria.
+    is_deleted = Column(Boolean, nullable=False, default=False, server_default='0')
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     attendances = relationship("Attendance", back_populates="user")
     user_plans = relationship("UserPlan", back_populates="user")

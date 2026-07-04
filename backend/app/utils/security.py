@@ -45,14 +45,15 @@ SECRET_KEY = "mi_clave_super_secreta"
 ALGORITHM = "HS256"
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
+PASSWORD_RECOVERY_TOKEN_EXPIRE_MINUTES = 30
 
 
-def create_access_token(data: dict):
+def create_access_token(data: dict, expires_in_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES):
 
     to_encode = data.copy()
 
     expire = datetime.utcnow() + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        minutes=expires_in_minutes
     )
 
     to_encode.update({

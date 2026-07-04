@@ -72,7 +72,7 @@ def post_reintegration_request(id: int, token: str, body: ReintegrationRequest, 
 def put_suspend_client(id: int, token: str, body: SuspendRequest, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return servicio_clientes.suspender_cliente(id, body.motivo, db)
+    return servicio_clientes.suspender_cliente(id, body.motivo, db, current_user)
 
 
 # HU Reintegrar cuenta (Nahuel)
@@ -83,7 +83,7 @@ def put_suspend_client(id: int, token: str, body: SuspendRequest, db: Session = 
 def put_reinstate_client(id: int, token: str, body: ReinstateRequest, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return servicio_clientes.reincorporar_cliente(id, body.motivo, db)
+    return servicio_clientes.reincorporar_cliente(id, body.motivo, db, current_user)
 
 
 # HU Reintegrar cuenta - Escenario 3: admin rechaza la solicitud de reintegro
@@ -92,4 +92,4 @@ def put_reinstate_client(id: int, token: str, body: ReinstateRequest, db: Sessio
 def put_reject_reintegration(id: int, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return servicio_clientes.rechazar_reintegro(id, db)
+    return servicio_clientes.rechazar_reintegro(id, db, current_user)

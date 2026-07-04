@@ -34,6 +34,14 @@ def email_already_exists_exception():
     )
 
 
+def dni_already_exists_exception():
+
+    return HTTPException(
+        status_code=409,
+        detail="Ya existe un usuario con ese DNI en este rol"
+    )
+
+
 def invalid_password_exception():
 
     return HTTPException(

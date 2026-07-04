@@ -9,10 +9,13 @@ from app.utils.subscriptions import is_abonado
 from fastapi import HTTPException
 from datetime import datetime, timedelta
 from database.connection import SessionLocal
+from app.models.audit_log import AuditType, AuditAction, AuditResult
+from app.services.servicio_auditoria import register_audit
+
 
 
 def obtener_todos_los_clientes(db: Session, search: str = None, status: str = None):
-    query = db.query(User).filter(User.role == "client")
+    query = db.query(User).filter(User.role == "client", User.is_deleted == False)
     if status:
         query = query.filter(User.account_status == status)
     if search:
@@ -46,7 +49,7 @@ def obtener_todos_los_clientes(db: Session, search: str = None, status: str = No
 
 
 def obtener_condiciones_cliente(cliente_id: int, db: Session):
-    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client").first()
+    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
@@ -139,7 +142,7 @@ def registrar_reintegro_jwt(cliente: User, motivo: str, db: Session):
 
 
 def registrar_reintegro(cliente_id: int, motivo: str, db: Session):
-    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client").first()
+    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
@@ -175,9 +178,9 @@ def registrar_reintegro(cliente_id: int, motivo: str, db: Session):
     }
 
 
-def suspender_cliente(cliente_id: int, motivo: str, db: Session):
+def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: User):
     """HU: Suspender cuenta. Motivo obligatorio."""
-    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client").first()
+    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
@@ -185,6 +188,14 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session):
         raise HTTPException(status_code=400, detail="El cliente ya esta suspendido")
 
     cliente.account_status = "suspended"
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.SUSPEND_ACCOUNT,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} suspendió la cuenta del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). Motivo: {motivo}",
+    )
     db.commit()
     db.refresh(cliente)
 
@@ -208,9 +219,9 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session):
     }
 
 
-def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session):
+def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session, current_user: User):
     """HU: Reintegrar cuenta. Motivo opcional."""
-    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client").first()
+    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
@@ -218,6 +229,14 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session):
         raise HTTPException(status_code=400, detail="El cliente no esta suspendido")
 
     cliente.account_status = "active"
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.REINTEGRATE_ACCOUNT,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} reintegró la cuenta del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). Motivo: {motivo}",
+    )
     db.commit()
     db.refresh(cliente)
 
@@ -242,11 +261,11 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session):
     }
 
 
-def rechazar_reintegro(cliente_id: int, db: Session):
+def rechazar_reintegro(cliente_id: int, db: Session, current_user: User):
     """HU: Reintegrar cuenta - Escenario 3. El admin rechaza la solicitud de reintegro.
     La cuenta vuelve a estado 'suspended' y se notifica al cliente.
     """
-    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client").first()
+    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
@@ -258,6 +277,14 @@ def rechazar_reintegro(cliente_id: int, db: Session):
 
     # Mantiene la cuenta suspendida
     cliente.account_status = "suspended"
+    register_audit(
+        db=db,
+        user_id=cliente.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.DENY_REINTEGRATION,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} rechazó la solicitud de reintegro del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). La cuenta permanece suspendida.",
+    )
     db.commit()
     db.refresh(cliente)
 
@@ -297,7 +324,7 @@ def listar_condiciones_por_actividad(activity_id: int, db: Session):
     resultado = []
     for reserva in reservas:
         cliente = db.query(User).filter(
-            User.id == reserva.user_id, User.role == "client"
+            User.id == reserva.user_id, User.role == "client", User.is_deleted == False
         ).first()
         if not cliente:
             continue

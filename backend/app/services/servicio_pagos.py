@@ -9,6 +9,9 @@ from app.models.plan import Plan
 from app.models.user_plan import UserPlan
 from app.models.user import User
 
+from app.models.audit_log import AuditType, AuditAction, AuditResult
+from app.services.servicio_auditoria import register_audit
+
 
 # ── Ver planes ────────────────────────────────────────────────────────────────
 
@@ -30,11 +33,10 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
     plan = db.query(Plan).filter(Plan.id == plan_id, Plan.status == "active").first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado o inactivo.")
-
+    user = db.query(User).filter(User.id == user_id).first()
     if test_scenario == "success":
         # Consumir el descuento acumulado por cancelación (beneficio del abonado para
         # su próximo pago de suscripción)
-        user = db.query(User).filter(User.id == user_id).first()
         descuento = (user.pending_discount_percent or 0) if user else 0
         precio_final = float(plan.price) * (1 - descuento / 100) if descuento else float(plan.price)
 
@@ -51,6 +53,14 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
         db.add(user_plan)
         if descuento and user:
             user.pending_discount_percent = 0
+        register_audit(
+            db=db,
+            user_id=user_id,
+            type=AuditType.PAYMENT,
+            action=AuditAction.SUBSCRIPTION,
+            result=AuditResult.SUCCESS,
+            detail=f"Pago aprobado para el usuario {user.name} {user.lastname}, plan '{plan.name}' en {specialization}. Precio final: ${precio_final:.2f}.",
+        )
         db.commit()
 
         mensaje = f"Pago aprobado. Te suscribiste al plan '{plan.name}' en {specialization}."
@@ -66,6 +76,15 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
             "discount_applied": descuento,
         }
     elif test_scenario == "insufficient_funds":
+        register_audit(
+            db=db,
+            user_id=user_id,
+            type=AuditType.PAYMENT,
+            action=AuditAction.SUBSCRIPTION,
+            result=AuditResult.ERROR,
+            detail=f"Pago rechazado por fondos insuficientes para el usuario {user.name} {user.lastname}, plan '{plan.name}' en {specialization}.",
+        )
+        db.commit()
         return {
             "success": False,
             "message": "Pago rechazado: fondos insuficientes en la cuenta.",

@@ -196,6 +196,7 @@ function SugerirActividad() {
   const [exito, setExito] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const esIndividual = form.activity_type === 'individual';
   const ocupada = useOcupaciones(actividadesActivas);
@@ -281,11 +282,7 @@ function SugerirActividad() {
         setHoraInicio('');
       }
       if (name === 'specific_date' && newValue) {
-        const dia = new Date(`${newValue}T00:00:00`).getDay();
-        if (dia === 0 || dia === 6) {
-          setError('Las actividades individuales no se pueden programar en fin de semana.');
-          return { ...prev, [name]: '' };
-        }
+        setFieldErrors((prev) => ({ ...prev, specific_date: '' }));
         setError('');
       }
       return next;
@@ -425,8 +422,30 @@ function SugerirActividad() {
                     name="specific_date"
                     value={form.specific_date}
                     onChange={handleChange}
+                    onBlur={(e) => {
+                      const value = e.target.value;
+                      if (!value) return;
+                      const hoy = new Date().toISOString().split('T')[0];
+                      if (value < hoy) {
+                        setFieldErrors((prev) => ({ ...prev, specific_date: 'Ingresá una fecha válida.' }));
+                        setForm((prev) => ({ ...prev, specific_date: '' }));
+                        return;
+                      }
+                      const dia = new Date(`${value}T00:00:00`).getDay();
+                      if (dia === 0 || dia === 6) {
+                        setFieldErrors((prev) => ({ ...prev, specific_date: 'Las actividades individuales no se pueden programar en fin de semana.' }));
+                        setForm((prev) => ({ ...prev, specific_date: '' }));
+                        return;
+                      }
+                      setFieldErrors((prev) => ({ ...prev, specific_date: '' }));
+                    }}
                     min={new Date().toISOString().split('T')[0]}
                   />
+                  {fieldErrors.specific_date && (
+                    <span style={{ fontSize: '12px', color: '#dc2626' }}>
+                      {fieldErrors.specific_date}
+                    </span>
+                  )}
                 </div>
               ) : (
                 <>

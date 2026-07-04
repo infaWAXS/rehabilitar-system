@@ -13,7 +13,8 @@ from app.utils.dependencies import get_current_user, require_role
 
 from app.services.servicio_usuarios import change_medical_clearance_status, change_password, change_user_status, delete_user, get_all_users, get_user_by_id, search_users, modify_employee, update_user_info as update_user_info_service, register_user_by_admin
 
-
+from app.models.audit_log import AuditAction, AuditResult, AuditType
+from app.services.servicio_auditoria import register_audit
 
 
 
@@ -33,9 +34,9 @@ router = APIRouter(
 def crear_cuenta_admin(
     datos: AdminUserCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role(["admin"])),
+    current_user: User = Depends(require_role(["admin"])),
 ):
-    return register_user_by_admin(datos, db)
+    return register_user_by_admin(datos, db, current_user)
 
 
 #El usuario actualmente autenticado - AGUSTIN
@@ -115,7 +116,7 @@ def change_professor_specialty_endpoint(
 ):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return modify_employee(user_id, None, None, None, specialty, None, None, db)
+    return modify_employee(user_id, None, None, None, specialty, None, None, db, None, current_user)
 
 
 # HU Verificar apto físico (admin) - E3: lista clientes con apto físico pendiente - Francis
@@ -123,7 +124,10 @@ def change_professor_specialty_endpoint(
 def list_pending_medical(token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return db.query(User).filter(User.medical_certificate_status == "pending").all()
+    return db.query(User).filter(
+        User.medical_certificate_status == "pending",
+        User.is_deleted == False,
+    ).all()
 
 
 # Endpoint para obtener datos de un usuario específico (admin o el propio usuario) - Agustin
@@ -158,7 +162,7 @@ def disable_user(user_id: int, token: str, db: Session = Depends(get_db)):
 
     require_role(["admin"])(current_user)
 
-    return change_user_status(user_id, "disabled", db)
+    return change_user_status(user_id, "disabled", db, current_user)
 
 #Agustin - Endpoint para que el admin habilite o deshabilite una cuenta de usuario (soft delete)
 @router.put("/enable/{user_id}", response_model=UserResponse)
@@ -168,7 +172,7 @@ def enable_user(user_id: int, token: str, db: Session = Depends(get_db)):
 
     require_role(["admin"])(current_user)
 
-    return change_user_status(user_id, "active", db)
+    return change_user_status(user_id, "active", db, current_user)
 
 
 
@@ -209,14 +213,14 @@ def upload_medical_certificate(
 def update_medical_clearance_status(user_id: int, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return change_medical_clearance_status(user_id, "approved", db)
+    return change_medical_clearance_status(user_id, "approved", db, current_user)
 
 # HU Verificar apto físico (admin) - E2: admin desaprueba → medical_certificate_status = "rejected" - AGUSTIN
 @router.put("/reject-medical/{user_id}", response_model=UserResponse)
 def reject_medical_certificate(user_id: int, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return change_medical_clearance_status(user_id, "rejected", db)
+    return change_medical_clearance_status(user_id, "rejected", db, current_user)
 
 
 # HU Modificar información de usuario (Nahuel)
@@ -234,7 +238,7 @@ def modify_employee_endpoint(user_id: int, request: UpdateUserRequest, token: st
     
     require_role(["admin"])(current_user)
     
-    return modify_employee(user_id, request.name, request.lastname, None, request.specialization, request.direccion, request.telefono, db, request.birth_date)
+    return modify_employee(user_id, request.name, request.lastname, None, request.specialization, request.direccion, request.telefono, db, request.birth_date, current_user)
 
 
 # Endpoint para que el admin suba el apto físico de un cliente específico - Francis
@@ -244,7 +248,7 @@ def admin_upload_certificate(user_id: int, token: str, file: UploadFile = File(.
     require_role(["admin"])(current_user)
 
     from app.exceptions.http_exceptions import user_not_found_exception
-    target = db.query(User).filter(User.id == user_id).first()
+    target = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
     if not target:
         raise user_not_found_exception()
 
@@ -277,22 +281,19 @@ def upload_dni_photo(token: str, file: UploadFile = File(...), db: Session = Dep
     return {"message": "Foto de DNI subida correctamente. Pendiente validación por sistema externo."}
 
 
-# Elimina la propia cuenta del usuario autenticado (hard delete) - Francis
+# Elimina la propia cuenta del usuario autenticado (baja logica) - Francis
 @router.delete("/me")
 def delete_my_account(token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
-    name = f"{current_user.name} {current_user.lastname}"
-    db.delete(current_user)
-    db.commit()
-    return {"message": f"Cuenta de {name} eliminada correctamente"}
+    return delete_user(current_user.id, current_user.id, db)
 
 
-# Elimina una cuenta de usuario (admin, hard delete) - Francis
+# Elimina una cuenta de usuario (admin, baja logica) - Francis
 @router.delete("/{user_id}")
 def delete_user_endpoint(user_id: int, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return delete_user(user_id, db)
+    return delete_user(user_id, current_user.id, db)
 
 
 # Endpoint para listar clientes (usuarios con rol "client") - Francis

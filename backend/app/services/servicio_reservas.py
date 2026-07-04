@@ -12,6 +12,8 @@ from app.exceptions.http_exceptions import user_not_found_exception
 from app.utils.credits import get_monthly_balance, spend_credit, grant_credit, was_paid_with_credit
 from database.connection import SessionLocal
 
+from app.models.audit_log import AuditType, AuditAction, AuditResult
+from app.services.servicio_auditoria import register_audit
 
 # Crea una nueva reserva para un usuario en una actividad.
 # payment_method: subscription | full_payment | partial_payment | credit
@@ -24,9 +26,13 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
                        test_scenario: str = "success",
                        deposit_percent: int = None):
     user = db.query(User).filter(User.id == user_id).first()
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
 
     if not user:
         raise user_not_found_exception()
+
+    if not activity:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
     if reservation_type not in ("fixed", "individual"):
         raise HTTPException(status_code=400,
@@ -56,6 +62,15 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
     if payment_method in ("full_payment", "partial_payment"):
         escenario = test_scenario or "success"
         if escenario == "insufficient_funds":
+            register_audit(
+                db=db,
+                user_id=user_id,
+                type=AuditType.PAYMENT,
+                action=AuditAction.INDIVIDUAL,
+                result=AuditResult.ERROR,
+                detail=f"Pago rechazado por fondos insuficientes para el usuario {user.name} {user.lastname} para la actividad {activity.name} (id {activity.id})."
+            )
+            db.commit()
             raise HTTPException(status_code=402, detail="Pago rechazado: fondos insuficientes en la cuenta.")
         elif escenario == "connection_error":
             raise HTTPException(status_code=503, detail="Error de conexión con el servidor del banco. Intentá nuevamente.")
@@ -69,6 +84,17 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         status = "pending"
         payment_status_val = "partial"
 
+    if payment_method in ("full_payment", "partial_payment"):
+        total = activity.price * deposit_percent_val / 100
+        register_audit(
+            db=db,
+            user_id=user_id,
+            type=AuditType.PAYMENT,
+            action=AuditAction.INDIVIDUAL,
+            result=AuditResult.SUCCESS,
+            detail=f"Usuario {user.name} {user.lastname} pagó una reserva para la actividad {activity.name} (id {activity.id}). Pago: ${total:.2f}."
+        )
+
     new_reservation = Reservation(
         user_id=user_id,
         activity_id=activity_id,
@@ -77,7 +103,7 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         payment_status=payment_status_val,
         reservation_date=reservation_date,
         deposit_percent=deposit_percent_val,
-    )
+    ) 
 
     db.add(new_reservation)
     db.commit()
@@ -208,7 +234,7 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
       no_refund        → no abonado + ≤ 24 h → pierde la seña, sin reintegro
     """
     from datetime import datetime, date as date_cls
-    from app.utils.subscriptions import is_abonado
+    from app.utils.subscriptions import is_abonado, get_active_user_plan
 
     reservation = get_reservation_by_id(reservation_id, db)
 
@@ -229,6 +255,9 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
 
     abonado = is_abonado(user_id, db)
     user = db.query(User).filter(User.id == user_id).first()
+    activity = db.query(Activity).filter(Activity.id == reservation.activity_id).first()
+    if abonado:
+        plan = get_active_user_plan(user_id, db)
 
     # Contar cancelaciones en la franja 24-48h ya registradas este mes (solo abonados)
     today = date_cls.today()
@@ -240,7 +269,7 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
     ).count()
 
     # ── Reglas de negocio ──────────────────────────────────────────────────────
-    if abonado:
+    if abonado and plan.specialization == activity.specialization:
         if hours_until > 48:
             if was_paid_with_credit(reservation.id, db):
                 result = "no_benefit"
@@ -278,6 +307,15 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
     else:
         percent = reservation.deposit_percent or 100
         if hours_until > 24:
+            total_refund = activity.price * percent / 100
+            register_audit(
+                db=db,
+                user_id=user_id,
+                type=AuditType.PAYMENT,
+                action=AuditAction.REFUND,
+                result=AuditResult.SUCCESS,
+                detail=f"Se hace un reintegro a {user.name} {user.lastname} de la actividad {activity.name} (id {activity.id}) de {total_refund:.2f}.",
+            )
             result = "deposit_returned"
             message = f"Turno cancelado. Se te reintegra el {percent}% que habías abonado."
         else:

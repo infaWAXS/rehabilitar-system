@@ -2,6 +2,7 @@
 # Francis: resto de funciones de gestion de usuarios.
 from urllib import request
 from threading import Thread
+from datetime import datetime
 from sqlalchemy import or_
 
 from app.schemas.esquema_usuario import UserLogin
@@ -13,9 +14,11 @@ from app.models.user import User
 from app.models.activity import Activity
 
 from app.utils.security import hash_password, verify_password, create_access_token, verify_token, generate_temporary_password
-from app.exceptions.http_exceptions import email_already_exists_exception, unauthorized_exception, forbidden_exception, user_not_found_exception
+from app.exceptions.http_exceptions import email_already_exists_exception, dni_already_exists_exception, unauthorized_exception, forbidden_exception, user_not_found_exception
 from database.connection import SessionLocal
 
+from app.models.audit_log import AuditAction, AuditResult, AuditType
+from app.services.servicio_auditoria import register_audit
 
 #Valida si el email ya existe, si no existe, hashea la contraseña y crea un nuevo usuario en la base de datos. 
 #Si el email ya existe, lanza una excepción HTTP 409. 
@@ -45,6 +48,14 @@ def register_user(user_data, db: Session):
             detail="Un profesor debe tener una especialidad asignada"
         )
 
+    dni = getattr(user_data, "dni", None)
+    if dni:
+        existing_dni = db.query(User).filter(
+            User.dni == dni, User.role == role
+        ).first()
+        if existing_dni:
+            raise dni_already_exists_exception()
+
     hashed_password = hash_password(
         user_data.password
     )
@@ -55,7 +66,7 @@ def register_user(user_data, db: Session):
         email=user_data.email,
         password=hashed_password,
         role=role,
-        dni=getattr(user_data, "dni", None),
+        dni=dni,
         direccion=getattr(user_data, "direccion", None),
         telefono=getattr(user_data, "telefono", None),
         specialization=specialization,
@@ -74,7 +85,7 @@ def register_user(user_data, db: Session):
 # HU Crear cuenta (admin): el administrador NO define la contraseña. El sistema genera
 # una contraseña temporal, crea la cuenta y se la envía al usuario por mail para que la
 # cambie luego desde "Cambiar contraseña".
-def register_user_by_admin(user_data, db: Session):
+def register_user_by_admin(user_data, db: Session, current_user: User):
     existing_user = db.query(User).filter(
         User.email == user_data.email
     ).first()
@@ -91,6 +102,14 @@ def register_user_by_admin(user_data, db: Session):
             detail="Un profesor debe tener una especialidad asignada"
         )
 
+    dni = getattr(user_data, "dni", None)
+    if dni:
+        existing_dni = db.query(User).filter(
+            User.dni == dni, User.role == role
+        ).first()
+        if existing_dni:
+            raise dni_already_exists_exception()
+
     temp_password = generate_temporary_password()
     hashed_password = hash_password(temp_password)
 
@@ -100,7 +119,7 @@ def register_user_by_admin(user_data, db: Session):
         email=user_data.email,
         password=hashed_password,
         role=role,
-        dni=getattr(user_data, "dni", None),
+        dni=dni,
         direccion=getattr(user_data, "direccion", None),
         telefono=getattr(user_data, "telefono", None),
         specialization=specialization,
@@ -108,6 +127,16 @@ def register_user_by_admin(user_data, db: Session):
     )
 
     db.add(new_user)
+
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.CREATE,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} creó la cuenta {new_user.email}"
+    )
+
     db.commit()
     db.refresh(new_user)
 
@@ -143,7 +172,8 @@ def login_user(request: UserLogin, db: Session):
 
 
     existing_user = db.query(User).filter(
-        User.email == request.email
+        User.email == request.email,
+        User.is_deleted == False,
     ).first()
 
     if not existing_user:
@@ -151,7 +181,7 @@ def login_user(request: UserLogin, db: Session):
             status_code=401,
             detail="Email invalido"
         )
-    
+
 
     if existing_user.account_status.lower() == "disabled":
 
@@ -172,6 +202,15 @@ def login_user(request: UserLogin, db: Session):
         if existing_user.failed_login_attempts >= 3:
             existing_user.account_status = "disabled"
 
+        if existing_user.role in ["admin", "receptionist", "professor"]:
+            register_audit(
+                db=db,
+                user_id=existing_user.id,
+                type=AuditType.ACCOUNT,
+                action=AuditAction.LOGIN,
+                result=AuditResult.ERROR,
+                detail=f"Intento de login fallido para {existing_user.name} {existing_user.lastname} por contraseña incorrecta."
+            )
         db.commit()
 
         raise HTTPException(
@@ -182,6 +221,15 @@ def login_user(request: UserLogin, db: Session):
     
     existing_user.failed_login_attempts = 0
 
+    if existing_user.role in ["admin", "receptionist", "professor"]:
+        register_audit(
+            db=db,
+            user_id=existing_user.id,
+            type=AuditType.ACCOUNT,
+            action=AuditAction.LOGIN,
+            result=AuditResult.SUCCESS,
+            detail=f"Login exitoso para {existing_user.name} {existing_user.lastname}."
+        )
     db.commit()
     
     access_token = create_access_token(
@@ -219,6 +267,15 @@ def change_password(current_user: User, new_password: str, confirm_password: str
 
     current_user.password = hashed_password
 
+    if current_user.role in ["admin", "receptionist", "professor"]:
+        register_audit(
+            db=db,
+            user_id=current_user.id,
+            type=AuditType.ACCOUNT,
+            action=AuditAction.RESET_PASSWORD,
+            result=AuditResult.SUCCESS,
+            detail=f"Usuario {current_user.name} {current_user.lastname} cambió su contraseña."
+        )
     db.commit()
 
     return {
@@ -246,6 +303,15 @@ def update_user_info(current_user: User, name: str, lastname: str, direccion: st
     if birth_date is not None:
         current_user.birth_date = birth_date
 
+    if current_user.role in ["admin", "receptionist", "professor"]:
+        register_audit(
+            db=db,
+            user_id=current_user.id,
+            type=AuditType.ACCOUNT,
+            action=AuditAction.UPDATE,
+            result=AuditResult.SUCCESS,
+            detail=f"Usuario {current_user.name} {current_user.lastname} actualizó su información personal."
+        )
     db.commit()
 
     db.refresh(current_user)
@@ -257,7 +323,7 @@ def update_user_info(current_user: User, name: str, lastname: str, direccion: st
 #Permite filtrar por rol y estado de cuenta. Solo los admins pueden acceder a esta ruta.
 def get_all_users(db: Session, role: str = None, status: str = None):
 
-    query = db.query(User)
+    query = db.query(User).filter(User.is_deleted == False)
 
     if role:
         query = query.filter(User.role == role)
@@ -271,7 +337,8 @@ def get_all_users(db: Session, role: str = None, status: str = None):
 #Devuelve la información de un usuario específico por su ID.
 def get_user_by_id(user_id: int, db: Session):
     user = db.query(User).filter(
-        User.id == user_id
+        User.id == user_id,
+        User.is_deleted == False,
     ).first()
 
     if not user:
@@ -282,16 +349,25 @@ def get_user_by_id(user_id: int, db: Session):
 
 
 #Cambia el estado de la cuenta de un usuario (activo o deshabilitado). Solo los admins pueden realizar esta acción.
-def change_user_status(user_id: int, status: str, db: Session):
+def change_user_status(user_id: int, status: str, db: Session, current_user: User):
     
     user = db.query(User).filter(
-        User.id == user_id
+        User.id == user_id,
+        User.is_deleted == False,
     ).first()
 
     if not user:
         raise user_not_found_exception()
     user.account_status = status
 
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.UPDATE,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} cambió el estado de la cuenta de {user.name} {user.lastname} (id {user.id}) a {status}"
+    )
     db.commit()
 
     db.refresh(user)
@@ -303,16 +379,26 @@ def change_user_status(user_id: int, status: str, db: Session):
 # HU Verificar apto físico (admin)
 # E1: admin aprueba → medical_certificate_status = "approved"
 # E2: admin desaprueba → medical_certificate_status = "rejected"
-def change_medical_clearance_status(user_id: int, status: str, db: Session):
+def change_medical_clearance_status(user_id: int, status: str, db: Session, current_user: User):
 
     user = db.query(User).filter(
-        User.id == user_id
+        User.id == user_id,
+        User.is_deleted == False,
     ).first()
 
     if not user:
         raise user_not_found_exception()
 
     user.medical_certificate_status = status
+
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.UPDATE_MEDICAL_CERTIFICATE,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} cambió el estado del certificado médico de {user.name} {user.lastname} (id {user.id}) a {status}"
+    )
 
     db.commit()
 
@@ -336,24 +422,45 @@ def change_medical_clearance_status(user_id: int, status: str, db: Session):
 
 
 # Genera un token de recuperación de contraseña para el usuario con el email especificado.
-def request_password_recovery(email: str, db: Session):
-    user = db.query(User).filter(User.email == email).first()
-    
+def request_password_recovery(email: str, http_request, db: Session):
+    from app.utils.security import PASSWORD_RECOVERY_TOKEN_EXPIRE_MINUTES
+    from app.utils.notifications import notify_password_recovery_requested
+
+    user = db.query(User).filter(User.email == email, User.is_deleted == False).first()
+
     if not user:
         raise HTTPException(
             status_code=404,
             detail="El correo no está registrado en el sistema"
         )
-    
+
     # Generar token con expiración de 30 minutos
     recovery_token = create_access_token(
-        data={"sub": user.email, "type": "recovery"}
+        data={"sub": user.email, "type": "recovery"},
+        expires_in_minutes=PASSWORD_RECOVERY_TOKEN_EXPIRE_MINUTES
     )
-    
+
+    # Extraer URL del frontend desde el header origin
+    frontend_url = http_request.headers.get("origin", "http://localhost:3000")
+
+    # Construir link de recuperación
+    recovery_link = f"{frontend_url}/restablecer-contrasena?token={recovery_token}"
+
+    # Enviar email con el link (en background)
+    user_id = user.id
+    def _enviar_recovery_async(uid: int, uemail: str, link: str, exp_mins: int) -> None:
+        db_n = SessionLocal()
+        try:
+            notify_password_recovery_requested(uemail, link, exp_mins, db_n)
+        except Exception:
+            pass
+        finally:
+            db_n.close()
+
+    Thread(target=_enviar_recovery_async, args=(user_id, user.email, recovery_link, PASSWORD_RECOVERY_TOKEN_EXPIRE_MINUTES), daemon=True).start()
+
     return {
-        "message": "Se ha enviado un enlace de recuperación a tu email",
-        "token": recovery_token,
-        "email": user.email
+        "message": "Se ha enviado un enlace de recuperación a tu email. El link es válido por 30 minutos."
     }
 
 
@@ -379,16 +486,25 @@ def reset_password(token: str, new_password: str, confirm_password: str, db: Ses
             detail="Token inválido o expirado"
         )
     
-    user = db.query(User).filter(User.email == email).first()
-    
+    user = db.query(User).filter(User.email == email, User.is_deleted == False).first()
+
     if not user:
         raise user_not_found_exception()
-    
+
     hashed_password = hash_password(new_password)
     user.password = hashed_password
     user.account_status = "active"
     user.failed_login_attempts = 0
-    
+
+    if user.role in ["admin", "receptionist", "professor"]:
+        register_audit(
+            db=db,
+            user_id=user.id,
+            type=AuditType.ACCOUNT,
+            action=AuditAction.RESET_PASSWORD,
+            result=AuditResult.SUCCESS,
+            detail=f"Usuario {user.name} {user.lastname} restableció su contraseña mediante recuperación."
+        )
     db.commit()
     db.refresh(user)
     
@@ -397,13 +513,20 @@ def reset_password(token: str, new_password: str, confirm_password: str, db: Ses
     }
 
 
-# Elimina permanentemente una cuenta de usuario (hard delete).
-def delete_user(user_id: int, db: Session):
+# Elimina una cuenta de usuario mediante baja logica (soft delete): el registro
+# no se borra de la base de datos, se marca is_deleted=True y se registra quien
+# y cuando la elimino (deleted_by/deleted_at) para poder auditarla despues.
+# deleted_by_id es el id de quien ejecuta la baja (el propio usuario si es
+# autoeliminacion, o el admin si la elimina desde el panel).
+def delete_user(user_id: int, deleted_by_id: int, db: Session):
     from app.models.reservation import Reservation
     from app.models.waitlist import Waitlist
     from app.services.servicio_lista_espera import promote_next_waitlist_entry
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.is_deleted == False,
+    ).first()
 
     if not user:
         raise user_not_found_exception()
@@ -464,21 +587,23 @@ def delete_user(user_id: int, db: Session):
 
             Thread(target=_notif_async, args=(uid_promovido, aid_promovido), daemon=True).start()
 
-    # Borrar registros dependientes con FK NOT NULL hacia el usuario (suscripciones,
-    # asistencias) para que el delete no falle por violación de integridad. Las
-    # notificaciones y movimientos de crédito no tienen FK NOT NULL pero se limpian
-    # igual para no dejar datos huérfanos.
-    from app.models.user_plan import UserPlan
-    from app.models.attendance import Attendance
-    from app.models.notification import Notification
-    from app.models.credit_transaction import CreditTransaction
+    # Baja logica: se conserva el registro (y sus datos relacionados: suscripciones,
+    # asistencias, notificaciones, movimientos de credito) para auditoria. Ya no
+    # hace falta borrarlos a mano porque no hay un delete fisico que viole FKs.
+    user.is_deleted = True
+    user.deleted_at = datetime.utcnow()
+    user.deleted_by = deleted_by_id
 
-    db.query(UserPlan).filter(UserPlan.user_id == user_id).delete(synchronize_session=False)
-    db.query(Attendance).filter(Attendance.user_id == user_id).delete(synchronize_session=False)
-    db.query(Notification).filter(Notification.user_id == user_id).delete(synchronize_session=False)
-    db.query(CreditTransaction).filter(CreditTransaction.user_id == user_id).delete(synchronize_session=False)
-
-    db.delete(user)
+    current_user = db.query(User).filter(User.id == deleted_by_id).first()
+    if current_user.role in ["admin", "receptionist", "professor"]:
+        register_audit(
+            db=db,
+            user_id=current_user.id,
+            type=AuditType.ACCOUNT,
+            action=AuditAction.DELETE,
+            result=AuditResult.SUCCESS,
+            detail=f"Admin {current_user.name} {current_user.lastname} eliminó la cuenta de {name} (id {user.id})"
+        )
     db.commit()
 
     return {"message": f"Cuenta de {name} eliminada correctamente"}
@@ -486,7 +611,7 @@ def delete_user(user_id: int, db: Session):
 
 # Busca usuarios por nombre, email o DNI con filtros opcionales.
 def search_users(db: Session, search: str = None, role: str = None, status: str = None, roles: list = None):
-    query = db.query(User)
+    query = db.query(User).filter(User.is_deleted == False)
 
     if search:
         query = query.filter(
@@ -516,7 +641,7 @@ def search_users(db: Session, search: str = None, role: str = None, status: str 
 #              desvincularlo. Pendiente de implementación hasta que el módulo de
 #              actividades (Angel) esté disponible.
 # Escenario 4: cancelación — comportamiento del frontend, no requiere lógica de backend.
-def modify_employee(employee_id: int, name: str = None, lastname: str = None, email: str = None, specialization: str = None, direccion: str = None, telefono: str = None, db: Session = None, birth_date = None):
+def modify_employee(employee_id: int, name: str = None, lastname: str = None, email: str = None, specialization: str = None, direccion: str = None, telefono: str = None, db: Session = None, birth_date = None, current_user: User = None):
     employee = db.query(User).filter(User.id == employee_id).first()
 
     if not employee:
@@ -559,6 +684,14 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
     if birth_date is not None:
         employee.birth_date = birth_date
 
+    register_audit(
+        db=db,
+        user_id=current_user.id,
+        type=AuditType.ACCOUNT,
+        action=AuditAction.UPDATE,
+        result=AuditResult.SUCCESS,
+        detail=f"Admin {current_user.name} {current_user.lastname} modificó la información del usuario {employee.name} {employee.lastname} (id {employee.id})"
+    )
     db.commit()
     db.refresh(employee)
 
@@ -569,7 +702,8 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
 def get_public_staff(db: Session, search: str = None, specialization: str = None):
     query = db.query(User).filter(
         User.role.in_(["professor", "receptionist"]),
-        User.account_status == "active"
+        User.account_status == "active",
+        User.is_deleted == False,
     )
 
     if search:
@@ -593,7 +727,8 @@ def get_staff_specializations(db: Session) -> list:
         .filter(
             User.role == "professor",
             User.specialization.isnot(None),
-            User.account_status == "active"
+            User.account_status == "active",
+            User.is_deleted == False,
         )
         .distinct()
         .all()

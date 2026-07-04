@@ -158,7 +158,7 @@ export default function RegistrarAsistencia() {
   const [cargandoLista, setCargandoLista] = useState(true);
   const [errorLista, setErrorLista] = useState('');
 
-  // EdiciÃ³n inline de comentario
+  // Edición inline de comentario
   const [editandoId, setEditandoId] = useState(null);
   const [comentarioEdit, setComentarioEdit] = useState('');
   const [guardando, setGuardando] = useState(false);

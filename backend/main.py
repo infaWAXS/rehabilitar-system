@@ -27,6 +27,7 @@ from app.routes.rutas_asistencias import router as attendance_router
 from app.routes.rutas_pagos import router as payment_router
 from app.routes.rutas_notificaciones import router as notification_router
 from app.routes.rutas_sugerencias import router as suggestion_router
+from app.routes.rutas_auditoria import router as audit_router
 from database.seed_mock import seed as seed_mock_users
 from app.routes.rutas_reportes import router as reportes_router
 
@@ -68,6 +69,15 @@ def _migrate(engine):
             conn.commit()
         if "cancellation_result" not in reservation_cols:
             conn.execute(text("ALTER TABLE reservations ADD COLUMN cancellation_result TEXT"))
+            conn.commit()
+        if "is_deleted" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
+        if "deleted_at" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN deleted_at DATETIME"))
+            conn.commit()
+        if "deleted_by" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN deleted_by INTEGER"))
             conn.commit()
 
 _migrate(engine)
@@ -115,6 +125,7 @@ app.include_router(attendance_router)
 app.include_router(payment_router)
 app.include_router(notification_router)
 app.include_router(suggestion_router)
+app.include_router(audit_router)
 app.include_router(reportes_router)
 
 @app.get("/")

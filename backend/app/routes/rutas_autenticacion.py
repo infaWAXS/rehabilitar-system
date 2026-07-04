@@ -1,6 +1,6 @@
 # Responsable: Agustin - endpoints de registro e inicio de sesion.
 # Francis: recuperacion de contrasena, logout, staff.
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -39,7 +39,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 @router.get("/users")
 def get_users(db: Session = Depends(get_db)):
 
-    users = db.query(User).all()
+    users = db.query(User).filter(User.is_deleted == False).all()
 
     return users
 
@@ -60,8 +60,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 
 # Endpoint para solicitar recuperación de contraseña
 @router.post("/recovery/request")
-def request_password_reset(request: PasswordRecoveryRequest, db: Session = Depends(get_db)):
-    return request_password_recovery(request.email, db)
+def request_password_reset(recovery_request: PasswordRecoveryRequest, http_request: Request, db: Session = Depends(get_db)):
+    return request_password_recovery(recovery_request.email, http_request, db)
 
 
 # Endpoint para validar token de recuperación de contraseña
