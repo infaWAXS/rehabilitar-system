@@ -52,10 +52,14 @@ export default function ClientesReportes() {
 
   const hayDatos = totales.inscripciones > 0;
 
-  const mockSancionesEstadisticas = {
-    tresFaltas: 12, cincuentaPorciento: 8, otrosMotivos: 4, reincidentes: 5,
-    masAntiguo: { nombre: 'Javier Giménez', fecha: '12/03/2026' },
-    masReciente: { nombre: 'Lucía Fernández', fecha: '28/06/2026' }
+// LECTURA REAL DESDE EL BACKEND (Con validación de nulos)
+  const mockSancionesEstadisticas = reporte?.sanciones_estadisticas || {
+    tresFaltas: 0,
+    cincuentaPorciento: 0,
+    otrosMotivos: 0,
+    reincidentes: 0,
+    masAntiguo: { nombre: '-', fecha: '-' },
+    masReciente: { nombre: '-', fecha: '-' }
   };
 
   return (
