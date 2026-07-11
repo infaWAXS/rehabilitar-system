@@ -79,7 +79,7 @@ export default function FinanzasReportes() {
                 <div style={s.tarjetaMini}>
                   <span style={s.labelMini}>Ingresos Totales (Rango)</span>
                   <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>
-                    ${Number(reporte.finanzas?.ingresos_totales || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    ${Number(reporte.finanzas?.ingresos_totales || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </p>
                 </div>
                 
@@ -93,7 +93,7 @@ export default function FinanzasReportes() {
                 <div style={s.tarjetaMini}>
                   <span style={s.labelMini}>Ingreso Promedio por Cliente</span>
                   <p style={{ ...s.valorMini, color: 'var(--color-texto)' }}>
-                    ${Number(reporte.finanzas?.ingreso_promedio || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    ${Number(reporte.finanzas?.ingreso_promedio || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </p>
                 </div>
               </div>
@@ -139,21 +139,21 @@ export default function FinanzasReportes() {
                   <div style={{ padding: '24px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '8px' }}>POR PLANES (SUSCRIPCIONES)</span>
                     <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#1e293b' }}>
-                      ${Number(reporte.finanzas?.desglose?.planes || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                      ${Number(reporte.finanzas?.desglose?.planes || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                   </div>
 
                   <div style={{ padding: '24px', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: '#15803d', display: 'block', marginBottom: '8px' }}>POR CLASES INDIVIDUALES</span>
                     <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#166534' }}>
-                       ${Number(reporte.finanzas?.desglose?.individuales || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                       ${Number(reporte.finanzas?.desglose?.individuales || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                   </div>
 
                   <div style={{ padding: '24px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: '#1d4ed8', display: 'block', marginBottom: '8px' }}>POR SEÑAS / RESERVAS</span>
                     <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#1e3a8a' }}>
-                       ${Number(reporte.finanzas?.desglose?.senas || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                       ${Number(reporte.finanzas?.desglose?.senas || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                   </div>
 
@@ -161,6 +161,64 @@ export default function FinanzasReportes() {
               </div>
             </>
           )}
+
+          {/* RANKINGS FINANCIEROS */}
+              <div style={s.seccionReporte}>
+                <h2 style={s.subtitulo}>Rankings de Recaudación (Top 5)</h2>
+                <p style={s.bajada}>Mejores rendimientos financieros por clase y por profesional en el rango seleccionado.</p>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginTop: '24px' }}>
+                  
+                  {/* Columna: Top 5 Clases */}
+                  <div style={{ background: '#ffffff', border: '1px solid var(--color-borde, #e2e8f0)', borderRadius: '8px', padding: '20px' }}>
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '15px', fontWeight: '700', color: 'var(--color-primario-oscuro)', borderBottom: '2px solid #f8fafc', paddingBottom: '12px' }}>
+                      Clases Más Rentables
+                    </h3>
+                    {reporte.finanzas?.top_clases?.length > 0 ? (
+                      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {reporte.finanzas.top_clases.map((clase, idx) => (
+                          <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: idx !== reporte.finanzas.top_clases.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                            <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-texto, #334155)' }}>
+                              <span style={{ color: 'var(--color-texto-suave, #94a3b8)', marginRight: '8px', fontWeight: '700' }}>#{idx + 1}</span> 
+                              {clase.nombre}
+                            </span>
+                            <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--color-secundario-oscuro, #15803d)' }}>
+                              ${Number(clase.recaudacion).toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p style={{ fontSize: '13px', color: 'var(--color-texto-suave, #64748b)', textAlign: 'center', margin: '32px 0' }}>No hay registros de ingresos en este período.</p>
+                    )}
+                  </div>
+
+                  {/* Columna: Top 5 Profesores */}
+                  <div style={{ background: '#ffffff', border: '1px solid var(--color-borde, #e2e8f0)', borderRadius: '8px', padding: '20px' }}>
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '15px', fontWeight: '700', color: 'var(--color-primario-oscuro)', borderBottom: '2px solid #f8fafc', paddingBottom: '12px' }}>
+                      Profesionales con Mayor Recaudación
+                    </h3>
+                    {reporte.finanzas?.top_profesores?.length > 0 ? (
+                      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                        {reporte.finanzas.top_profesores.map((prof, idx) => (
+                          <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: idx !== reporte.finanzas.top_profesores.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                            <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-texto, #334155)' }}>
+                              <span style={{ color: 'var(--color-texto-suave, #94a3b8)', marginRight: '8px', fontWeight: '700' }}>#{idx + 1}</span> 
+                              {prof.nombre}
+                            </span>
+                            <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--color-secundario-oscuro, #15803d)' }}>
+                              ${Number(prof.recaudacion).toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p style={{ fontSize: '13px', color: 'var(--color-texto-suave, #64748b)', textAlign: 'center', margin: '32px 0' }}>No hay registros de ingresos en este período.</p>
+                    )}
+                  </div>
+
+                </div>
+              </div>
 
           {/* 4. EXPORTACIÓN MODULAR */}
           <ReportesExportar tipoReporte="Financieros" />
