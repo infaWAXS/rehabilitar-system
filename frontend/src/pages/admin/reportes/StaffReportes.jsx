@@ -63,15 +63,39 @@ export default function StaffReportes() {
     return copia;
   };
 
-  const opcionesEspecialidades = reporte?.clase ? [...new Set(reporte.clase.map(c => c.tipo))].sort() : [];
+  const opcionesEspecialidades = reporte?.clases_lista ? [...new Set(reporte.clases_lista.map(c => c.tipo))].sort() : [];
   const profesoresOrdenados = reporte ? procesarOrdenamiento(reporte.profesores_mayor_concurrencia, sortProfesores, filtroEspecialidad) : [];
   
-  const totalClasesDictadas = profesoresOrdenados.reduce((acc, p) => {
-    const clases = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : (p.cantidad_clases_dictadas ?? 0);
-    return acc + clases;
-  }, 0);
-  
-  const hayDatos = totalClasesDictadas > 0;
+  // CÁLCULO ESTRICTO DE TOTALES
+  let totalAtendidosGlobal = 0;
+  let totalCanceladosGlobal = 0;
+  let totalClasesDictadasGlobal = 0;
+  let sumaCupos = 0;
+  let countProfesConClases = 0;
+
+  profesoresOrdenados.forEach((p) => {
+    const atendidos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.atendidos ?? 0) : p.total_alumnos_atendidos;
+    const cancelados = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cancelados ?? 0) : p.total_cancelaciones_recibidas;
+    const cupos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.uso_cupos ?? 0.0) : p.porcentaje_ocupacion_clases;
+    const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
+    
+    // Solo sumamos si dicta clases en este filtro
+    if (clasesDictadas > 0) {
+      totalAtendidosGlobal += atendidos;
+      totalCanceladosGlobal += cancelados;
+      totalClasesDictadasGlobal += clasesDictadas;
+      sumaCupos += cupos;
+      countProfesConClases++;
+    }
+  });
+
+  const promedioCuposGlobal = countProfesConClases > 0 ? (sumaCupos / countProfesConClases).toFixed(1) : 0;
+  const hayDatos = totalClasesDictadasGlobal > 0;
+
+  // FILTRO DE RETENCIÓN POR ESPECIALIDAD (Máx 10)
+  const profesoresRetencionFiltrados = reporte?.retencion?.filter(r => {
+    return filtroEspecialidad ? r.especialidad === filtroEspecialidad : true;
+  }).slice(0, 10);
 
   return (
     <div style={s.contenedor}>
@@ -86,7 +110,6 @@ export default function StaffReportes() {
 
       {reporte && (
         <>
-          {/* NUEVO RESUMEN DE ESPECIALIDADES */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Prof. Tren Superior</span>
@@ -126,8 +149,8 @@ export default function StaffReportes() {
                       <th style={s.thOrdenable} onClick={() => cambiarOrden('nombre')}>Kinesiólogo</th>
                       <th style={s.thOrdenable} onClick={() => cambiarOrden('total_alumnos_atendidos')}>Alumnos Atendidos</th>
                       <th style={s.thOrdenable} onClick={() => cambiarOrden('total_cancelaciones_recibidas')}>Ausencias</th>
+                      <th style={s.thOrdenable} onClick={() => cambiarOrden('cantidad_clases_dictadas')}>Clases Dadas</th> {/* COLUMNA MOVIDA ANTES DE CUPOS */}
                       <th style={s.thOrdenable} onClick={() => cambiarOrden('porcentaje_ocupacion_clases')}>Uso de Cupos</th>
-                      <th style={s.thOrdenable} onClick={() => cambiarOrden('cantidad_clases_dictadas')}>Clases Dadas</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -145,24 +168,27 @@ export default function StaffReportes() {
                           <td style={s.td}><strong>{p.nombre}</strong></td>
                           <td style={s.td}>{atendidos}</td>
                           <td style={s.td}>{cancelados}</td>
+                          <td style={s.td}>{clasesDictadas}</td>
                           <td style={s.td}>
                             <span style={{ ...s.badgePorcentaje, background: '#eff6ff', color: '#1d4ed8' }}>{cupos}%</span>
-                          </td>
-                          <td style={s.td}>
-                            {clasesDictadas}
                           </td>
                         </tr>
                       );
                     })}
 
+                    {/* FILA DE TOTALES CALCULADA CORRECTAMENTE */}
                     <tr style={{ background: '#f8fafc', borderTop: '2px solid var(--color-borde)', fontWeight: 'bold' }}>
                       <td style={{ ...s.td, color: 'var(--color-primario-oscuro)' }}><strong>Totales / Promedios</strong></td>
-                      <td style={s.td}>-</td>
-                      <td style={s.td}>-</td>
-                      <td style={s.td}>-</td>
+                      <td style={s.td}>{totalAtendidosGlobal}</td>
+                      <td style={s.td}>{totalCanceladosGlobal}</td>
                       <td style={s.td}>
                         <span style={{ ...s.badgePorcentaje, background: '#e0f2fe', color: '#0369a1' }}>
-                          {totalClasesDictadas}
+                          {totalClasesDictadasGlobal}
+                        </span>
+                      </td>
+                      <td style={s.td}>
+                        <span style={{ ...s.badgePorcentaje, background: '#eff6ff', color: '#1d4ed8' }}>
+                          {promedioCuposGlobal}%
                         </span>
                       </td>
                     </tr>
@@ -174,15 +200,38 @@ export default function StaffReportes() {
             )}
           </div>
 
-          {/* NUEVO MÓDULO DE RETENCIÓN (FIJO - ÚLTIMAS 4 SEMANAS) */}
+          {reporte?.profesores_eliminados?.length > 0 && (
+          <div style={s.seccionReporte}>
+            <h2 style={s.subtitulo}>Profesores Dados de Baja (Histórico)</h2>
+            <div style={s.wrapperTabla}>
+              <table style={s.tabla}>
+                <thead>
+                  <tr>
+                    <th style={s.thOrdenable}>Nombre</th>
+                    <th style={s.thOrdenable}>Fecha de Baja</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reporte.profesores_eliminados.map((p, i) => (
+                    <tr key={i}>
+                      <td style={s.td}>{p.nombre}</td>
+                      <td style={s.td}>{new Date(p.fecha_baja).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
               Retención de Alumno por Profesor (Clases Fijas)
-              <span style={s.badgeGlobalTitulo}>Últimas 4 Semanas Fijas</span>
+              {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Últimas 4 Semanas Fijas</span>}
             </h2>
             <p style={s.bajada}>Mide la consistencia de los alumnos mes a mes en clases estables, independientemente del rango de fechas superior.</p>
             
-            {reporte.retencion?.length > 0 ? (
+            {profesoresRetencionFiltrados?.length > 0 ? (
               <div style={s.wrapperTabla}>
                 <table style={s.tabla}>
                   <thead>
@@ -196,7 +245,7 @@ export default function StaffReportes() {
                     </tr>
                   </thead>
                   <tbody>
-                    {reporte.retencion.map((r, i) => (
+                    {profesoresRetencionFiltrados.map((r, i) => (
                       <tr key={i}>
                         <td style={s.td}><strong>{r.profesor}</strong></td>
                         <td style={s.td}>{r.clase}</td>
@@ -210,7 +259,7 @@ export default function StaffReportes() {
                 </table>
               </div>
             ) : (
-              <ReportesEmptyState entidad="clases fijas para analizar retención" filtroEspecialidad="" />
+              <ReportesEmptyState entidad="clases fijas para analizar retención" filtroEspecialidad={filtroEspecialidad} />
             )}
           </div>
 
