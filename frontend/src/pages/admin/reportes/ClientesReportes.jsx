@@ -52,15 +52,38 @@ export default function ClientesReportes() {
 
   const hayDatos = totales.inscripciones > 0;
 
-// LECTURA REAL DESDE EL BACKEND (Con validación de nulos)
-  const mockSancionesEstadisticas = reporte?.sanciones_estadisticas || {
-    tresFaltas: 0,
-    cincuentaPorciento: 0,
-    otrosMotivos: 0,
-    reincidentes: 0,
-    masAntiguo: { nombre: '-', fecha: '-' },
-    masReciente: { nombre: '-', fecha: '-' }
-  };
+ // LECTURA DINÁMICA Y CÁLCULO DE SANCIONES
+  const statsSanciones = React.useMemo(() => {
+    // Valores por defecto si no hay reporte
+    const fallback = {
+      tresFaltas: 0,
+      cincuentaPorciento: 0,
+      otrosMotivos: 0,
+      reincidentes: reporte?.sanciones_estadisticas?.reincidentes || 0,
+      masAntiguo: reporte?.sanciones_estadisticas?.masAntiguo || { nombre: '-', fecha: '-' },
+      masReciente: reporte?.sanciones_estadisticas?.masReciente || { nombre: '-', fecha: '-' }
+    };
+
+    if (!reporte?.sancionados || reporte.sancionados.length === 0) {
+      return fallback;
+    }
+
+    const contadores = { tresFaltas: 0, cincuentaPorciento: 0, otrosMotivos: 0 };
+
+    reporte.sancionados.forEach(user => {
+      const motivoStr = user.motivo?.toLowerCase() || '';
+      
+      if (motivoStr.includes('3 faltas') || motivoStr.includes('tres faltas')) {
+        contadores.tresFaltas++;
+      } else if (motivoStr.includes('50%') || motivoStr.includes('cincuenta')) {
+        contadores.cincuentaPorciento++;
+      } else {
+        contadores.otrosMotivos++;
+      }
+    });
+
+    return { ...fallback, ...contadores };
+  }, [reporte]);
 
   return (
     <div style={s.contenedor}>
@@ -196,8 +219,7 @@ export default function ClientesReportes() {
               <ReportesEmptyState entidad="flujos de asistencia" filtroEspecialidad={filtroEspecialidad} />
             )}
           </div>
-
-          {/* SANCIONADOS (Se mantiene siempre visible al ser global) */}
+          {/* SECCIÓN SANCIONADOS */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
               Cuentas Suspendidas por Inasistencia
@@ -208,30 +230,37 @@ export default function ClientesReportes() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>POR +3 FALTAS</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{mockSancionesEstadisticas.tresFaltas}</p>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>
+                  {statsSanciones.tresFaltas}
+                </p>
               </div>
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>AUSENCIA &gt; 50%</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{mockSancionesEstadisticas.cincuentaPorciento}</p>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>
+                  {statsSanciones.cincuentaPorciento}
+                </p>
               </div>
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>OTROS MOTIVOS</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{mockSancionesEstadisticas.otrosMotivos}</p>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>
+                  {statsSanciones.otrosMotivos}
+                </p>
               </div>
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>REINCIDENTES (2+)</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{mockSancionesEstadisticas.reincidentes}</p>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>
+                  {statsSanciones.reincidentes}
+                </p>
               </div>
             </div>
-
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', background: '#f0fbfb', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)', marginBottom: '24px' }}>
               <div>
                 <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Récord más antiguo:</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>{mockSancionesEstadisticas.masAntiguo.nombre} ({mockSancionesEstadisticas.masAntiguo.fecha})</span>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>{statsSanciones.masAntiguo.nombre} ({statsSanciones.masAntiguo.fecha})</span>
               </div>
               <div>
                 <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Suspensión más reciente:</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>{mockSancionesEstadisticas.masReciente.nombre} ({mockSancionesEstadisticas.masReciente.fecha})</span>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>{statsSanciones.masReciente.nombre} ({statsSanciones.masReciente.fecha})</span>
               </div>
             </div>
 

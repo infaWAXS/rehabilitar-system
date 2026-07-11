@@ -16,3 +16,12 @@ export async function getStatisticsReport(fechaInicio, fechaFin) {
   // apiClient devuelve { data: payload }, extraemos la data
   return response.data;
 }
+
+
+export async function getFinancialReport(fechaInicio, fechaFin) {
+  // apiClient ya debería tener interceptores para inyectar el token automáticamente
+  // Cambiamos a la URL relativa y usamos el apiClient configurado
+  const response = await apiClient.get(`/api/reports/finances?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  
+  return response.data;
+}

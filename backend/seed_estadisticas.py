@@ -8,6 +8,9 @@ from app.models.room import Room
 from app.models.activity import Activity
 from app.models.attendance import Attendance
 
+# 🚨 IMPORTANTE: Verificá que la ruta de importación coincida con tu estructura
+from app.models.user_suspension import UserSuspension 
+
 def seed_estadisticas(db: Session):
     print("⏳ Iniciando carga de datos estadísticos estacionales (Ene-Jun 2026)...")
 
@@ -35,7 +38,6 @@ def seed_estadisticas(db: Session):
     clientes_creados = []
 
     # 2. Distribución de Nuevos Registros según las reglas del negocio para 2026
-    # Definimos cuántos usuarios crear por mes
     distribucion_usuarios = {
         1: 5,   # Enero: Pocos ingresos
         2: 25,  # Febrero: Explota de gente
@@ -49,10 +51,10 @@ def seed_estadisticas(db: Session):
     for mes, cant_usuarios in distribucion_usuarios.items():
         for _ in range(cant_usuarios):
             alumno_idx += 1
-            # Generamos un día aleatorio dentro del mes correspondiente del año 2026
             dia_random = random.randint(1, 28)
             fecha_registro = datetime(2026, mes, dia_random, random.randint(9, 19), random.randint(0, 59))
             
+            # 1 de cada 15 usuarios nace con la cuenta deshabilitada
             status_cuenta = "disabled" if alumno_idx % 15 == 0 else "active"
             email_random = f"alumno{alumno_idx}_{random.randint(100,999)}@rehabilitar.com"
 
@@ -70,10 +72,63 @@ def seed_estadisticas(db: Session):
             clientes_creados.append(nuevo_usuario)
     db.commit()
 
+    # =========================================================================
+    # 2.5 GENERACIÓN DE HISTORIAL DE SUSPENSIONES Y REACTIVACIONES
+    # =========================================================================
+    print("⏳ Generando historial de suspensiones y reactivaciones...")
+    
+    razones_suspension = [
+        "Inasistencia mayor al 50%", 
+        "Acumulación de 3 faltas consecutivas", 
+        "Falta de pago de arancel", 
+        "Incumplimiento de normas del centro"
+    ]
+    
+    razones_reintegro = [
+        "Pago regularizado exitosamente", 
+        "Alta médica presentada y aprobada", 
+        "Reactivación manual por la administración",
+        "Compromiso de asistencia firmado"
+    ]
+
+    for cliente in clientes_creados:
+        # CASO A: Usuario actualmente deshabilitado -> Suspensión ACTIVA
+        if cliente.account_status == "disabled":
+            fecha_suspension = cliente.created_at + timedelta(days=random.randint(5, 15))
+            
+            suspension_activa = UserSuspension(
+                user_id=cliente.id,
+                suspension_date=fecha_suspension,
+                suspension_reason=random.choice(razones_suspension),
+                is_active=True,
+                reinstatement_date=None,
+                reinstatement_reason=None
+            )
+            db.add(suspension_activa)
+
+        # CASO B: Usuario activo, pero con historial de suspensión (Muestra reducida)
+        elif cliente.id % 8 == 0: 
+            fecha_suspension = cliente.created_at + timedelta(days=random.randint(2, 10))
+            duracion_sancion = random.randint(3, 20) 
+            fecha_reintegro = fecha_suspension + timedelta(days=duracion_sancion)
+            
+            # Solo guardamos el historial si la fecha de reintegro es coherente (pasada)
+            if fecha_reintegro < datetime(2026, 7, 1):
+                suspension_pasada = UserSuspension(
+                    user_id=cliente.id,
+                    suspension_date=fecha_suspension,
+                    suspension_reason=random.choice(razones_suspension),
+                    is_active=False,
+                    reinstatement_date=fecha_reintegro,
+                    reinstatement_reason=random.choice(razones_reintegro)
+                )
+                db.add(suspension_pasada)
+                
+    db.commit()
+
     # 3. Asignar Suscripciones/Planes según el mes de registro
     for cliente in clientes_creados:
         if cliente.account_status == "active":
-            # El plan arranca un par de días después de registrarse
             fecha_inicio = cliente.created_at.date() + timedelta(days=random.randint(0, 2))
             fecha_fin = fecha_inicio + timedelta(days=30)
             
@@ -94,12 +149,11 @@ def seed_estadisticas(db: Session):
         print("⚠️ No hay salas creadas.")
         return
 
-    # 5. Generar Actividades Históricas (Distribuidas de Enero a Junio de 2026)
+    # 5. Generar Actividades Históricas
     profesores_staff = ["Carlos Gómez", "María Rodríguez", "Juan Pérez", "Marcos Profesor"]
     especialidades_tren = ["Tren Superior", "Tren Inferior", "Tren Medio"]
     actividades_creadas = []
 
-    # Repartimos la oferta de clases: Enero tiene menos oferta, Febrero y el resto tienen más regularidad
     distribucion_clases = {1: 6, 2: 15, 3: 12, 4: 12, 5: 12, 6: 12}
 
     act_idx = 0
@@ -129,26 +183,20 @@ def seed_estadisticas(db: Session):
     for actividad in actividades_creadas:
         mes_actual = actividad.specific_date.month
         
-        # Ajustamos los pesos de asistencia según tu estacionalidad
         if mes_actual == 1:
-            # Enero: Poca concurrencia (40% de que vayan, 60% ausente/cancelado)
             pesos_asistencia = [40, 60]
-            rango_anotados = (2, 4) # Menos gente anotada por clase
+            rango_anotados = (2, 4)
         elif mes_actual == 2:
-            # Febrero: Aumenta la concurrencia a full (85% presente, 15% ausente)
             pesos_asistencia = [85, 15]
-            rango_anotados = (7, 10) # Clases casi llenas
+            rango_anotados = (7, 10)
         else:
-            # Marzo a Junio: Se estabiliza la asistencia en un ritmo intermedio/alto regular
             pesos_asistencia = [75, 25]
-            rango_anotados = (5, 8) # Ocupación normal y estable
+            rango_anotados = (5, 8)
 
-        # Filtramos alumnos que ya estuvieran creados en el sistema para esa fecha
         alumnos_disponibles = [u for u in clientes_creados if u.created_at.date() <= actividad.specific_date]
         if not alumnos_disponibles:
             continue
 
-        # Seleccionamos cuántos se anotaron a esta clase en base al mes
         cant_anotados = min(random.randint(*rango_anotados), len(alumnos_disponibles))
         alumnos_anotados = random.sample(alumnos_disponibles, cant_anotados)
 

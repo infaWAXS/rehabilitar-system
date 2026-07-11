@@ -1,6 +1,6 @@
 # app/services/servicio_reportes.py
 import random
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from app.models.user import User
@@ -10,6 +10,8 @@ from app.models.activity import Activity
 from app.models.attendance import Attendance
 from app.models.room import Room
 from app.models.user_suspension import UserSuspension
+import calendar
+
 
 def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_fin: date):
     datetime_inicio = datetime.combine(fecha_inicio, datetime.min.time())
@@ -60,6 +62,40 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
 
     especialidades_db = db.query(Activity.specialization).distinct().filter(Activity.specialization.isnot(None)).all()
     lista_especialidades = [esp[0] for esp in especialidades_db if esp[0]]
+
+# [NUEVO] 1. Suscripciones activas en el rango (Se cruzó la fecha de inicio/fin del plan con el rango)
+    suscripciones_activas = db.query(func.count(UserPlan.id)).filter(
+        UserPlan.start_date <= fecha_fin,
+        UserPlan.end_date >= fecha_inicio
+    ).scalar() or 0
+
+ # [NUEVO] 2. Desglose de ingresos
+    # A. Ingresos por planes (Mantenemos tu lógica, pero casteado a float)
+    ingresos_planes_db = db.query(func.sum(Plan.price)).\
+        join(UserPlan, UserPlan.plan_id == Plan.id).\
+        filter(UserPlan.start_date.between(fecha_inicio, fecha_fin)).\
+        scalar() or 0.0
+    ingresos_planes = float(ingresos_planes_db)
+        
+    # B. Ingresos por clases individuales (Casteado a float)
+    ingresos_individuales_db = db.query(func.sum(Activity.price)).\
+        join(Attendance, Attendance.activity_id == Activity.id).\
+        filter(
+            Activity.activity_type == 'individual',
+            Attendance.status == 'present',
+            Attendance.timestamp.between(datetime_inicio, datetime_fin)
+        ).scalar() or 0.0
+    ingresos_individuales = float(ingresos_individuales_db)
+        
+    # C. Ingresos por Señas
+    ingresos_senas = 0.0 
+
+    # Total general unificado (ahora son todos floats, no va a crashear)
+    ingresos_totales_reales = ingresos_planes + ingresos_individuales + ingresos_senas
+
+    # Promedio
+    ingreso_promedio = (ingresos_totales_reales / suscripciones_activas) if suscripciones_activas > 0 else 0.0
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # 2. RENDIMIENTO POR ESPECIALIDAD (TABLAS 1 Y 2)
@@ -455,6 +491,16 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
             "datos": cronologia_lista
         },
         "mapa_calor": mapa_calor_datos,
-        "mapa_infraestructura": mapa_infraestructura_datos
+        "mapa_infraestructura": mapa_infraestructura_datos,
+        "finanzas": {
+            "ingresos_totales": float(ingresos_totales_reales),
+            "suscripciones_activas": suscripciones_activas,
+            "ingreso_promedio": float(ingreso_promedio),
+            "desglose": {
+                "planes": float(ingresos_planes),
+                "individuales": float(ingresos_individuales),
+                "senas": float(ingresos_senas)
+            }
+        }
     }
     
