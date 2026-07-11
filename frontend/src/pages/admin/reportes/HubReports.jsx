@@ -107,7 +107,7 @@ export default function HubReports() {
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Ingresos por Planes</span>
               <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>
-                ${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                ${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </p>
             </div>
             <div style={s.tarjetaMini}>
