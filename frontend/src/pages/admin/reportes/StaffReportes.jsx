@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getStatisticsReport } from '../../../services/reportsService';
+import { getStaffReport } from '../../../services/reportsService';
 import { s } from './reportesStyles';
 import ReportesHeader from './components/ReportesHeader';
 import ReportesExportar from './components/ReportesExportar';
@@ -18,7 +18,7 @@ export default function StaffReportes() {
     setErrorValidacion(''); setReporte(null); setFiltroEspecialidad('');
     try {
       setCargando(true);
-      const data = await getStatisticsReport(inicio, fin);
+      const data = await getStaffReport(inicio, fin);
       setReporte(data);
     } catch (err) {
       setErrorValidacion(err.message || 'No se pudo procesar el reporte.');
