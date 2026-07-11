@@ -66,7 +66,6 @@ export default function StaffReportes() {
   const opcionesEspecialidades = reporte?.clases_lista ? [...new Set(reporte.clases_lista.map(c => c.tipo))].sort() : [];
   const profesoresOrdenados = reporte ? procesarOrdenamiento(reporte.profesores_mayor_concurrencia, sortProfesores, filtroEspecialidad) : [];
   
-  // CÁLCULO ESTRICTO DE TOTALES
   let totalAtendidosGlobal = 0;
   let totalCanceladosGlobal = 0;
   let totalClasesDictadasGlobal = 0;
@@ -79,7 +78,6 @@ export default function StaffReportes() {
     const cupos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.uso_cupos ?? 0.0) : p.porcentaje_ocupacion_clases;
     const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
     
-    // Solo sumamos si dicta clases en este filtro
     if (clasesDictadas > 0) {
       totalAtendidosGlobal += atendidos;
       totalCanceladosGlobal += cancelados;
@@ -92,10 +90,13 @@ export default function StaffReportes() {
   const promedioCuposGlobal = countProfesConClases > 0 ? (sumaCupos / countProfesConClases).toFixed(1) : 0;
   const hayDatos = totalClasesDictadasGlobal > 0;
 
-  // FILTRO DE RETENCIÓN POR ESPECIALIDAD (Máx 10)
   const profesoresRetencionFiltrados = reporte?.retencion?.filter(r => {
     return filtroEspecialidad ? r.especialidad === filtroEspecialidad : true;
   }).slice(0, 10);
+
+  const absentismoFiltrado = reporte?.absentismo?.filter(a => {
+    return filtroEspecialidad ? a.especialidad === filtroEspecialidad : true;
+  }) || [];
 
   return (
     <div style={s.contenedor}>
@@ -149,7 +150,7 @@ export default function StaffReportes() {
                       <th style={s.thOrdenable} onClick={() => cambiarOrden('nombre')}>Kinesiólogo</th>
                       <th style={s.thOrdenable} onClick={() => cambiarOrden('total_alumnos_atendidos')}>Alumnos Atendidos</th>
                       <th style={s.thOrdenable} onClick={() => cambiarOrden('total_cancelaciones_recibidas')}>Ausencias</th>
-                      <th style={s.thOrdenable} onClick={() => cambiarOrden('cantidad_clases_dictadas')}>Clases Dadas</th> {/* COLUMNA MOVIDA ANTES DE CUPOS */}
+                      <th style={s.thOrdenable} onClick={() => cambiarOrden('cantidad_clases_dictadas')}>Clases Dadas</th>
                       <th style={s.thOrdenable} onClick={() => cambiarOrden('porcentaje_ocupacion_clases')}>Uso de Cupos</th>
                     </tr>
                   </thead>
@@ -176,7 +177,6 @@ export default function StaffReportes() {
                       );
                     })}
 
-                    {/* FILA DE TOTALES CALCULADA CORRECTAMENTE */}
                     <tr style={{ background: '#f8fafc', borderTop: '2px solid var(--color-borde)', fontWeight: 'bold' }}>
                       <td style={{ ...s.td, color: 'var(--color-primario-oscuro)' }}><strong>Totales / Promedios</strong></td>
                       <td style={s.td}>{totalAtendidosGlobal}</td>
@@ -200,29 +200,73 @@ export default function StaffReportes() {
             )}
           </div>
 
-          {reporte?.profesores_eliminados?.length > 0 && (
           <div style={s.seccionReporte}>
-            <h2 style={s.subtitulo}>Profesores Dados de Baja (Histórico)</h2>
-            <div style={s.wrapperTabla}>
-              <table style={s.tabla}>
-                <thead>
-                  <tr>
-                    <th style={s.thOrdenable}>Nombre</th>
-                    <th style={s.thOrdenable}>Fecha de Baja</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reporte.profesores_eliminados.map((p, i) => (
-                    <tr key={i}>
-                      <td style={s.td}>{p.nombre}</td>
-                      <td style={s.td}>{new Date(p.fecha_baja).toLocaleDateString()}</td>
+            <h2 style={s.subtitulo}>
+              Absentismo del Staff (Registro de Faltas)
+              {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
+            </h2>
+            <p style={s.bajada}>Muestra a los profesionales que tomaron una actividad pero finalizaron dándose de baja (sin volver a recuperarla).</p>
+            
+            {absentismoFiltrado.length > 0 ? (
+              <div style={s.wrapperTabla}>
+                <table style={s.tabla}>
+                  <thead>
+                    <tr>
+                      <th style={s.thOrdenable}>Profesor</th>
+                      <th style={s.thOrdenable}>Clase Ausentada</th>
+                      <th style={s.thOrdenable}>Fecha Actividad</th>
+                      <th style={s.thOrdenable}>Especialidad</th>
+                      <th style={s.thOrdenable}>Última Acción (Baja)</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {absentismoFiltrado.map((a, i) => (
+                      <tr key={i}>
+                        <td style={s.td}><strong>{a.profesor}</strong></td>
+                        <td style={s.td}>{a.clase}</td>
+                        <td style={s.td}>
+                          <span style={{ fontSize: '13px', color: '#475569' }}>{a.fecha_actividad}</span>
+                        </td>
+                        <td style={s.td}>{a.especialidad}</td>
+                        <td style={s.td}>
+                          {/* SPLIT POR EL PUNTO DE LOS MILISEGUNDOS */}
+                          <span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>
+                            {a.fecha_baja ? String(a.fecha_baja).split('.')[0] : '-'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <ReportesEmptyState entidad="faltas registradas en el personal" filtroEspecialidad={filtroEspecialidad} />
+            )}
           </div>
-        )}
+
+          {reporte?.profesores_eliminados?.length > 0 && (
+            <div style={s.seccionReporte}>
+              <h2 style={s.subtitulo}>Profesores Dados de Baja (Histórico)</h2>
+              <div style={s.wrapperTabla}>
+                <table style={s.tabla}>
+                  <thead>
+                    <tr>
+                      <th style={s.thOrdenable}>Nombre</th>
+                      <th style={s.thOrdenable}>Fecha de Baja</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reporte.profesores_eliminados.map((p, i) => (
+                      <tr key={i}>
+                        <td style={s.td}>{p.nombre}</td>
+                        <td style={s.td}>{new Date(p.fecha_baja).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
