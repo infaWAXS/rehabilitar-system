@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getStatisticsReport } from '../../../services/reportsService';
+import { getClientsReport } from '../../../services/reportsService';
 import { s } from './reportesStyles';
 import ReportesHeader from './components/ReportesHeader';
 import ReportesExportar from './components/ReportesExportar';
@@ -19,7 +19,7 @@ export default function ClientesReportes() {
     setErrorValidacion(''); setReporte(null); setFiltroEspecialidad('');
     try {
       setCargando(true);
-      const data = await getStatisticsReport(inicio, fin);
+      const data = await getClientsReport(inicio, fin);
       setReporte(data);
     } catch (err) {
       setErrorValidacion(err.message || 'No se pudo procesar el reporte.');
@@ -52,27 +52,24 @@ export default function ClientesReportes() {
 
   const hayDatos = totales.inscripciones > 0;
 
- // LECTURA DINÁMICA Y CÁLCULO DE SANCIONES
+// LECTURA DINÁMICA Y CÁLCULO DE SANCIONES
   const statsSanciones = React.useMemo(() => {
-    // Valores por defecto si no hay reporte
-    const fallback = {
-      tresFaltas: 0,
-      cincuentaPorciento: 0,
-      otrosMotivos: 0,
-      reincidentes: reporte?.sanciones_estadisticas?.reincidentes || 0,
-      masAntiguo: reporte?.sanciones_estadisticas?.masAntiguo || { nombre: '-', fecha: '-' },
-      masReciente: reporte?.sanciones_estadisticas?.masReciente || { nombre: '-', fecha: '-' }
-    };
-
+    // 1. Si la tabla está vacía en este rango, forzamos todo a 0 y vacío
     if (!reporte?.sancionados || reporte.sancionados.length === 0) {
-      return fallback;
+      return {
+        tresFaltas: 0,
+        cincuentaPorciento: 0,
+        otrosMotivos: 0,
+        reincidentes: 0,
+        masAntiguo: { nombre: '-', fecha: '' },
+        masReciente: { nombre: '-', fecha: '' }
+      };
     }
 
+    // 2. Si hay datos, calculamos los contadores
     const contadores = { tresFaltas: 0, cincuentaPorciento: 0, otrosMotivos: 0 };
-
     reporte.sancionados.forEach(user => {
       const motivoStr = user.motivo?.toLowerCase() || '';
-      
       if (motivoStr.includes('3 faltas') || motivoStr.includes('tres faltas')) {
         contadores.tresFaltas++;
       } else if (motivoStr.includes('50%') || motivoStr.includes('cincuenta')) {
@@ -82,8 +79,17 @@ export default function ClientesReportes() {
       }
     });
 
-    return { ...fallback, ...contadores };
+    // 3. Retornamos los contadores + los récords del backend
+    return { 
+      ...contadores,
+      reincidentes: reporte.sanciones_estadisticas?.reincidentes || 0,
+      masAntiguo: reporte.sanciones_estadisticas?.masAntiguo || { nombre: '-', fecha: '' },
+      masReciente: reporte.sanciones_estadisticas?.masReciente || { nombre: '-', fecha: '' }
+    };
   }, [reporte]);
+
+
+  const motivosOcultos = ["Acumulación De 3 Faltas Consecutivas", "Inasistencia mayor al 50%"];
 
   return (
     <div style={s.contenedor}>
@@ -256,33 +262,44 @@ export default function ClientesReportes() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', background: '#f0fbfb', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)', marginBottom: '24px' }}>
               <div>
                 <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Récord más antiguo:</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>{statsSanciones.masAntiguo.nombre} ({statsSanciones.masAntiguo.fecha})</span>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
+                  {statsSanciones.masAntiguo.nombre !== '-' ? `${statsSanciones.masAntiguo.nombre} (${statsSanciones.masAntiguo.fecha})` : '-'}
+                </span>
               </div>
               <div>
                 <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Suspensión más reciente:</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>{statsSanciones.masReciente.nombre} ({statsSanciones.masReciente.fecha})</span>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
+                  {statsSanciones.masReciente.nombre !== '-' ? `${statsSanciones.masReciente.nombre} (${statsSanciones.masReciente.fecha})` : '-'}
+                </span>
               </div>
             </div>
 
             <div style={s.wrapperTabla}>
-              <table style={s.tabla}>
-                <thead>
-                  <tr>
-                    <th style={s.thOrdenable}>Nombre</th>
-                    <th style={s.thOrdenable}>Motivo de la Suspensión</th>
-                    <th style={s.thOrdenable}>Inicio de Suspensión</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reporte.sancionados?.map((user, idx) => (
+             <table style={s.tabla}>
+              <thead>
+                <tr>
+                  <th style={s.thOrdenable}>Nombre</th>
+                  <th style={s.thOrdenable}>Motivo de la Suspensión</th>
+                  <th style={s.thOrdenable}>Inicio de Suspensión</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Aplicamos el filtro aquí mismo */}
+                {reporte.sancionados
+                  ?.filter(user => !motivosOcultos.includes(user.motivo)) 
+                  .map((user, idx) => (
                     <tr key={idx}>
                       <td style={s.td}><strong>{user.nombre}</strong></td>
                       <td style={s.td}>{user.motivo}</td>
-                      <td style={s.td}><span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{user.fecha_inicio}</span></td>
+                      <td style={s.td}>
+                        <span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>
+                          {user.fecha_inicio}
+                        </span>
+                      </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
+              </tbody>
+            </table>
             </div>
           </div>
 

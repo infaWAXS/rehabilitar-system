@@ -25,3 +25,8 @@ export async function getFinancialReport(fechaInicio, fechaFin) {
   
   return response.data;
 }
+
+export async function getClientsReport(fechaInicio, fechaFin) {
+  const response = await apiClient.get(`/api/reports/clients?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  return response.data;
+}
