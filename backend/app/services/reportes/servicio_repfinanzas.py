@@ -1,4 +1,4 @@
-# app/services/servicio_repfinanzas.py
+# app/services/reportes/servicio_repfinanzas.py
 import calendar
 from datetime import date, datetime, timedelta
 from sqlalchemy import func
@@ -12,8 +12,12 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
     datetime_inicio = datetime.combine(fecha_inicio, datetime.min.time())
     datetime_fin = datetime.combine(fecha_fin, datetime.max.time())
 
+    # Obtenemos las especialidades disponibles para el filtro
+    especialidades_db = db.query(Activity.specialization).distinct().filter(Activity.specialization.isnot(None)).all()
+    lista_especialidades = [esp[0] for esp in especialidades_db if esp[0]]
+
     # ──────────────────────────────────────────────────────────────────────────
-    # 1. TARJETAS DE RESUMEN Y DESGLOSE
+    # 1. TARJETAS DE RESUMEN Y DESGLOSE GLOBAL
     # ──────────────────────────────────────────────────────────────────────────
     suscripciones_activas = db.query(func.count(UserPlan.id)).filter(
         UserPlan.start_date <= fecha_fin,
@@ -34,6 +38,17 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
     ingresos_totales_reales = ingresos_planes + ingresos_individuales + ingresos_senas
     ingreso_promedio = (ingresos_totales_reales / suscripciones_activas) if suscripciones_activas > 0 else 0.0
 
+    # Desglose de ingresos individuales POR ESPECIALIDAD para el filtro
+    ing_indiv_global_esp_db = db.query(
+        Activity.specialization, func.sum(Activity.price)
+    ).join(Attendance, Attendance.activity_id == Activity.id).filter(
+        Activity.activity_type == 'individual',
+        Attendance.status == 'present',
+        Attendance.timestamp.between(datetime_inicio, datetime_fin)
+    ).group_by(Activity.specialization).all()
+    
+    ingresos_individuales_por_esp = {e[0] or "General": float(e[1] or 0.0) for e in ing_indiv_global_esp_db}
+
     # ──────────────────────────────────────────────────────────────────────────
     # 2. EVOLUCIÓN FINANCIERA TEMPORAL
     # ──────────────────────────────────────────────────────────────────────────
@@ -48,20 +63,24 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
             dt_ini = datetime.combine(dia_evaluado, datetime.min.time())
             dt_fin = datetime.combine(dia_evaluado, datetime.max.time())
 
-            # Validación de nulos (None) en bucle diario
             ing_planes_dia_db = db.query(func.sum(Plan.price)).join(UserPlan, UserPlan.plan_id == Plan.id).filter(UserPlan.start_date == dia_evaluado).scalar()
             ing_planes_dia = float(ing_planes_dia_db) if ing_planes_dia_db else 0.0
 
             ing_indiv_dia_db = db.query(func.sum(Activity.price)).join(Attendance, Attendance.activity_id == Activity.id).filter(
-                Activity.activity_type == 'individual', 
-                Attendance.status == 'present', 
-                Attendance.timestamp.between(dt_ini, dt_fin)
+                Activity.activity_type == 'individual', Attendance.status == 'present', Attendance.timestamp.between(dt_ini, dt_fin)
             ).scalar()
             ing_indiv_dia = float(ing_indiv_dia_db) if ing_indiv_dia_db else 0.0
 
+            # Sub-consulta por especialidad para este día
+            ing_esp_dia_db = db.query(Activity.specialization, func.sum(Activity.price)).join(Attendance, Attendance.activity_id == Activity.id).filter(
+                Activity.activity_type == 'individual', Attendance.status == 'present', Attendance.timestamp.between(dt_ini, dt_fin)
+            ).group_by(Activity.specialization).all()
+            ing_esp_dia = {e[0] or "General": float(e[1] or 0.0) for e in ing_esp_dia_db}
+
             cronologia_lista.append({
                 "mes_corto": f"{dia_evaluado.day} {meses_mapeo[dia_evaluado.month]}",
-                "ingresos_brutos": ing_planes_dia + ing_indiv_dia
+                "ingresos_brutos": ing_planes_dia + ing_indiv_dia,
+                "por_especialidad": ing_esp_dia
             })
     else:
         granularidad_texto = "Mensual"
@@ -81,15 +100,20 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
             ing_planes_mes = float(ing_planes_mes_db) if ing_planes_mes_db else 0.0
 
             ing_indiv_mes_db = db.query(func.sum(Activity.price)).join(Attendance, Attendance.activity_id == Activity.id).filter(
-                Activity.activity_type == 'individual', 
-                Attendance.status == 'present', 
-                Attendance.timestamp.between(dt_ini, dt_fin)
+                Activity.activity_type == 'individual', Attendance.status == 'present', Attendance.timestamp.between(dt_ini, dt_fin)
             ).scalar()
             ing_indiv_mes = float(ing_indiv_mes_db) if ing_indiv_mes_db else 0.0
 
+            # Sub-consulta por especialidad para este mes
+            ing_esp_mes_db = db.query(Activity.specialization, func.sum(Activity.price)).join(Attendance, Attendance.activity_id == Activity.id).filter(
+                Activity.activity_type == 'individual', Attendance.status == 'present', Attendance.timestamp.between(dt_ini, dt_fin)
+            ).group_by(Activity.specialization).all()
+            ing_esp_mes = {e[0] or "General": float(e[1] or 0.0) for e in ing_esp_mes_db}
+
             cronologia_lista.append({
                 "mes_corto": f"{meses_mapeo[fecha_iter_ini.month]} {str(fecha_iter_ini.year)[2:]}",
-                "ingresos_brutos": ing_planes_mes + ing_indiv_mes
+                "ingresos_brutos": ing_planes_mes + ing_indiv_mes,
+                "por_especialidad": ing_esp_mes
             })
 
             if fecha_iter_ini.month == 12:
@@ -98,35 +122,37 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
                 fecha_iter_ini = date(fecha_iter_ini.year, fecha_iter_ini.month + 1, 1)
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 3. RANKINGS (TOP 5)
+    # 3. RANKINGS (Enviamos TODOS para que el Frontend filtre el Top 5)
     # ──────────────────────────────────────────────────────────────────────────
-    top_clases_db = db.query(
+    todas_clases_db = db.query(
         Activity.name.label('nombre'),
+        Activity.specialization.label('especialidad'),
         func.sum(Activity.price).label('recaudacion')
     ).join(Attendance, Attendance.activity_id == Activity.id).filter(
         Activity.activity_type == 'individual',
         Attendance.status == 'present',
         Attendance.timestamp.between(datetime_inicio, datetime_fin)
-    ).group_by(Activity.name).order_by(func.sum(Activity.price).desc()).limit(5).all()
+    ).group_by(Activity.name, Activity.specialization).all()
 
-    # Validación de nulos (None) en los Rankings
-    top_clases = [{"nombre": c.nombre or "Clase sin nombre", "recaudacion": float(c.recaudacion) if c.recaudacion else 0.0} for c in top_clases_db]
+    todas_clases = [{"nombre": c.nombre or "Clase", "especialidad": c.especialidad or "General", "recaudacion": float(c.recaudacion or 0.0)} for c in todas_clases_db]
 
-    top_profesores_db = db.query(
+    todos_profesores_db = db.query(
         Activity.professor.label('nombre'),
+        Activity.specialization.label('especialidad'),
         func.sum(Activity.price).label('recaudacion')
     ).join(Attendance, Attendance.activity_id == Activity.id).filter(
         Activity.activity_type == 'individual',
         Attendance.status == 'present',
         Attendance.timestamp.between(datetime_inicio, datetime_fin)
-    ).group_by(Activity.professor).order_by(func.sum(Activity.price).desc()).limit(5).all()
+    ).group_by(Activity.professor, Activity.specialization).all()
 
-    top_profesores = [{"nombre": p.nombre or "Profesor no asignado", "recaudacion": float(p.recaudacion) if p.recaudacion else 0.0} for p in top_profesores_db]
+    todos_profesores = [{"nombre": p.nombre or "Profesor", "especialidad": p.especialidad or "General", "recaudacion": float(p.recaudacion or 0.0)} for p in todos_profesores_db]
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4. EMPAQUETADO FINAL
     # ──────────────────────────────────────────────────────────────────────────
     return {
+        "especialidades": lista_especialidades,
         "finanzas": {
             "ingresos_totales": ingresos_totales_reales,
             "suscripciones_activas": suscripciones_activas,
@@ -134,10 +160,11 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
             "desglose": {
                 "planes": ingresos_planes,
                 "individuales": ingresos_individuales,
+                "individuales_por_especialidad": ingresos_individuales_por_esp,
                 "senas": ingresos_senas
             },
-            "top_clases": top_clases,
-            "top_profesores": top_profesores
+            "todas_clases": todas_clases,
+            "todos_profesores": todos_profesores
         },
         "evolucion_temporal": {
             "granularidad": granularidad_texto,
