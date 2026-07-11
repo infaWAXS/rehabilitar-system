@@ -1,10 +1,11 @@
 # app/services/reportes/servicio_repstaff.py
 from datetime import date, datetime, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.activity import Activity
 from app.models.attendance import Attendance
+import re
 
 def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: date):
     datetime_inicio = datetime.combine(fecha_inicio, datetime.min.time())
@@ -109,10 +110,10 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
     
     now_dt = datetime.now()
     rango_semanas = [
-        (now_dt - timedelta(days=28), now_dt - timedelta(days=21)), # Semana 1
-        (now_dt - timedelta(days=21), now_dt - timedelta(days=14)), # Semana 2
-        (now_dt - timedelta(days=14), now_dt - timedelta(days=7)),  # Semana 3
-        (now_dt - timedelta(days=7), now_dt)                        # Semana 4
+        (now_dt - timedelta(days=28), now_dt - timedelta(days=21)), 
+        (now_dt - timedelta(days=21), now_dt - timedelta(days=14)), 
+        (now_dt - timedelta(days=14), now_dt - timedelta(days=7)),  
+        (now_dt - timedelta(days=7), now_dt)                        
     ]
 
     for act in actividades_fijas:
@@ -130,7 +131,6 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
             semanas_data.append(count if count > 0 else "-")
             total_presentes += count
 
-        # Mostrar solo si tuvieron al menos 2 alumnos en total en las 4 semanas
         if total_presentes >= 2:
             prof_name = act.professor if act.professor else "Sin asignar"
             clase_name = getattr(act, 'name', act.specialization) or "Clase Fija"
@@ -138,7 +138,7 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
             retencion_lista.append({
                 "profesor": prof_name,
                 "clase": clase_name,
-                "especialidad": act.specialization or "General", # Dato clave para el filtro del frontend
+                "especialidad": act.specialization or "General",
                 "semana_1": semanas_data[0],
                 "semana_2": semanas_data[1],
                 "semana_3": semanas_data[2],
@@ -146,12 +146,79 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
             })
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4. EMPAQUETADO FINAL
+    # 4. ABSENTISMO DEL STAFF (Basado en audit_logs con Fecha Actividad)
+    # ──────────────────────────────────────────────────────────────────────────
+    absentismo_lista = []
+    try:
+        query_audit = text("""
+            SELECT user_id, action, detail, timestamp 
+            FROM audit_logs 
+            WHERE type = 'ACTIVITY' 
+            AND action IN ('CLAIM_ACTIVITY', 'RESIGN_ACTIVITY')
+            AND timestamp >= :start AND timestamp <= :end
+            ORDER BY timestamp ASC
+        """)
+        result_audit = db.execute(query_audit, {"start": datetime_inicio, "end": datetime_fin}).fetchall()
+        
+        tracking_faltas = {}
+        
+        # Pre-cargamos especialidades y FECHAS DE ACTIVIDAD para join rápido
+        actividades_info = db.query(Activity.id, Activity.specialization, Activity.specific_date, Activity.schedule).all()
+        act_info_map = {}
+        for a in actividades_info:
+            # Si es específica guardamos su fecha, si es fija guardamos su horario/cronograma
+            fecha_act = a.specific_date.strftime("%d/%m/%Y") if a.specific_date else (str(a.schedule) if a.schedule else "Fija")
+            act_info_map[str(a.id)] = {
+                "specialization": a.specialization or "General",
+                "fecha_actividad": fecha_act
+            }
+
+        for row in result_audit:
+            u_id = row.user_id if hasattr(row, 'user_id') else row[0]
+            action = row.action if hasattr(row, 'action') else row[1]
+            detail = row.detail if hasattr(row, 'detail') else row[2]
+            ts = row.timestamp if hasattr(row, 'timestamp') else row[3]
+
+            match = re.search(r"actividad '(.*?)' \(id (\d+)\)", detail)
+            if match:
+                act_name = match.group(1)
+                act_id = match.group(2)
+                key = (u_id, act_id)
+
+                prof_match = re.search(r"Profesor (.*?) (asumió|renunció)", detail)
+                prof_name = prof_match.group(1) if prof_match else f"ID {u_id}"
+
+                info = act_info_map.get(str(act_id), {"specialization": "General", "fecha_actividad": "Desconocida"})
+
+                tracking_faltas[key] = {
+                    "profesor": prof_name,
+                    "clase": act_name,
+                    "especialidad": info["specialization"],
+                    "fecha_actividad": info["fecha_actividad"],
+                    "last_action": action,
+                    "fecha": ts.strftime("%Y-%m-%d %H:%M:%S") if isinstance(ts, datetime) else str(ts)
+                }
+
+        for key, data in tracking_faltas.items():
+            if data["last_action"] == 'RESIGN_ACTIVITY':
+                absentismo_lista.append({
+                    "profesor": data["profesor"],
+                    "clase": data["clase"],
+                    "especialidad": data["especialidad"],
+                    "fecha_actividad": data["fecha_actividad"],
+                    "fecha_baja": data["fecha"]
+                })
+    except Exception as e:
+        print(f"Error procesando audit_logs para absentismo: {e}")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 5. EMPAQUETADO FINAL
     # ──────────────────────────────────────────────────────────────────────────
     return {
         "resumen": resumen,
         "clases_lista": clases_lista,
         "profesores_mayor_concurrencia": profesores_lista,
         "profesores_eliminados": [{"nombre": f"{p.name} {p.lastname}".strip(), "fecha_baja": p.deleted_at} for p in profesores_eliminados],
-        "retencion": retencion_lista
+        "retencion": retencion_lista,
+        "absentismo": absentismo_lista
     }
