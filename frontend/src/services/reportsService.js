@@ -30,3 +30,13 @@ export async function getClientsReport(fechaInicio, fechaFin) {
   const response = await apiClient.get(`/api/reports/clients?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
   return response.data;
 }
+
+export async function getStaffReport(fechaInicio, fechaFin) {
+  const response = await apiClient.get(`/api/reports/staff?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  return response.data;
+}
+
+export async function getRoomsReport(fechaInicio, fechaFin) {
+  const response = await apiClient.get(`/api/reports/rooms?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  return response.data;
+}
