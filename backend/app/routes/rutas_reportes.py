@@ -9,6 +9,7 @@ from app.utils.dependencies import get_current_user, require_role
 # Importamos AMBOS servicios
 from app.services.servicio_reportes import generar_reporte_estadistico_service
 from app.services.servicio_repfinanzas import generar_reporte_financiero_service
+from app.services.servicio_repclientes import generar_reporte_clientes_service
 
 router = APIRouter(
     prefix="/api/reports",
@@ -41,4 +42,13 @@ def get_reporte_financiero(
         
     return generar_reporte_financiero_service(db, fecha_inicio, fecha_fin)
 
-    
+@router.get("/clients")
+def get_reporte_clientes(
+    fecha_inicio: date = Query(..., description="Fecha de inicio (YYYY-MM-DD)"),
+    fecha_fin: date = Query(..., description="Fecha de fin (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["admin"]))
+):
+    if fecha_inicio > fecha_fin:
+        raise HTTPException(status_code=400, detail="Inicio posterior a fin")
+    return generar_reporte_clientes_service(db, fecha_inicio, fecha_fin)
