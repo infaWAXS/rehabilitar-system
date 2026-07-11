@@ -1,5 +1,5 @@
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from fastapi import HTTPException
 from decimal import Decimal
@@ -32,12 +32,17 @@ def _deserializar_fechas(texto: Optional[str]) -> Optional[List[date_cls]]:
 
 
 def _a_response(sugerencia: ActivitySuggestion) -> SuggestionResponse:
+    prof_name = (
+        f"{sugerencia.professor.name} {sugerencia.professor.lastname}"
+        if sugerencia.professor else "Sin asignar"
+    )
+    room_name = sugerencia.room.name if sugerencia.room else "Sin sala"
     return SuggestionResponse(
         id=sugerencia.id,
         professor_id=sugerencia.professor_id,
-        professor_name=f"{sugerencia.professor.name} {sugerencia.professor.lastname}",
+        professor_name=prof_name,
         room_id=sugerencia.room_id,
-        room_name=sugerencia.room.name,
+        room_name=room_name,
         name=sugerencia.name,
         specialization=sugerencia.specialization,
         activity_type=sugerencia.activity_type,
@@ -101,6 +106,10 @@ def listar_sugerencias_pendientes(db: Session) -> List[SuggestionResponse]:
     """Lista las sugerencias que todavía no fueron aceptadas ni rechazadas."""
     sugerencias = (
         db.query(ActivitySuggestion)
+        .options(
+            joinedload(ActivitySuggestion.professor),
+            joinedload(ActivitySuggestion.room),
+        )
         .filter(ActivitySuggestion.status == "pending")
         .order_by(ActivitySuggestion.id)
         .all()

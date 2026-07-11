@@ -660,7 +660,7 @@ function InscribirActividad() {
               {resultado.tipo === 'confirmada' && (
                 <>
                   <div style={s.exito}>OK - {resultado.mensaje}</div>
-                  <div style={s.infoBox('green')}>Tu inscripcion quedo confirmada. Podes verla en Mis Reservas.</div>
+                  <div style={s.infoBox('green')}>Tu inscripción quedo confirmada. Podes verla en Mis Reservas.</div>
                 </>
               )}
               {resultado.tipo === 'pendiente' && (
