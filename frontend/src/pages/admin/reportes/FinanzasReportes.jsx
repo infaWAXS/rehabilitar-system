@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { getStatisticsReport } from '../../../services/reportsService';
+// IMPORTANTE: Importar la nueva función del servicio
+import { getFinancialReport } from '../../../services/reportsService';
 import { s } from './reportesStyles';
 import ReportesHeader from './components/ReportesHeader';
 import ReportesExportar from './components/ReportesExportar';
@@ -17,7 +18,8 @@ export default function FinanzasReportes() {
     setReporte(null);
     try {
       setCargando(true);
-      const data = await getStatisticsReport(inicio, fin);
+      // Usamos el nuevo servicio que le pega a /finances
+      const data = await getFinancialReport(inicio, fin);
       setReporte(data);
     } catch (err) {
       setErrorValidacion(err.message || 'No se pudo procesar el reporte financiero.');
@@ -39,9 +41,9 @@ export default function FinanzasReportes() {
     consultarFechas(fechaInicio, fechaFin);
   };
 
-  // Validamos si hay ingresos en el rango total o en el desglose mensual
+  // Validamos si hay ingresos en el rango total o en el desglose
   const hayDatos = reporte && (
-    reporte.resumen.ingresos_totales > 0 || 
+    (reporte.finanzas?.ingresos_totales > 0) || 
     (reporte.evolucion_temporal?.datos && reporte.evolucion_temporal.datos.some(d => d.ingresos_brutos > 0))
   );
 
@@ -73,23 +75,35 @@ export default function FinanzasReportes() {
           {hayDatos && (
             <>
               {/* Tarjetas de Resumen Financiero */}
-              <div style={s.gridResumen}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
                 <div style={s.tarjetaMini}>
-                  <span style={s.labelMini}>Ingresos por Planes (Rango)</span>
+                  <span style={s.labelMini}>Ingresos Totales (Rango)</span>
                   <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>
-                    ${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    ${Number(reporte.finanzas?.ingresos_totales || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                {/* Dejamos el espacio listo para el balance de suscripciones activas vs vencidas */}
-                <div style={{ ...s.tarjetaMini, background: '#f8fafc', border: '1px dashed var(--color-borde)', justifyContent: 'center', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-texto-suave)' }}>+ Balance de Suscripciones (Próximamente)</span>
+                
+                <div style={s.tarjetaMini}>
+                  <span style={s.labelMini}>Suscripciones Activas (En Rango)</span>
+                  <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>
+                    {reporte.finanzas?.suscripciones_activas || 0}
+                  </p>
+                </div>
+
+                <div style={s.tarjetaMini}>
+                  <span style={s.labelMini}>Ingreso Promedio por Cliente</span>
+                  <p style={{ ...s.valorMini, color: 'var(--color-texto)' }}>
+                    ${Number(reporte.finanzas?.ingreso_promedio || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </p>
                 </div>
               </div>
 
-              {/* Evolución Financiera Mensual (Conectado a BD) */}
+              {/* Evolución Financiera Mensual (Dinámica) */}
               <div style={s.seccionReporte}>
-                <h2 style={s.subtitulo}>Evolución Financiera Mensual</h2>
-                <p style={s.bajada}>Ganancias brutas generadas por mes vinculadas al historial de planes.</p>
+                <h2 style={s.subtitulo}>
+                  Evolución Financiera {reporte.evolucion_temporal?.granularidad ? `(${reporte.evolucion_temporal.granularidad})` : ''}
+                </h2>
+                <p style={s.bajada}>Ganancias brutas generadas en el tiempo, agrupadas según la extensión del rango seleccionado.</p>
                 
                 <div style={s.contenedorGrafico}>
                   {reporte.evolucion_temporal?.datos && (() => {
@@ -115,24 +129,34 @@ export default function FinanzasReportes() {
                 </div>
               </div>
 
-              {/* Mockup visual para el cruce de Métodos de Pago */}
+              {/* Cruce de Ingresos: Planes vs Individuales vs Señas */}
               <div style={s.seccionReporte}>
-                <h2 style={s.subtitulo}>Cruce de Ingresos: Digital vs Efectivo</h2>
-                <p style={s.bajada}>Comparativa de ingresos automatizados (Mercado Pago / Tarjeta) frente a cobros manuales en caja.</p>
+                <h2 style={s.subtitulo}>Cruce de Ingresos y Facturación</h2>
+                <p style={s.bajada}>Comparativa del origen de las ganancias en el rango de fechas marcado.</p>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginTop: '24px' }}>
-                  <div style={{ padding: '24px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#1d4ed8', display: 'block', marginBottom: '8px' }}>PAGOS DIGITALES (MP)</span>
-                    <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#1e3a8a' }}>$0,00</p>
-                    <span style={{ fontSize: '12px', color: '#3b82f6', fontWeight: '600' }}>0 transacciones registradas</span>
-                  </div>
-                  <div style={{ padding: '24px', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#15803d', display: 'block', marginBottom: '8px' }}>EFECTIVO (CAJA)</span>
-                    <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#166534' }}>
-                      ${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginTop: '24px' }}>
+                  
+                  <div style={{ padding: '24px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '8px' }}>POR PLANES (SUSCRIPCIONES)</span>
+                    <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#1e293b' }}>
+                      ${Number(reporte.finanzas?.desglose?.planes || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                     </p>
-                    <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: '600' }}>El 100% de la facturación actual</span>
                   </div>
+
+                  <div style={{ padding: '24px', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#15803d', display: 'block', marginBottom: '8px' }}>POR CLASES INDIVIDUALES</span>
+                    <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#166534' }}>
+                       ${Number(reporte.finanzas?.desglose?.individuales || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+
+                  <div style={{ padding: '24px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#1d4ed8', display: 'block', marginBottom: '8px' }}>POR SEÑAS / RESERVAS</span>
+                    <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#1e3a8a' }}>
+                       ${Number(reporte.finanzas?.desglose?.senas || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+
                 </div>
               </div>
             </>
