@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getStatisticsReport } from '../../../services/reportsService';
 import { s } from './reportesStyles';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 export default function HubReports() {
   const navigate = useNavigate();
@@ -15,7 +18,6 @@ export default function HubReports() {
 
   const anioActual = new Date().getFullYear();
 
-  // Carga automática del resumen anual al montar el componente
   useEffect(() => {
     const cargarResumenAnual = async () => {
       try {
@@ -23,7 +25,6 @@ export default function HubReports() {
         const hoy = new Date();
         const anio = hoy.getFullYear();
 
-        // Generamos el rango: 1 de Enero del año actual hasta la fecha de hoy
         const inicio = `${anio}-01-01`;
         const mes = String(hoy.getMonth() + 1).padStart(2, '0');
         const dia = String(hoy.getDate()).padStart(2, '0');
@@ -32,7 +33,7 @@ export default function HubReports() {
         const data = await getStatisticsReport(inicio, fin);
         setReporte(data);
       } catch (err) {
-        setErrorValidacion(err.message || 'Error al cargar el resumen anual.');
+        setErrorValidacion(err.message || 'Error al cargar el resumen anual. (Revisa tu sesión)');
       } finally {
         setCargando(false);
       }
@@ -41,7 +42,6 @@ export default function HubReports() {
     cargarResumenAnual();
   }, []);
 
-  // Funciones de ordenamiento (simplificadas sin filtros de especialidad)
   const cambiarOrden = (llave, estadoActual, setEstado) => {
     const direccion = estadoActual.llave === llave && estadoActual.direccion === 'asc' ? 'desc' : 'asc';
     setEstado({ llave, direccion });
@@ -64,23 +64,137 @@ export default function HubReports() {
     return copia;
   };
 
-  // Preprocesamiento de datos a renderizar
   const salasOrdenadas = reporte ? procesarOrdenamiento(reporte.ocupacion_aulas, sortSalas) : [];
   const profesoresOrdenados = reporte ? procesarOrdenamiento(reporte.profesores_mayor_concurrencia, sortProfesores) : [];
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
 
-  // Función genérica para descargar archivos vacíos
-  const handleExport = (tipo, formato) => {
-    const filename = `Exportacion_${tipo}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
-    const blob = new Blob(['Contenido de prueba'], { type: formato === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+  // ─────────────────────────────────────────────────────────
+  // LÓGICA DE EXPORTACIÓN (Simplificada a 1 sola opción)
+  // ─────────────────────────────────────────────────────────
+  const handleExport = (formato) => {
+    if (!reporte) return;
+    const filename = `Hub_Estadistico_Completo_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
+
+    if (formato === 'excel') {
+      const wb = XLSX.utils.book_new();
+
+      const wsResumen = XLSX.utils.json_to_sheet([{
+        "Métrica": "Clientes Totales", "Valor": reporte.resumen.clientes_totales
+      }, {
+        "Métrica": "Ingresos por Planes", "Valor": `$${reporte.resumen.ingresos_totales}`
+      }, {
+        "Métrica": "Staff de Profesores", "Valor": reporte.resumen.profesores_totales
+      }, {
+        "Métrica": "Tasa de Ausentismo Promedio", "Valor": `${reporte.resumen.tasa_ausentismo}%`
+      }]);
+      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
+
+      const wsSalas = XLSX.utils.json_to_sheet(reporte.ocupacion_aulas.map(a => ({
+        "Espacio Físico": a.aula, "Capacidad Máxima": a.capacidad_maxima, "Usos Totales": a.cantidad_usos
+      })));
+      XLSX.utils.book_append_sheet(wb, wsSalas, "Ocupación de Salas");
+
+      const wsProfes = XLSX.utils.json_to_sheet(reporte.profesores_mayor_concurrencia.map(p => ({
+        "Kinesiólogo": p.nombre, "Alumnos Atendidos": p.total_alumnos_atendidos, "Clases Dadas": p.cantidad_clases_dictadas
+      })));
+      XLSX.utils.book_append_sheet(wb, wsProfes, "Concurrencia Profesores");
+
+      if (reporte.evolucion_temporal?.datos) {
+        const wsFinanzas = XLSX.utils.json_to_sheet(reporte.evolucion_temporal.datos.map(f => ({
+          "Mes": f.mes_corto, "Ingresos Brutos": `$${f.ingresos_brutos}`
+        })));
+        XLSX.utils.book_append_sheet(wb, wsFinanzas, "Evolución Financiera");
+      }
+
+      XLSX.writeFile(wb, filename);
+
+    } else if (formato === 'pdf') {
+      const doc = new jsPDF();
+      let currentY = 14;
+      
+      // Función auxiliar para saber si necesitamos un salto de página
+      const checkPageBreak = (espacioNecesario) => {
+        const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
+        if (currentY + espacioNecesario >= pageHeight - 10) {
+          doc.addPage();
+          currentY = 14;
+        }
+      };
+
+      // Título
+      doc.setFontSize(18);
+      doc.text(`Centro de Control: Hub Estadistico ${anioActual}`, 14, currentY);
+      currentY += 10;
+
+      // Resumen Global
+      doc.setFontSize(12);
+      doc.text(`Clientes Totales: ${reporte.resumen.clientes_totales}`, 14, currentY); currentY += 6;
+      doc.text(`Ingresos por Planes: $${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR')}`, 14, currentY); currentY += 6;
+      doc.text(`Staff de Profesores: ${reporte.resumen.profesores_totales}`, 14, currentY); currentY += 6;
+      doc.text(`Tasa de Ausentismo: ${reporte.resumen.tasa_ausentismo}%`, 14, currentY); currentY += 14;
+
+      // Estilos base para todas las tablas (para que queden holgadas y legibles)
+      const baseTableStyles = {
+        theme: 'striped',
+        headStyles: { fillColor: [15, 118, 110], fontSize: 12, halign: 'center' },
+        bodyStyles: { fontSize: 10, valign: 'middle' },
+        styles: { cellPadding: 5, overflow: 'linebreak' }, // cellPadding da el espacio de respiración
+        margin: { top: 14 }
+      };
+
+      // Tabla 1: Ocupación de Salas
+      checkPageBreak(30);
+      doc.setFontSize(14);
+      doc.text("Ocupacion de Salas", 14, currentY);
+      autoTable(doc, {
+        ...baseTableStyles,
+        startY: currentY + 4,
+        head: [['Espacio Físico', 'Capacidad Máxima', 'Usos Totales']],
+        body: reporte.ocupacion_aulas.map(a => [a.aula, `${a.capacidad_maxima} alumnos`, a.cantidad_usos]),
+        columnStyles: {
+          0: { cellWidth: 70 }, // Forzamos un buen ancho para los nombres
+          1: { halign: 'center' },
+          2: { halign: 'center' }
+        }
+      });
+      currentY = doc.lastAutoTable.finalY + 14;
+
+      // Tabla 2: Concurrencia de Profesores
+      checkPageBreak(30);
+      doc.setFontSize(14);
+      doc.text("Concurrencia de Profesores", 14, currentY);
+      autoTable(doc, {
+        ...baseTableStyles,
+        startY: currentY + 4,
+        head: [['Kinesiologo', 'Alumnos Atendidos', 'Clases Dadas']],
+        body: reporte.profesores_mayor_concurrencia.map(p => [p.nombre, p.total_alumnos_atendidos, p.cantidad_clases_dictadas]),
+        columnStyles: {
+          0: { cellWidth: 70 },
+          1: { halign: 'center' },
+          2: { halign: 'center' }
+        }
+      });
+      currentY = doc.lastAutoTable.finalY + 14;
+
+      // Tabla 3: Evolución Financiera
+      if (reporte.evolucion_temporal?.datos) {
+        checkPageBreak(30);
+        doc.setFontSize(14);
+        doc.text("Evolucion Financiera Mensual", 14, currentY);
+        autoTable(doc, {
+          ...baseTableStyles,
+          startY: currentY + 4,
+          head: [['Mes', 'Ingresos Brutos']],
+          body: reporte.evolucion_temporal.datos.map(f => [f.mes_corto, `$${Number(f.ingresos_brutos).toLocaleString('es-AR')}`]),
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 50 },
+            1: { halign: 'center', cellWidth: 60 }
+          }
+        });
+      }
+
+      doc.save(filename);
+    }
   };
 
   return (
@@ -98,7 +212,7 @@ export default function HubReports() {
 
       {reporte && (
         <>
-          {/* 1. Tarjetas de Resumen */}
+          {/* Tarjetas de Resumen */}
           <div style={s.gridResumen}>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Clientes Totales</span>
@@ -120,46 +234,31 @@ export default function HubReports() {
             </div>
           </div>
 
-          {/* 2. Botonera de Redirección Superior */}
+          {/* Botonera de Redirección */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginTop: '16px', marginBottom: '32px' }}>
             <div style={{ background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', padding: '2px', borderRadius: '8px' }}>
-              <button 
-                style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} 
-                onClick={() => navigate('/admin/reportes/clientes')}
-              >
+              <button style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} onClick={() => navigate('/admin/reportes/clientes')}>
                 Control registros →
               </button>
             </div>
-            
             <div style={{ background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', padding: '2px', borderRadius: '8px' }}>
-              <button 
-                style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} 
-                onClick={() => navigate('/admin/reportes/finanzas')}
-              >
+              <button style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} onClick={() => navigate('/admin/reportes/finanzas')}>
                 Ir a Finanzas →
               </button>
             </div>
-
             <div style={{ background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', padding: '2px', borderRadius: '8px' }}>
-              <button 
-                style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} 
-                onClick={() => navigate('/admin/reportes/staff')}
-              >
+              <button style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} onClick={() => navigate('/admin/reportes/staff')}>
                 Auditoría de Staff →
               </button>
             </div>
-            
             <div style={{ background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', padding: '2px', borderRadius: '8px' }}>
-              <button 
-                style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} 
-                onClick={() => navigate('/admin/reportes/salas')}
-              >
+              <button style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} onClick={() => navigate('/admin/reportes/salas')}>
                 Logística de Salas →
               </button>
             </div>
           </div>
 
-          {/* 3. MAPA DE CALOR: Concurrencia de Alumnos */}
+          {/* Mapa de Calor */}
           {reporte.mapa_calor && (
             <div style={s.seccionReporte}>
               <h2 style={s.subtitulo}>
@@ -182,18 +281,13 @@ export default function HubReports() {
                   ))}
                 </div>
               </div>
-              <button 
-                style={{ ...s.boton, width: '100%', marginTop: '24px' }} 
-                onClick={() => navigate('/admin/reportes/clientes')}
-              >
+              <button style={{ ...s.boton, width: '100%', marginTop: '24px' }} onClick={() => navigate('/admin/reportes/clientes')}>
                 Control Alumnos →
               </button>
             </div>
           )}
 
-          {/* 4. Tablas Globales: Ocupación de Salas y Staff */}
           <div style={s.gridDividido}>
-            
             {/* Ocupación de Salas */}
             <div style={s.seccionReporte}>
               <h2 style={s.subtitulo}>
@@ -224,10 +318,7 @@ export default function HubReports() {
                   </tbody>
                 </table>
               </div>
-              <button 
-                style={{ ...s.boton, width: '100%', marginTop: '24px' }} 
-                onClick={() => navigate('/admin/reportes/salas')}
-              >
+              <button style={{ ...s.boton, width: '100%', marginTop: '24px' }} onClick={() => navigate('/admin/reportes/salas')}>
                 Reporte Salas →
               </button>
             </div>
@@ -262,17 +353,13 @@ export default function HubReports() {
                   </tbody>
                 </table>
               </div>
-              <button 
-                style={{ ...s.boton, width: '100%', marginTop: '24px' }} 
-                onClick={() => navigate('/admin/reportes/staff')}
-              >
+              <button style={{ ...s.boton, width: '100%', marginTop: '24px' }} onClick={() => navigate('/admin/reportes/staff')}>
                 Reporte Staff →
               </button>
             </div>
-
           </div>
 
-         {/* 5. MÓDULO NUEVO: Evolución Financiera Mensual (Conectado a BD) */}
+         {/* Evolución Financiera Mensual */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
               Evolución Financiera Mensual
@@ -283,12 +370,10 @@ export default function HubReports() {
             <div style={s.contenedorGrafico}>
               {reporte.evolucion_temporal?.datos && (() => {
                 const datosMeses = reporte.evolucion_temporal.datos;
-                // Calculamos el ingreso máximo para que la barra más alta sea del 100%
                 const maxIngreso = Math.max(...datosMeses.map(d => d.ingresos_brutos), 1); 
 
                 return datosMeses.map((d, i) => {
                   const alturaPorcentaje = (d.ingresos_brutos / maxIngreso) * 100;
-                  // Si el ingreso es mayor a 1000, lo mostramos como "Xk", sino el número entero
                   const textoTooltip = d.ingresos_brutos >= 1000 
                     ? `$${(d.ingresos_brutos / 1000).toFixed(0)}k` 
                     : `$${d.ingresos_brutos}`;
@@ -305,52 +390,22 @@ export default function HubReports() {
               })()}
             </div>
 
-            <button 
-              style={{ ...s.boton, width: '100%', marginTop: '40px' }} 
-              onClick={() => navigate('/admin/reportes/finanzas')}
-            >
+            <button style={{ ...s.boton, width: '100%', marginTop: '40px' }} onClick={() => navigate('/admin/reportes/finanzas')}>
               Reporte Financiero →
             </button>
           </div>
 
-          {/* 6. MÓDULO EXPORTACIÓN */}
+          {/* 6. MÓDULO EXPORTACIÓN (UNA SOLA OPCIÓN) */}
           <div style={{ ...s.seccionReporte, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-            <h2 style={s.subtitulo}>Exportar Datos</h2>
-            <p style={s.bajada}>Descarga los reportes en formato PDF o Excel para su análisis externo o impresión.</p>
+            <h2 style={s.subtitulo}>Exportar Datos del Hub</h2>
+            <p style={s.bajada}>Descarga todas las estadísticas mostradas (Resumen, Salas, Staff y Finanzas) unificadas en un solo archivo.</p>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Opción 1: Resumen */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                <span style={{ fontWeight: '600', color: 'var(--color-texto)' }}>Exportar Resumen Anual</span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => handleExport('Resumen', 'pdf')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#ef4444' }}>PDF</button>
-                  <button onClick={() => handleExport('Resumen', 'excel')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#10b981' }}>EXCEL</button>
-                </div>
-              </div>
-
-              {/* Opción 2: Estadística Específica (Mockup de Selector) */}
-               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1', flexWrap: 'wrap', gap: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontWeight: '600', color: 'var(--color-texto)' }}>Exportar Estadística Específica:</span>
-                  <select style={{ ...s.select, minWidth: 'auto', padding: '6px 12px' }}>
-                    <option>Mapa de Calor</option>
-                    <option>Ocupación de Salas</option>
-                    <option>Concurrencia de Profesores</option>
-                    <option>Evolución Financiera</option>
-                  </select>
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => handleExport('Especifica', 'pdf')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#ef4444' }}>PDF</button>
-                  <button onClick={() => handleExport('Especifica', 'excel')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#10b981' }}>EXCEL</button>
-                </div>
-              </div>
-
-              {/* Opción 3: Todas las estadísticas */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                 <span style={{ fontWeight: '600', color: 'var(--color-texto)' }}>Exportar Todas las Estadísticas</span>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => handleExport('Completo', 'pdf')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#ef4444' }}>PDF</button>
-                  <button onClick={() => handleExport('Completo', 'excel')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#10b981' }}>EXCEL</button>
+                  <button onClick={() => handleExport('pdf')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#ef4444' }}>PDF</button>
+                  <button onClick={() => handleExport('excel')} style={{ ...s.boton, padding: '8px 16px', fontSize: '13px', height: 'auto', background: '#10b981' }}>EXCEL</button>
                 </div>
               </div>
             </div>

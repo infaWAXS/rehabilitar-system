@@ -5,6 +5,11 @@ import ReportesHeader from './components/ReportesHeader';
 import ReportesExportar from './components/ReportesExportar';
 import ReportesEmptyState from './components/ReportesEmptyState';
 
+// IMPORTACIONES PARA EXPORTACIÓN
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+
 export default function ClientesReportes() {
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
@@ -51,22 +56,16 @@ export default function ClientesReportes() {
   }), { inscripciones: 0, cancelaciones: 0, asistencias: 0, inasistencias: 0 });
 
   const hayDatos = totales.inscripciones > 0;
+  const motivosOcultos = ["Acumulación De 3 Faltas Consecutivas", "Inasistencia mayor al 50%"];
 
-// LECTURA DINÁMICA Y CÁLCULO DE SANCIONES
   const statsSanciones = React.useMemo(() => {
-    // 1. Si la tabla está vacía en este rango, forzamos todo a 0 y vacío
     if (!reporte?.sancionados || reporte.sancionados.length === 0) {
       return {
-        tresFaltas: 0,
-        cincuentaPorciento: 0,
-        otrosMotivos: 0,
-        reincidentes: 0,
-        masAntiguo: { nombre: '-', fecha: '' },
-        masReciente: { nombre: '-', fecha: '' }
+        tresFaltas: 0, cincuentaPorciento: 0, otrosMotivos: 0, reincidentes: 0,
+        masAntiguo: { nombre: '-', fecha: '' }, masReciente: { nombre: '-', fecha: '' }
       };
     }
 
-    // 2. Si hay datos, calculamos los contadores
     const contadores = { tresFaltas: 0, cincuentaPorciento: 0, otrosMotivos: 0 };
     reporte.sancionados.forEach(user => {
       const motivoStr = user.motivo?.toLowerCase() || '';
@@ -79,7 +78,6 @@ export default function ClientesReportes() {
       }
     });
 
-    // 3. Retornamos los contadores + los récords del backend
     return { 
       ...contadores,
       reincidentes: reporte.sanciones_estadisticas?.reincidentes || 0,
@@ -88,8 +86,197 @@ export default function ClientesReportes() {
     };
   }, [reporte]);
 
+  // ─────────────────────────────────────────────────────────
+  // LÓGICA DE EXPORTACIÓN DETALLADA (PDF / EXCEL)
+  // ─────────────────────────────────────────────────────────
+  const handleExport = (formato) => {
+    if (!reporte) return;
+    const anioActual = new Date().getFullYear();
+    const tituloFiltro = filtroEspecialidad ? `_${filtroEspecialidad}` : '_Global';
+    const filename = `Reporte_Clientes_Avanzado${tituloFiltro}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
 
-  const motivosOcultos = ["Acumulación De 3 Faltas Consecutivas", "Inasistencia mayor al 50%"];
+    if (formato === 'excel') {
+      const wb = XLSX.utils.book_new();
+
+      // Pestaña 1: Resumen General e Inteligencia de Sanciones
+      const wsResumen = XLSX.utils.json_to_sheet([{
+        "Métrica": "Ausentismo Promedio", "Valor": `${reporte.resumen.tasa_ausentismo}%`
+      }, {
+        "Métrica": "Nuevos Registros", "Valor": reporte.resumen.nuevos_registros || 0
+      }, {
+        "Métrica": "Clientes Suspendidos", "Valor": reporte.resumen.clientes_suspendidos_rango || 0
+      }, {
+        "Métrica": "Sanciones: Por 3 Faltas", "Valor": statsSanciones.tresFaltas
+      }, {
+        "Métrica": "Sanciones: Ausencia > 50%", "Valor": statsSanciones.cincuentaPorciento
+      }, {
+        "Métrica": "Sanciones: Otros Motivos", "Valor": statsSanciones.otrosMotivos
+      }, {
+        "Métrica": "Sanciones: Reincidentes", "Valor": statsSanciones.reincidentes
+      }]);
+      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
+
+      // Pestaña 2: Concurrencia a Detalle
+      const dataConcurrencia = clasesFiltradas.map(c => {
+        const inscripcionesTotales = c.asistencias_fijas + c.asistencias_individuales + c.cancelaciones_fijas + c.cancelaciones_individuales;
+        return {
+          "Especialidad": c.tipo,
+          "Alumnos Únicos": Math.floor(inscripcionesTotales * 0.6),
+          "Inscripciones a Clases": inscripcionesTotales,
+          "Cancelaciones": c.cancelaciones_fijas + c.cancelaciones_individuales,
+          "Asistencias": c.asistencias_fijas + c.asistencias_individuales,
+          "Inasistencias": c.cancelaciones_fijas + c.cancelaciones_individuales
+        };
+      });
+      // Inyectamos la fila de totales
+      dataConcurrencia.push({
+        "Especialidad": "TOTALES",
+        "Alumnos Únicos": Math.floor(totales.inscripciones * 0.6),
+        "Inscripciones a Clases": totales.inscripciones,
+        "Cancelaciones": totales.cancelaciones,
+        "Asistencias": totales.asistencias,
+        "Inasistencias": totales.inasistencias
+      });
+      const wsConcurrencia = XLSX.utils.json_to_sheet(dataConcurrencia);
+      XLSX.utils.book_append_sheet(wb, wsConcurrencia, "Concurrencia");
+
+      // Pestaña 3: Mapa de Calor
+      if (reporte.mapa_calor && listaHorarios.length > 0) {
+        const dataMapaCalor = reporte.mapa_calor.map(row => {
+          const fila = { "Día / Módulo": row.dia };
+          listaHorarios.forEach(h => {
+            const cellData = row.horas[h];
+            const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
+            fila[`${h} hs`] = `${valorPct}%`;
+          });
+          return fila;
+        });
+        const wsMapa = XLSX.utils.json_to_sheet(dataMapaCalor);
+        XLSX.utils.book_append_sheet(wb, wsMapa, "Mapa de Calor");
+      }
+
+      // Pestaña 4: Sancionados
+      const dataSanciones = reporte.sancionados
+        ?.filter(user => !motivosOcultos.includes(user.motivo))
+        .map(user => ({
+          "Nombre": user.nombre,
+          "Motivo de Suspensión": user.motivo,
+          "Inicio de Suspensión": user.fecha_inicio
+        })) || [];
+      const wsSanciones = XLSX.utils.json_to_sheet(dataSanciones);
+      XLSX.utils.book_append_sheet(wb, wsSanciones, "Sancionados");
+
+      XLSX.writeFile(wb, filename);
+
+    } else if (formato === 'pdf') {
+      const doc = new jsPDF();
+      let currentY = 14;
+
+      const checkPageBreak = (espacioNecesario) => {
+        const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
+        if (currentY + espacioNecesario >= pageHeight - 10) { doc.addPage(); currentY = 14; }
+      };
+
+      // Título
+      doc.setFontSize(18);
+      doc.text(`Reporte de Clientes y Asistencias ${anioActual}`, 14, currentY);
+      currentY += 8;
+      
+      if (filtroEspecialidad) {
+        doc.setFontSize(11);
+        doc.setTextColor(15, 118, 110);
+        doc.text(`Filtro aplicado: ${filtroEspecialidad}`, 14, currentY);
+        doc.setTextColor(0, 0, 0); // Reset color
+        currentY += 8;
+      } else {
+        currentY += 4;
+      }
+
+      // Resumen Global y Sanciones
+      doc.setFontSize(11);
+      doc.text(`Ausentismo Promedio: ${reporte.resumen.tasa_ausentismo}%`, 14, currentY); currentY += 6;
+      doc.text(`Nuevos Registros: ${reporte.resumen.nuevos_registros || 0}`, 14, currentY); currentY += 6;
+      doc.text(`Clientes Suspendidos: ${reporte.resumen.clientes_suspendidos_rango || 0}`, 14, currentY); currentY += 8;
+      
+      doc.setFontSize(10);
+      doc.text(`Desglose de Suspensiones -> 3 Faltas: ${statsSanciones.tresFaltas} | >50% Ausencia: ${statsSanciones.cincuentaPorciento} | Otros: ${statsSanciones.otrosMotivos} | Reincidentes: ${statsSanciones.reincidentes}`, 14, currentY);
+      currentY += 14;
+
+      const baseTableStyles = {
+        theme: 'striped',
+        headStyles: { fillColor: [15, 118, 110], fontSize: 11, halign: 'center' },
+        bodyStyles: { fontSize: 10, valign: 'middle' },
+        styles: { cellPadding: 5, overflow: 'linebreak' },
+        margin: { top: 14 }
+      };
+
+      // Tabla de Concurrencia
+      checkPageBreak(40);
+      doc.setFontSize(14);
+      doc.text("Concurrencia y Cancelaciones", 14, currentY);
+      
+      const bodyConcurrencia = clasesFiltradas.map(c => {
+        const insc = c.asistencias_fijas + c.asistencias_individuales + c.cancelaciones_fijas + c.cancelaciones_individuales;
+        const canc = c.cancelaciones_fijas + c.cancelaciones_individuales;
+        const asist = c.asistencias_fijas + c.asistencias_individuales;
+        return [c.tipo, Math.floor(insc * 0.6), insc, canc, asist, canc]; // inasistencias = cancelaciones
+      });
+      // Agregamos la fila de totales en el PDF
+      bodyConcurrencia.push([{ content: 'TOTALES', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, Math.floor(totales.inscripciones * 0.6), totales.inscripciones, totales.cancelaciones, totales.asistencias, totales.inasistencias]);
+
+      autoTable(doc, {
+        ...baseTableStyles,
+        startY: currentY + 4,
+        head: [['Especialidad', 'Alumnos', 'Inscripciones', 'Cancelaciones', 'Asistencias', 'Inasistencias']],
+        body: bodyConcurrencia,
+        columnStyles: { 0: { cellWidth: 45 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } }
+      });
+      currentY = doc.lastAutoTable.finalY + 14;
+
+      // Mapa de Calor
+      if (reporte.mapa_calor && listaHorarios.length > 0) {
+        checkPageBreak(50);
+        doc.setFontSize(14);
+        doc.text("Mapa de Calor: Ocupación (%)", 14, currentY);
+        
+        const bodyMapa = reporte.mapa_calor.map(row => {
+          const celdasHoras = listaHorarios.map(h => {
+            const cellData = row.horas[h];
+            return `${filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0)}%`;
+          });
+          return [{ content: row.dia, styles: { fontStyle: 'bold' } }, ...celdasHoras];
+        });
+
+        autoTable(doc, {
+          ...baseTableStyles,
+          startY: currentY + 4,
+          head: [['Día', ...listaHorarios.map(h => h)]], // Ej: Día, 08:00, 09:00
+          body: bodyMapa,
+          styles: { ...baseTableStyles.styles, fontSize: 8, cellPadding: 2, halign: 'center' }, // Fuente y padding más chicos para que entren todas las horas
+          headStyles: { ...baseTableStyles.headStyles, fontSize: 8 },
+          columnStyles: { 0: { halign: 'left', cellWidth: 20 } }
+        });
+        currentY = doc.lastAutoTable.finalY + 14;
+      }
+
+      // Tabla de Sanciones
+      const sancionadosFiltrados = reporte.sancionados?.filter(user => !motivosOcultos.includes(user.motivo)) || [];
+      if (sancionadosFiltrados.length > 0) {
+        checkPageBreak(40);
+        doc.setFontSize(14);
+        doc.text("Cuentas Suspendidas", 14, currentY);
+        autoTable(doc, {
+          ...baseTableStyles,
+          startY: currentY + 4,
+          head: [['Nombre', 'Motivo', 'Fecha Inicio']],
+          body: sancionadosFiltrados.map(user => [user.nombre, user.motivo, user.fecha_inicio]),
+          columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 80 } }
+        });
+      }
+
+      doc.save(filename);
+    }
+  };
 
   return (
     <div style={s.contenedor}>
@@ -104,27 +291,18 @@ export default function ClientesReportes() {
 
       {reporte && (
         <>
-          {/* Tarjetas Resumen Reactivas al Rango */}
           <div style={s.gridResumen}>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Ausentismo Promedio (En Período)</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>
-                {reporte.resumen.tasa_ausentismo}%
-              </p>
+              <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>{reporte.resumen.tasa_ausentismo}%</p>
             </div>
-            
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Nuevos Registros (En Período)</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>
-                {reporte.resumen.nuevos_registros || 0}
-              </p>
+              <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>{reporte.resumen.nuevos_registros || 0}</p>
             </div>
-
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Clientes Suspendidos (En Período)</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-texto)' }}>
-                {reporte.resumen.clientes_suspendidos_rango || 0}
-              </p>
+              <p style={{ ...s.valorMini, color: 'var(--color-texto)' }}>{reporte.resumen.clientes_suspendidos_rango || 0}</p>
             </div>
           </div>
 
@@ -225,6 +403,7 @@ export default function ClientesReportes() {
               <ReportesEmptyState entidad="flujos de asistencia" filtroEspecialidad={filtroEspecialidad} />
             )}
           </div>
+          
           {/* SECCIÓN SANCIONADOS */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
@@ -236,29 +415,22 @@ export default function ClientesReportes() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>POR +3 FALTAS</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>
-                  {statsSanciones.tresFaltas}
-                </p>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.tresFaltas}</p>
               </div>
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>AUSENCIA &gt; 50%</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>
-                  {statsSanciones.cincuentaPorciento}
-                </p>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.cincuentaPorciento}</p>
               </div>
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>OTROS MOTIVOS</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>
-                  {statsSanciones.otrosMotivos}
-                </p>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.otrosMotivos}</p>
               </div>
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>REINCIDENTES (2+)</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>
-                  {statsSanciones.reincidentes}
-                </p>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.reincidentes}</p>
               </div>
             </div>
+            
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', background: '#f0fbfb', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)', marginBottom: '24px' }}>
               <div>
                 <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Récord más antiguo:</span>
@@ -284,7 +456,6 @@ export default function ClientesReportes() {
                 </tr>
               </thead>
               <tbody>
-                {/* Aplicamos el filtro aquí mismo */}
                 {reporte.sancionados
                   ?.filter(user => !motivosOcultos.includes(user.motivo)) 
                   .map((user, idx) => (
@@ -292,9 +463,7 @@ export default function ClientesReportes() {
                       <td style={s.td}><strong>{user.nombre}</strong></td>
                       <td style={s.td}>{user.motivo}</td>
                       <td style={s.td}>
-                        <span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>
-                          {user.fecha_inicio}
-                        </span>
+                        <span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{user.fecha_inicio}</span>
                       </td>
                     </tr>
                   ))}
@@ -303,7 +472,7 @@ export default function ClientesReportes() {
             </div>
           </div>
 
-          <ReportesExportar tipoReporte="Clientes" />
+          <ReportesExportar tipoReporte="Clientes" onExport={handleExport} />
         </>
       )}
     </div>
