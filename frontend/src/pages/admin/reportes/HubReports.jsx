@@ -12,7 +12,6 @@ export default function HubReports() {
   const [cargando, setCargando] = useState(true);
   const [errorValidacion, setErrorValidacion] = useState('');
 
-  // Estados de ordenamiento para las tablas
   const [sortSalas, setSortSalas] = useState({ llave: null, direccion: 'asc' });
   const [sortProfesores, setSortProfesores] = useState({ llave: null, direccion: 'asc' });
 
@@ -69,7 +68,7 @@ export default function HubReports() {
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
 
   // ─────────────────────────────────────────────────────────
-  // LÓGICA DE EXPORTACIÓN (Simplificada a 1 sola opción)
+  // LÓGICA DE EXPORTACIÓN (EXCEL MEJORADO Y MAPA DE CALOR)
   // ─────────────────────────────────────────────────────────
   const handleExport = (formato) => {
     if (!reporte) return;
@@ -78,6 +77,7 @@ export default function HubReports() {
     if (formato === 'excel') {
       const wb = XLSX.utils.book_new();
 
+      // 1. Resumen General
       const wsResumen = XLSX.utils.json_to_sheet([{
         "Métrica": "Clientes Totales", "Valor": reporte.resumen.clientes_totales
       }, {
@@ -87,22 +87,49 @@ export default function HubReports() {
       }, {
         "Métrica": "Tasa de Ausentismo Promedio", "Valor": `${reporte.resumen.tasa_ausentismo}%`
       }]);
+      // Ancho de columnas para Resumen
+      wsResumen['!cols'] = [{ wch: 35 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
 
+      // 2. Mapa de Calor
+      if (reporte.mapa_calor && listaHorarios.length > 0) {
+        const dataMapaCalor = reporte.mapa_calor.map(row => {
+          const fila = { "Día / Módulo": row.dia };
+          listaHorarios.forEach(h => {
+            fila[`${h} hs`] = `${row.horas[h]?.general ?? 0.0}%`;
+          });
+          return fila;
+        });
+        const wsMapa = XLSX.utils.json_to_sheet(dataMapaCalor);
+        
+        // Ancho de columnas para Mapa de Calor (Primera ancha, el resto ajustadas)
+        const colWidths = [{ wch: 15 }];
+        listaHorarios.forEach(() => colWidths.push({ wch: 10 }));
+        wsMapa['!cols'] = colWidths;
+        
+        XLSX.utils.book_append_sheet(wb, wsMapa, "Mapa de Calor");
+      }
+
+      // 3. Ocupación de Salas
       const wsSalas = XLSX.utils.json_to_sheet(reporte.ocupacion_aulas.map(a => ({
         "Espacio Físico": a.aula, "Capacidad Máxima": a.capacidad_maxima, "Usos Totales": a.cantidad_usos
       })));
+      wsSalas['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsSalas, "Ocupación de Salas");
 
+      // 4. Concurrencia Profesores
       const wsProfes = XLSX.utils.json_to_sheet(reporte.profesores_mayor_concurrencia.map(p => ({
         "Kinesiólogo": p.nombre, "Alumnos Atendidos": p.total_alumnos_atendidos, "Clases Dadas": p.cantidad_clases_dictadas
       })));
+      wsProfes['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsProfes, "Concurrencia Profesores");
 
+      // 5. Evolución Financiera
       if (reporte.evolucion_temporal?.datos) {
         const wsFinanzas = XLSX.utils.json_to_sheet(reporte.evolucion_temporal.datos.map(f => ({
           "Mes": f.mes_corto, "Ingresos Brutos": `$${f.ingresos_brutos}`
         })));
+        wsFinanzas['!cols'] = [{ wch: 20 }, { wch: 25 }];
         XLSX.utils.book_append_sheet(wb, wsFinanzas, "Evolución Financiera");
       }
 
@@ -112,7 +139,6 @@ export default function HubReports() {
       const doc = new jsPDF();
       let currentY = 14;
       
-      // Función auxiliar para saber si necesitamos un salto de página
       const checkPageBreak = (espacioNecesario) => {
         const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
         if (currentY + espacioNecesario >= pageHeight - 10) {
@@ -133,14 +159,36 @@ export default function HubReports() {
       doc.text(`Staff de Profesores: ${reporte.resumen.profesores_totales}`, 14, currentY); currentY += 6;
       doc.text(`Tasa de Ausentismo: ${reporte.resumen.tasa_ausentismo}%`, 14, currentY); currentY += 14;
 
-      // Estilos base para todas las tablas (para que queden holgadas y legibles)
       const baseTableStyles = {
         theme: 'striped',
         headStyles: { fillColor: [15, 118, 110], fontSize: 12, halign: 'center' },
         bodyStyles: { fontSize: 10, valign: 'middle' },
-        styles: { cellPadding: 5, overflow: 'linebreak' }, // cellPadding da el espacio de respiración
+        styles: { cellPadding: 5, overflow: 'linebreak' },
         margin: { top: 14 }
       };
+
+      // Tabla 0: Mapa de Calor
+      if (reporte.mapa_calor && listaHorarios.length > 0) {
+        checkPageBreak(50);
+        doc.setFontSize(14);
+        doc.text("Mapa de Calor: Ocupacion (%)", 14, currentY);
+        
+        const bodyMapa = reporte.mapa_calor.map(row => {
+          const celdasHoras = listaHorarios.map(h => `${row.horas[h]?.general ?? 0.0}%`);
+          return [{ content: row.dia, styles: { fontStyle: 'bold' } }, ...celdasHoras];
+        });
+
+        autoTable(doc, {
+          ...baseTableStyles,
+          startY: currentY + 4,
+          head: [['Día', ...listaHorarios.map(h => h)]],
+          body: bodyMapa,
+          styles: { ...baseTableStyles.styles, fontSize: 8, cellPadding: 2, halign: 'center' },
+          headStyles: { ...baseTableStyles.headStyles, fontSize: 8 },
+          columnStyles: { 0: { halign: 'left', cellWidth: 20 } }
+        });
+        currentY = doc.lastAutoTable.finalY + 14;
+      }
 
       // Tabla 1: Ocupación de Salas
       checkPageBreak(30);
@@ -152,7 +200,7 @@ export default function HubReports() {
         head: [['Espacio Físico', 'Capacidad Máxima', 'Usos Totales']],
         body: reporte.ocupacion_aulas.map(a => [a.aula, `${a.capacidad_maxima} alumnos`, a.cantidad_usos]),
         columnStyles: {
-          0: { cellWidth: 70 }, // Forzamos un buen ancho para los nombres
+          0: { cellWidth: 70 },
           1: { halign: 'center' },
           2: { halign: 'center' }
         }
@@ -212,7 +260,6 @@ export default function HubReports() {
 
       {reporte && (
         <>
-          {/* Tarjetas de Resumen */}
           <div style={s.gridResumen}>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Clientes Totales</span>
@@ -234,7 +281,6 @@ export default function HubReports() {
             </div>
           </div>
 
-          {/* Botonera de Redirección */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginTop: '16px', marginBottom: '32px' }}>
             <div style={{ background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', padding: '2px', borderRadius: '8px' }}>
               <button style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} onClick={() => navigate('/admin/reportes/clientes')}>
@@ -258,7 +304,6 @@ export default function HubReports() {
             </div>
           </div>
 
-          {/* Mapa de Calor */}
           {reporte.mapa_calor && (
             <div style={s.seccionReporte}>
               <h2 style={s.subtitulo}>
@@ -288,7 +333,6 @@ export default function HubReports() {
           )}
 
           <div style={s.gridDividido}>
-            {/* Ocupación de Salas */}
             <div style={s.seccionReporte}>
               <h2 style={s.subtitulo}>
                 Ocupación de Salas
@@ -323,7 +367,6 @@ export default function HubReports() {
               </button>
             </div>
 
-            {/* Concurrencia de Profesores */}
             <div style={s.seccionReporte}>
               <h2 style={s.subtitulo}>
                 Concurrencia de Profesores
@@ -359,7 +402,6 @@ export default function HubReports() {
             </div>
           </div>
 
-         {/* Evolución Financiera Mensual */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
               Evolución Financiera Mensual
@@ -395,10 +437,9 @@ export default function HubReports() {
             </button>
           </div>
 
-          {/* 6. MÓDULO EXPORTACIÓN (UNA SOLA OPCIÓN) */}
           <div style={{ ...s.seccionReporte, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
             <h2 style={s.subtitulo}>Exportar Datos del Hub</h2>
-            <p style={s.bajada}>Descarga todas las estadísticas mostradas (Resumen, Salas, Staff y Finanzas) unificadas en un solo archivo.</p>
+            <p style={s.bajada}>Descarga todas las estadísticas mostradas unificadas en un solo archivo.</p>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #cbd5e1' }}>

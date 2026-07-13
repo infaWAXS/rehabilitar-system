@@ -87,7 +87,7 @@ export default function ClientesReportes() {
   }, [reporte]);
 
   // ─────────────────────────────────────────────────────────
-  // LÓGICA DE EXPORTACIÓN DETALLADA (PDF / EXCEL)
+  // LÓGICA DE EXPORTACIÓN DETALLADA (PDF / EXCEL MEJORADO)
   // ─────────────────────────────────────────────────────────
   const handleExport = (formato) => {
     if (!reporte) return;
@@ -114,6 +114,8 @@ export default function ClientesReportes() {
       }, {
         "Métrica": "Sanciones: Reincidentes", "Valor": statsSanciones.reincidentes
       }]);
+      // Ajuste de legibilidad para el resumen
+      wsResumen['!cols'] = [{ wch: 35 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
 
       // Pestaña 2: Concurrencia a Detalle
@@ -124,20 +126,23 @@ export default function ClientesReportes() {
           "Alumnos Únicos": Math.floor(inscripcionesTotales * 0.6),
           "Inscripciones a Clases": inscripcionesTotales,
           "Cancelaciones": c.cancelaciones_fijas + c.cancelaciones_individuales,
+          "Lista de Espera": 0,
           "Asistencias": c.asistencias_fijas + c.asistencias_individuales,
           "Inasistencias": c.cancelaciones_fijas + c.cancelaciones_individuales
         };
       });
-      // Inyectamos la fila de totales
       dataConcurrencia.push({
         "Especialidad": "TOTALES",
         "Alumnos Únicos": Math.floor(totales.inscripciones * 0.6),
         "Inscripciones a Clases": totales.inscripciones,
         "Cancelaciones": totales.cancelaciones,
+        "Lista de Espera": 0,
         "Asistencias": totales.asistencias,
         "Inasistencias": totales.inasistencias
       });
       const wsConcurrencia = XLSX.utils.json_to_sheet(dataConcurrencia);
+      // Ajuste de legibilidad para Concurrencia
+      wsConcurrencia['!cols'] = [{ wch: 25 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsConcurrencia, "Concurrencia");
 
       // Pestaña 3: Mapa de Calor
@@ -152,19 +157,31 @@ export default function ClientesReportes() {
           return fila;
         });
         const wsMapa = XLSX.utils.json_to_sheet(dataMapaCalor);
+        // Ajuste de legibilidad para el Mapa
+        const colWidths = [{ wch: 15 }];
+        listaHorarios.forEach(() => colWidths.push({ wch: 10 }));
+        wsMapa['!cols'] = colWidths;
         XLSX.utils.book_append_sheet(wb, wsMapa, "Mapa de Calor");
       }
 
-      // Pestaña 4: Sancionados
-      const dataSanciones = reporte.sancionados
-        ?.filter(user => !motivosOcultos.includes(user.motivo))
-        .map(user => ({
-          "Nombre": user.nombre,
+      // Pestaña 4: Sancionados (Módulo Aparte y Legible)
+      const sancionadosFiltrados = reporte.sancionados?.filter(user => !motivosOcultos.includes(user.motivo)) || [];
+      if (sancionadosFiltrados.length > 0) {
+        const dataSanciones = sancionadosFiltrados.map(user => ({
+          "Nombre del Alumno": user.nombre,
           "Motivo de Suspensión": user.motivo,
           "Inicio de Suspensión": user.fecha_inicio
-        })) || [];
-      const wsSanciones = XLSX.utils.json_to_sheet(dataSanciones);
-      XLSX.utils.book_append_sheet(wb, wsSanciones, "Sancionados");
+        }));
+        const wsSanciones = XLSX.utils.json_to_sheet(dataSanciones);
+        // Anchos de columna súper claros para este módulo
+        wsSanciones['!cols'] = [{ wch: 30 }, { wch: 45 }, { wch: 25 }];
+        XLSX.utils.book_append_sheet(wb, wsSanciones, "Cuentas Suspendidas");
+      } else {
+        // Si no hay sancionados, dejamos constancia en una hoja
+        const wsSancionesVacia = XLSX.utils.json_to_sheet([{ "Estado": "No se registraron suspensiones en este período." }]);
+        wsSancionesVacia['!cols'] = [{ wch: 50 }];
+        XLSX.utils.book_append_sheet(wb, wsSancionesVacia, "Cuentas Suspendidas");
+      }
 
       XLSX.writeFile(wb, filename);
 
@@ -186,21 +203,17 @@ export default function ClientesReportes() {
         doc.setFontSize(11);
         doc.setTextColor(15, 118, 110);
         doc.text(`Filtro aplicado: ${filtroEspecialidad}`, 14, currentY);
-        doc.setTextColor(0, 0, 0); // Reset color
+        doc.setTextColor(0, 0, 0);
         currentY += 8;
       } else {
         currentY += 4;
       }
 
-      // Resumen Global y Sanciones
+      // Resumen Global
       doc.setFontSize(11);
       doc.text(`Ausentismo Promedio: ${reporte.resumen.tasa_ausentismo}%`, 14, currentY); currentY += 6;
       doc.text(`Nuevos Registros: ${reporte.resumen.nuevos_registros || 0}`, 14, currentY); currentY += 6;
-      doc.text(`Clientes Suspendidos: ${reporte.resumen.clientes_suspendidos_rango || 0}`, 14, currentY); currentY += 8;
-      
-      doc.setFontSize(10);
-      doc.text(`Desglose de Suspensiones -> 3 Faltas: ${statsSanciones.tresFaltas} | >50% Ausencia: ${statsSanciones.cincuentaPorciento} | Otros: ${statsSanciones.otrosMotivos} | Reincidentes: ${statsSanciones.reincidentes}`, 14, currentY);
-      currentY += 14;
+      doc.text(`Clientes Suspendidos: ${reporte.resumen.clientes_suspendidos_rango || 0}`, 14, currentY); currentY += 14;
 
       const baseTableStyles = {
         theme: 'striped',
@@ -219,17 +232,17 @@ export default function ClientesReportes() {
         const insc = c.asistencias_fijas + c.asistencias_individuales + c.cancelaciones_fijas + c.cancelaciones_individuales;
         const canc = c.cancelaciones_fijas + c.cancelaciones_individuales;
         const asist = c.asistencias_fijas + c.asistencias_individuales;
-        return [c.tipo, Math.floor(insc * 0.6), insc, canc, asist, canc]; // inasistencias = cancelaciones
+        return [c.tipo, Math.floor(insc * 0.6), insc, canc, 0, asist, canc]; 
       });
-      // Agregamos la fila de totales en el PDF
-      bodyConcurrencia.push([{ content: 'TOTALES', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, Math.floor(totales.inscripciones * 0.6), totales.inscripciones, totales.cancelaciones, totales.asistencias, totales.inasistencias]);
+      bodyConcurrencia.push([{ content: 'TOTALES', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, Math.floor(totales.inscripciones * 0.6), totales.inscripciones, totales.cancelaciones, 0, totales.asistencias, totales.inasistencias]);
 
       autoTable(doc, {
         ...baseTableStyles,
         startY: currentY + 4,
-        head: [['Especialidad', 'Alumnos', 'Inscripciones', 'Cancelaciones', 'Asistencias', 'Inasistencias']],
+        head: [['Especialidad', 'Alumnos', 'Inscrip.', 'Cancel.', 'Espera', 'Asist.', 'Inasist.']],
         body: bodyConcurrencia,
-        columnStyles: { 0: { cellWidth: 45 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } }
+        styles: { ...baseTableStyles.styles, fontSize: 9, cellPadding: 3 },
+        columnStyles: { 0: { cellWidth: 35 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' } }
       });
       currentY = doc.lastAutoTable.finalY + 14;
 
@@ -250,28 +263,44 @@ export default function ClientesReportes() {
         autoTable(doc, {
           ...baseTableStyles,
           startY: currentY + 4,
-          head: [['Día', ...listaHorarios.map(h => h)]], // Ej: Día, 08:00, 09:00
+          head: [['Día', ...listaHorarios.map(h => h)]],
           body: bodyMapa,
-          styles: { ...baseTableStyles.styles, fontSize: 8, cellPadding: 2, halign: 'center' }, // Fuente y padding más chicos para que entren todas las horas
+          styles: { ...baseTableStyles.styles, fontSize: 8, cellPadding: 2, halign: 'center' }, 
           headStyles: { ...baseTableStyles.headStyles, fontSize: 8 },
           columnStyles: { 0: { halign: 'left', cellWidth: 20 } }
         });
         currentY = doc.lastAutoTable.finalY + 14;
       }
 
-      // Tabla de Sanciones
+      // Bloque de Cuentas Suspendidas
+      checkPageBreak(40);
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text("Cuentas Suspendidas por Inasistencia", 14, currentY);
+      currentY += 6;
+      
+      doc.setFontSize(10);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Desglose -> 3 Faltas: ${statsSanciones.tresFaltas} | >50% Ausencia: ${statsSanciones.cincuentaPorciento} | Otros: ${statsSanciones.otrosMotivos} | Reincidentes: ${statsSanciones.reincidentes}`, 14, currentY);
+      doc.setTextColor(0, 0, 0);
+      currentY += 8;
+
       const sancionadosFiltrados = reporte.sancionados?.filter(user => !motivosOcultos.includes(user.motivo)) || [];
       if (sancionadosFiltrados.length > 0) {
-        checkPageBreak(40);
-        doc.setFontSize(14);
-        doc.text("Cuentas Suspendidas", 14, currentY);
         autoTable(doc, {
           ...baseTableStyles,
-          startY: currentY + 4,
+          startY: currentY,
           head: [['Nombre', 'Motivo', 'Fecha Inicio']],
           body: sancionadosFiltrados.map(user => [user.nombre, user.motivo, user.fecha_inicio]),
           columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 80 } }
         });
+        currentY = doc.lastAutoTable.finalY + 14;
+      } else {
+        doc.setFontSize(11);
+        doc.setTextColor(100, 116, 139);
+        doc.text("No se registraron suspensiones en este período para listar.", 14, currentY + 4);
+        doc.setTextColor(0, 0, 0);
+        currentY += 14;
       }
 
       doc.save(filename);
@@ -472,6 +501,7 @@ export default function ClientesReportes() {
             </div>
           </div>
 
+          {/* EL BOTÓN AHORA RECIBE LA FUNCIÓN HANDLE EXPORT */}
           <ReportesExportar tipoReporte="Clientes" onExport={handleExport} />
         </>
       )}
