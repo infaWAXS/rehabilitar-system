@@ -3,215 +3,141 @@ from datetime import date, datetime, timedelta
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.plan import Plan
-from app.models.user_plan import UserPlan
 from app.models.room import Room
 from app.models.activity import Activity
 from app.models.attendance import Attendance
 
-# 🚨 IMPORTANTE: Verificá que la ruta de importación coincida con tu estructura
-from app.models.user_suspension import UserSuspension 
-
 def seed_estadisticas(db: Session):
-    print("⏳ Iniciando carga de datos estadísticos estacionales (Ene-Jun 2026)...")
+    print("⏳ Iniciando carga de datos de Testing (Clases específicas y control de ausencias)...")
 
-    # 1. Asegurar que existan los Planes Base
+    # ──────────────────────────────────────────────────────────────────────────
+    # 1. PLANES BASE Y CLIENTES
+    # ──────────────────────────────────────────────────────────────────────────
     planes_nombres = ["Plan Básico", "Plan Premium", "Pase Libre"]
     for nombre in planes_nombres:
-        existe = db.query(Plan).filter(Plan.name == nombre).first()
-        if not existe:
-            nuevo_plan = Plan(
-                name=nombre,
-                description=f"Descripción de {nombre}",
-                price=random.choice([15000.00, 22000.00, 30000.00]),
-                duration_days=30,
-                coverage_type="Acceso estándar",
-                status="active"
-            )
+        if not db.query(Plan).filter(Plan.name == nombre).first():
+            nuevo_plan = Plan(name=nombre, description="Descripción", price=20000.00, duration_days=30, coverage_type="estándar", status="active")
             db.add(nuevo_plan)
     db.commit()
-    planes = db.query(Plan).all()
 
-    # Listas para generación de nombres
-    nombres = ["Lucas", "Santiago", "Mateo", "Matias", "Nicolas", "Agustina", "Sofia", "Valentina", "Camila", "Martina"]
-    apellidos = ["Garcia", "Rodriguez", "Lopez", "Fernandez", "Gomez", "Diaz", "Perez", "Romero", "Alvarez", "Sosa"]
-    
     clientes_creados = []
-
-    # 2. Distribución de Nuevos Registros según las reglas del negocio para 2026
-    distribucion_usuarios = {
-        1: 5,   # Enero: Pocos ingresos
-        2: 25,  # Febrero: Explota de gente
-        3: 12,  # Marzo: Se estabiliza
-        4: 10,  # Abril: Se mantiene estable
-        5: 11,  # Mayo: Se mantiene estable
-        6: 9    # Junio: Se mantiene estable
-    }
-
-    alumno_idx = 0
-    for mes, cant_usuarios in distribucion_usuarios.items():
-        for _ in range(cant_usuarios):
-            alumno_idx += 1
-            dia_random = random.randint(1, 28)
-            fecha_registro = datetime(2026, mes, dia_random, random.randint(9, 19), random.randint(0, 59))
-            
-            # 1 de cada 15 usuarios nace con la cuenta deshabilitada
-            status_cuenta = "disabled" if alumno_idx % 15 == 0 else "active"
-            email_random = f"alumno{alumno_idx}_{random.randint(100,999)}@rehabilitar.com"
-
+    for i in range(1, 20): 
+        email_random = f"alumno{i}@rehabilitar.com"
+        usuario_existente = db.query(User).filter(User.email == email_random).first()
+        if not usuario_existente:
             nuevo_usuario = User(
-                name=random.choice(nombres),
-                lastname=random.choice(apellidos),
-                email=email_random,
-                password="hashed_password_123",
-                role="client",
-                account_status=status_cuenta,
-                birth_date=date(1996, 3, 15),
-                created_at=fecha_registro
+                name="Alumno", 
+                lastname=f"Test_{i}", 
+                email=email_random, 
+                password="pwd",
+                role="client", 
+                account_status="active", 
+                created_at=datetime(2026, 1, 1, 10, 0),
+                birth_date=date(1990, 1, 1) 
             )
             db.add(nuevo_usuario)
             clientes_creados.append(nuevo_usuario)
+        else:
+            clientes_creados.append(usuario_existente)
     db.commit()
 
-    # =========================================================================
-    # 2.5 GENERACIÓN DE HISTORIAL DE SUSPENSIONES Y REACTIVACIONES
-    # =========================================================================
-    print("⏳ Generando historial de suspensiones y reactivaciones...")
-    
-    razones_suspension = [
-        "Inasistencia mayor al 50%", 
-        "Acumulación de 3 faltas consecutivas", 
-        "Falta de pago de arancel", 
-        "Incumplimiento de normas del centro"
+    # ──────────────────────────────────────────────────────────────────────────
+    # 2. CREACIÓN DE PROFESORES COMO USUARIOS
+    # ──────────────────────────────────────────────────────────────────────────
+    profesores_data = [
+        {"name": "Carlos", "lastname": "Gómez"},
+        {"name": "María", "lastname": "Rodríguez"},
+        {"name": "Leyma", "lastname": ""} 
     ]
     
-    razones_reintegro = [
-        "Pago regularizado exitosamente", 
-        "Alta médica presentada y aprobada", 
-        "Reactivación manual por la administración",
-        "Compromiso de asistencia firmado"
-    ]
-
-    for cliente in clientes_creados:
-        # CASO A: Usuario actualmente deshabilitado -> Suspensión ACTIVA
-        if cliente.account_status == "disabled":
-            fecha_suspension = cliente.created_at + timedelta(days=random.randint(5, 15))
-            
-            suspension_activa = UserSuspension(
-                user_id=cliente.id,
-                suspension_date=fecha_suspension,
-                suspension_reason=random.choice(razones_suspension),
-                is_active=True,
-                reinstatement_date=None,
-                reinstatement_reason=None
+    for p_data in profesores_data:
+        email_profe = f"{p_data['name'].lower()}@profe.com"
+        if not db.query(User).filter(User.email == email_profe).first():
+            nuevo_profe = User(
+                name=p_data['name'], 
+                lastname=p_data['lastname'], 
+                email=email_profe, 
+                password="pwd",
+                role="professor", 
+                account_status="active", 
+                created_at=datetime(2025, 12, 1),
+                birth_date=date(1985, 5, 5) 
             )
-            db.add(suspension_activa)
-
-        # CASO B: Usuario activo, pero con historial de suspensión (Muestra reducida)
-        elif cliente.id % 8 == 0: 
-            fecha_suspension = cliente.created_at + timedelta(days=random.randint(2, 10))
-            duracion_sancion = random.randint(3, 20) 
-            fecha_reintegro = fecha_suspension + timedelta(days=duracion_sancion)
-            
-            # Solo guardamos el historial si la fecha de reintegro es coherente (pasada)
-            if fecha_reintegro < datetime(2026, 7, 1):
-                suspension_pasada = UserSuspension(
-                    user_id=cliente.id,
-                    suspension_date=fecha_suspension,
-                    suspension_reason=random.choice(razones_suspension),
-                    is_active=False,
-                    reinstatement_date=fecha_reintegro,
-                    reinstatement_reason=random.choice(razones_reintegro)
-                )
-                db.add(suspension_pasada)
-                
+            db.add(nuevo_profe)
     db.commit()
 
-    # 3. Asignar Suscripciones/Planes según el mes de registro
-    for cliente in clientes_creados:
-        if cliente.account_status == "active":
-            fecha_inicio = cliente.created_at.date() + timedelta(days=random.randint(0, 2))
-            fecha_fin = fecha_inicio + timedelta(days=30)
-            
-            plan_activo = UserPlan(
-                user_id=cliente.id,
-                plan_id=random.choice(planes).id,
-                specialization=random.choice(["Tren Superior", "Tren Inferior", "Tren Medio"]),
-                start_date=fecha_inicio,
-                end_date=fecha_fin,
-                status="active" if fecha_fin >= date.today() else "expired"
-            )
-            db.add(plan_activo)
-    db.commit()
-
-    # 4. Obtener salas de kinesiología existentes
+    # ──────────────────────────────────────────────────────────────────────────
+    # 3. VERIFICACIÓN DE SALAS
+    # ──────────────────────────────────────────────────────────────────────────
     salas = db.query(Room).all()
     if not salas:
-        print("⚠️ No hay salas creadas.")
-        return
+        db.add_all([
+            Room(name="Sala 1", capacity=15, equipment="Básico", status="active"),
+            Room(name="Sala 4", capacity=10, equipment="Especial", status="active")
+        ])
+        db.commit()
+        salas = db.query(Room).all()
 
-    # 5. Generar Actividades Históricas
-    profesores_staff = ["Carlos Gómez", "María Rodríguez", "Juan Pérez", "Marcos Profesor"]
-    especialidades_tren = ["Tren Superior", "Tren Inferior", "Tren Medio"]
-    actividades_creadas = []
+    sala_1 = next((s for s in salas if "1" in s.name or "1" in str(s.id)), salas[0])
+    sala_4 = next((s for s in salas if "4" in s.name or "4" in str(s.id)), salas[-1])
 
-    distribucion_clases = {1: 6, 2: 15, 3: 12, 4: 12, 5: 12, 6: 12}
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4. INYECCIÓN DE CLASES (AHORA CON AUSENTES Y PRECIOS VARIABLES)
+    # ──────────────────────────────────────────────────────────────────────────
+    print("⏳ Inyectando clases individuales, pagos y alumnos ausentes...")
 
-    act_idx = 0
-    for mes, cant_clases in distribucion_clases.items():
-        for _ in range(cant_clases):
-            act_idx += 1
-            dia_random = random.randint(1, 28)
-            fecha_act = date(2026, mes, dia_random)
-            
-            nueva_actividad = Activity(
-                room_id=random.choice(salas).id,
-                name=f"Sesión Funcional M{act_idx}",
-                specialization=random.choice(especialidades_tren),
-                activity_type=random.choice(["fixed", "individual"]),
-                specific_date=fecha_act,
-                time_slot=random.choice(["09:00", "15:00", "19:00"]),
-                professor=random.choice(profesores_staff),
-                price=3000.00,
-                capacity=random.choice([10, 12]),
-                status="active"
-            )
-            db.add(nueva_actividad)
-            actividades_creadas.append(nueva_actividad)
-    db.commit()
+    # Agregamos la clave 'ausentes' y un 'precio' para impactar las métricas de ingresos
+    clases_test = [
+        {"fecha": date(2026, 1, 5), "nombre": "Yoga", "hora": "08:00", "sala": sala_4, "profe": "Carlos Gómez", "capacidad": 6, "presentes": 2, "ausentes": 1, "precio": 3000.00, "esp": "Tren Medio"},
+        {"fecha": date(2026, 1, 20), "nombre": "Hip Trass", "hora": "10:00", "sala": sala_1, "profe": "María Rodríguez", "capacidad": 9, "presentes": 3, "ausentes": 2, "precio": 3500.00, "esp": "Tren Inferior"},
+        {"fecha": date(2026, 1, 22), "nombre": "twrk", "hora": "12:00", "sala": sala_1, "profe": "Leyma", "capacidad": 9, "presentes": 2, "ausentes": 0, "precio": 3000.00, "esp": "Tren Inferior"},
+        {"fecha": date(2026, 1, 29), "nombre": "perreo", "hora": "12:00", "sala": sala_1, "profe": "Leyma", "capacidad": 9, "presentes": 1, "ausentes": 2, "precio": 3000.00, "esp": "Tren Inferior"},
+        # Nueva clase extra con un precio mayor para ver un pico financiero de individuales
+        {"fecha": date(2026, 1, 15), "nombre": "Pilates Clínico", "hora": "18:00", "sala": sala_4, "profe": "Carlos Gómez", "capacidad": 8, "presentes": 4, "ausentes": 3, "precio": 6500.00, "esp": "Tren Superior"}
+    ]
 
-    # 6. Generar Asistencias aplicando las Reglas de Concurrencia por Mes
-    for actividad in actividades_creadas:
-        mes_actual = actividad.specific_date.month
+    for c in clases_test:
+        # 1. Crear la Actividad Individual (Esto factura en Finanzas)
+        nueva_act_test = Activity(
+            room_id=c["sala"].id,
+            name=c["nombre"],
+            specialization=c["esp"],
+            activity_type="individual", # Obliga al sistema a considerarlo un ingreso individual
+            specific_date=c["fecha"],
+            time_slot=c["hora"],
+            professor=c["profe"],
+            price=c["precio"], 
+            capacity=c["capacidad"],
+            status="active"
+        )
+        db.add(nueva_act_test)
+        db.flush() # Obtenemos el ID de la clase
+
+        # 2. Seleccionar el total de alumnos que PAGARON (Presentes + Ausentes)
+        total_anotados = c["presentes"] + c["ausentes"]
+        alumnos_disponibles = [u for u in clientes_creados if u.created_at.date() <= c["fecha"]]
         
-        if mes_actual == 1:
-            pesos_asistencia = [40, 60]
-            rango_anotados = (2, 4)
-        elif mes_actual == 2:
-            pesos_asistencia = [85, 15]
-            rango_anotados = (7, 10)
+        # Nos aseguramos de no pedir más alumnos de los que existen
+        if total_anotados > len(alumnos_disponibles):
+            alumnos_anotados = alumnos_disponibles
         else:
-            pesos_asistencia = [75, 25]
-            rango_anotados = (5, 8)
+            alumnos_anotados = random.sample(alumnos_disponibles, total_anotados)
 
-        alumnos_disponibles = [u for u in clientes_creados if u.created_at.date() <= actividad.specific_date]
-        if not alumnos_disponibles:
-            continue
+        hora_int = int(c["hora"].split(":")[0])
+        fecha_dt = datetime.combine(c["fecha"], datetime.min.time()) + timedelta(hours=hora_int)
 
-        cant_anotados = min(random.randint(*rango_anotados), len(alumnos_disponibles))
-        alumnos_anotados = random.sample(alumnos_disponibles, cant_anotados)
-
-        fecha_base_dt = datetime.combine(actividad.specific_date, datetime.min.time())
-
-        for alumno in alumnos_anotados:
-            estado_asistencia = random.choices(["present", "absent"], weights=pesos_asistencia)[0]
-
-            nueva_asistencia = Attendance(
+        # 3. Repartir el estado: Los primeros 'X' van, los últimos 'Y' faltan
+        for index, alumno in enumerate(alumnos_anotados):
+            # Si el índice es menor a los presentes que definimos, fue. Si no, faltó pero pagó igual.
+            estado_asistencia = "present" if index < c["presentes"] else "absent"
+            
+            nueva_asistencia_test = Attendance(
                 user_id=alumno.id,
-                activity_id=actividad.id,
-                status=estado_asistencia,
-                timestamp=fecha_base_dt + timedelta(hours=random.randint(9, 19))
+                activity_id=nueva_act_test.id,
+                status=estado_asistencia, 
+                timestamp=fecha_dt
             )
-            db.add(nueva_asistencia)
+            db.add(nueva_asistencia_test)
             
     db.commit()
-    print("✅ Carga masiva estacional completada. ¡Ya podés comparar los meses en el frontend!")
+    print("✅ Seed finalizado. Ingresos por clases individuales sumados (Incluyendo ausentes facturados).")
