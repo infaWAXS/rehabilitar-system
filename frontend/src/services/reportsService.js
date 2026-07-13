@@ -40,3 +40,11 @@ export async function getRoomsReport(fechaInicio, fechaFin) {
   const response = await apiClient.get(`/api/reports/rooms?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
   return response.data;
 }
+
+export async function getHubReport(fechaInicio, fechaFin) {
+  // Usamos el apiClient que ya tiene todo configurado (tokens, interceptores, etc.)
+  const response = await apiClient.get(`/api/reports/hub?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  
+  // apiClient devuelve un objeto donde la información está en la propiedad 'data'
+  return response.data;
+}

@@ -40,33 +40,43 @@ def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date
     total_ausentes = db.query(func.count(Attendance.id)).filter(Attendance.status == 'absent', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
     tasa_ausentismo = round((total_ausentes / total_asistencias * 100), 1) if total_asistencias > 0 else 0.0
 
-    # ──────────────────────────────────────────────────────────────────────────
+   # ──────────────────────────────────────────────────────────────────────────
     # 2. EVOLUCIÓN FINANCIERA MENSUAL (Gráfico de barras de los 12 meses)
     # ──────────────────────────────────────────────────────────────────────────
     cronologia_lista = []
     meses_mapeo = {1:"Ene", 2:"Feb", 3:"Mar", 4:"Abr", 5:"May", 6:"Jun", 7:"Jul", 8:"Ago", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dic"}
+    
+    from datetime import timedelta # Aseguramos la importación aquí
 
     for m in range(1, 13):
-        # Ingresos por Planes en el mes 'm'
+        # 1. Definimos dinámicamente el primer y último día del mes iterado
+        fecha_ini_mes = date(anio_actual, m, 1)
+        if m == 12:
+            fecha_fin_mes = date(anio_actual, 12, 31)
+        else:
+            fecha_fin_mes = date(anio_actual, m + 1, 1) - timedelta(days=1)
+            
+        # 2. Convertimos a datetime (00:00:00 a 23:59:59) para atrapar las transacciones con hora exacta
+        datetime_ini_mes = datetime.combine(fecha_ini_mes, datetime.min.time())
+        datetime_fin_mes = datetime.combine(fecha_fin_mes, datetime.max.time())
+
+        # 3. Ingresos por Planes en el mes 'm'
         ingresos_planes_mes = db.query(func.sum(Plan.price)).\
             join(UserPlan, UserPlan.plan_id == Plan.id).\
-            filter(
-                extract('year', UserPlan.start_date) == anio_actual,
-                extract('month', UserPlan.start_date) == m
-            ).scalar() or 0.0
-
-        # Ingresos por Transacciones/Señas en el mes 'm'
+            filter(UserPlan.start_date.between(fecha_ini_mes, fecha_fin_mes)).\
+            scalar() or 0.0
+            
+        # 4. Ingresos por Transacciones/Señas en el mes 'm'
         ingresos_transacciones_mes = db.query(func.sum(CreditTransaction.amount)).\
-            filter(
-                extract('year', CreditTransaction.created_at) == anio_actual,
-                extract('month', CreditTransaction.created_at) == m
-            ).scalar() or 0.0
+            filter(CreditTransaction.created_at.between(datetime_ini_mes, datetime_fin_mes)).\
+            scalar() or 0.0
 
-        total_mes = float(ingresos_planes_mes) + float(ingresos_transacciones_mes)
-        
+        # Unificamos ambas fuentes de ingresos
+        ingresos_mes_total = float(ingresos_planes_mes) + float(ingresos_transacciones_mes)
+
         cronologia_lista.append({
             "mes_corto": meses_mapeo[m],
-            "ingresos_brutos": round(total_mes, 2)
+            "ingresos_brutos": round(ingresos_mes_total, 2)
         })
 
     # ──────────────────────────────────────────────────────────────────────────
