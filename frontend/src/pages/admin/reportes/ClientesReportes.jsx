@@ -335,6 +335,75 @@ export default function ClientesReportes() {
             </div>
           </div>
 
+           {/* SECCIÓN SANCIONADOS */}
+          <div style={s.seccionReporte}>
+            <h2 style={s.subtitulo}>
+              Cuentas Suspendidas por Inasistencia
+              <span style={s.badgeGlobalTitulo}>Global</span>
+            </h2>
+            <p style={s.bajada}>Análisis de deserción y motivos de penalización automática.</p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>POR +3 FALTAS</span>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.tresFaltas}</p>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>AUSENCIA &gt; 50%</span>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.cincuentaPorciento}</p>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>OTROS MOTIVOS</span>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.otrosMotivos}</p>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>REINCIDENTES (2+)</span>
+                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.reincidentes}</p>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', background: '#f0fbfb', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)', marginBottom: '24px' }}>
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Récord más antiguo:</span>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
+                  {statsSanciones.masAntiguo.nombre !== '-' ? `${statsSanciones.masAntiguo.nombre} (${statsSanciones.masAntiguo.fecha})` : '-'}
+                </span>
+              </div>
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Suspensión más reciente:</span>
+                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
+                  {statsSanciones.masReciente.nombre !== '-' ? `${statsSanciones.masReciente.nombre} (${statsSanciones.masReciente.fecha})` : '-'}
+                </span>
+              </div>
+            </div>
+
+            <div style={s.wrapperTabla}>
+             <table style={s.tabla}>
+              <thead>
+                <tr>
+                  <th style={s.thOrdenable}>Nombre</th>
+                  <th style={s.thOrdenable}>Motivo de la Suspensión</th>
+                  <th style={s.thOrdenable}>Inicio de Suspensión</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reporte.sancionados
+                  ?.filter(user => !motivosOcultos.includes(user.motivo)) 
+                  .map((user, idx) => (
+                    <tr key={idx}>
+                      <td style={s.td}><strong>{user.nombre}</strong></td>
+                      <td style={s.td}>{user.motivo}</td>
+                      <td style={s.td}>
+                        <span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{user.fecha_inicio}</span>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            </div>
+          </div>
+                  
+          {/*Filtro especialidad*/}        
           <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)' }}>
             <div style={s.grupo}>
               <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
@@ -431,74 +500,6 @@ export default function ClientesReportes() {
             ) : (
               <ReportesEmptyState entidad="flujos de asistencia" filtroEspecialidad={filtroEspecialidad} />
             )}
-          </div>
-          
-          {/* SECCIÓN SANCIONADOS */}
-          <div style={s.seccionReporte}>
-            <h2 style={s.subtitulo}>
-              Cuentas Suspendidas por Inasistencia
-              <span style={s.badgeGlobalTitulo}>Global</span>
-            </h2>
-            <p style={s.bajada}>Análisis de deserción y motivos de penalización automática.</p>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>POR +3 FALTAS</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.tresFaltas}</p>
-              </div>
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>AUSENCIA &gt; 50%</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.cincuentaPorciento}</p>
-              </div>
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>OTROS MOTIVOS</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.otrosMotivos}</p>
-              </div>
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>REINCIDENTES (2+)</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.reincidentes}</p>
-              </div>
-            </div>
-            
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', background: '#f0fbfb', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)', marginBottom: '24px' }}>
-              <div>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Récord más antiguo:</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
-                  {statsSanciones.masAntiguo.nombre !== '-' ? `${statsSanciones.masAntiguo.nombre} (${statsSanciones.masAntiguo.fecha})` : '-'}
-                </span>
-              </div>
-              <div>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Suspensión más reciente:</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
-                  {statsSanciones.masReciente.nombre !== '-' ? `${statsSanciones.masReciente.nombre} (${statsSanciones.masReciente.fecha})` : '-'}
-                </span>
-              </div>
-            </div>
-
-            <div style={s.wrapperTabla}>
-             <table style={s.tabla}>
-              <thead>
-                <tr>
-                  <th style={s.thOrdenable}>Nombre</th>
-                  <th style={s.thOrdenable}>Motivo de la Suspensión</th>
-                  <th style={s.thOrdenable}>Inicio de Suspensión</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reporte.sancionados
-                  ?.filter(user => !motivosOcultos.includes(user.motivo)) 
-                  .map((user, idx) => (
-                    <tr key={idx}>
-                      <td style={s.td}><strong>{user.nombre}</strong></td>
-                      <td style={s.td}>{user.motivo}</td>
-                      <td style={s.td}>
-                        <span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{user.fecha_inicio}</span>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-            </div>
           </div>
 
           {/* EL BOTÓN AHORA RECIBE LA FUNCIÓN HANDLE EXPORT */}

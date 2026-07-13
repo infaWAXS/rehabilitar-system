@@ -103,6 +103,7 @@ export default function StaffReportes() {
     return filtroEspecialidad ? a.especialidad === filtroEspecialidad : true;
   }) || [];
 
+
   // ─────────────────────────────────────────────────────────
   // LÓGICA DE EXPORTACIÓN DETALLADA (PDF / EXCEL)
   // ─────────────────────────────────────────────────────────
@@ -172,23 +173,26 @@ export default function StaffReportes() {
         XLSX.utils.book_append_sheet(wb, wsAbsentismo, "Absentismo");
       }
 
-      // Pestaña 4: Retención
+      // Pestaña 4: Retención (Dinámica Real)
       if (profesoresRetencionFiltrados.length > 0) {
-        const dataRetencion = profesoresRetencionFiltrados.map(r => ({
-          "Profesor": r.profesor,
-          "Clase / Especialidad": r.clase,
-          "Semana 1": r.semana_1,
-          "Semana 2": r.semana_2,
-          "Semana 3": r.semana_3,
-          "Semana 4": r.semana_4
-        }));
+        const dataRetencion = profesoresRetencionFiltrados.map(r => {
+          const fila = {
+            "Profesor": r.profesor,
+            "Clase / Especialidad": r.clase
+          };
+          for (let i = 0; i < 4; i++) {
+            const sesion = r.sesiones?.[i];
+            fila[`Sesión ${i + 1}`] = sesion ? `${sesion.presentes} asist. (${sesion.fecha})` : "-";
+          }
+          return fila;
+        });
         const wsRetencion = XLSX.utils.json_to_sheet(dataRetencion);
-        wsRetencion['!cols'] = [{ wch: 30 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
-        XLSX.utils.book_append_sheet(wb, wsRetencion, "Retención");
+        wsRetencion['!cols'] = [{ wch: 30 }, { wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+        XLSX.utils.book_append_sheet(wb, wsRetencion, "Evolución Retención");
       } else {
-        const wsRetencion = XLSX.utils.json_to_sheet([{ "Estado": "No hay clases fijas para analizar retención." }]);
-        wsRetencion['!cols'] = [{ wch: 50 }];
-        XLSX.utils.book_append_sheet(wb, wsRetencion, "Retención");
+        const wsRetencion = XLSX.utils.json_to_sheet([{ "Estado": "No hay clases fijas para analizar retención en este rango." }]);
+        wsRetencion['!cols'] = [{ wch: 60 }];
+        XLSX.utils.book_append_sheet(wb, wsRetencion, "Evolución Retención");
       }
 
       // Pestaña 5: Bajas
@@ -229,17 +233,22 @@ export default function StaffReportes() {
       }
 
       // Resumen Global
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Resumen de Staff", 14, currentY);
+      currentY += 6;
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
       doc.text(`Prof. Tren Superior: ${reporte.resumen?.tren_superior || 0}`, 14, currentY); currentY += 6;
       doc.text(`Prof. Tren Inferior: ${reporte.resumen?.tren_inferior || 0}`, 14, currentY); currentY += 6;
-      doc.text(`Prof. Tren Medio: ${reporte.resumen?.tren_medio || 0}`, 14, currentY); currentY += 14;
+      doc.text(`Prof. Tren Medio: ${reporte.resumen?.tren_medio || 0}`, 14, currentY); currentY += 10;
 
       const baseTableStyles = {
         theme: 'striped',
-        headStyles: { fillColor: [15, 118, 110], fontSize: 11, halign: 'center' },
-        bodyStyles: { fontSize: 10, valign: 'middle' },
-        styles: { cellPadding: 5, overflow: 'linebreak' },
-        margin: { top: 14 }
+        headStyles: { fillColor: [15, 118, 110], fontSize: 10, halign: 'center' },
+        bodyStyles: { fontSize: 9, valign: 'middle' },
+        styles: { cellPadding: 3, overflow: 'linebreak' },
+        margin: { top: 10 }
       };
 
       // Tabla de Concurrencia
@@ -265,9 +274,9 @@ export default function StaffReportes() {
       autoTable(doc, {
         ...baseTableStyles,
         startY: currentY + 4,
-        head: [['Kinesiólogo', 'Atendidos', 'Ausencias', 'Clases Dadas', 'Cupos (%)']],
+        head: [['Kinesiólogo', 'Alumnos', 'Ausencias', 'Clases', 'Cupos (%)']],
         body: bodyConcurrencia,
-        columnStyles: { 0: { cellWidth: 55 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' } }
+        columnStyles: { 0: { cellWidth: 50 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' } }
       });
       currentY = doc.lastAutoTable.finalY + 14;
 
@@ -293,24 +302,32 @@ export default function StaffReportes() {
         currentY += 16;
       }
 
-      // Retención
+      // Retención Dinámica
       checkPageBreak(40);
       doc.setFontSize(14);
-      doc.text("Retención de Alumno por Profesor", 14, currentY);
+      doc.text("Retención de Alumno por Profesor (Evolución)", 14, currentY);
       
       if (profesoresRetencionFiltrados.length > 0) {
         autoTable(doc, {
           ...baseTableStyles,
           startY: currentY + 4,
-          head: [['Profesor', 'Clase/Esp.', 'Sem 1', 'Sem 2', 'Sem 3', 'Sem 4']],
-          body: profesoresRetencionFiltrados.map(r => [r.profesor, r.clase, r.semana_1, r.semana_2, r.semana_3, r.semana_4]),
-          columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 45 }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } }
+          head: [['Profesor', 'Clase/Esp.', 'Sesión 1', 'Sesión 2', 'Sesión 3', 'Sesión 4']],
+          body: profesoresRetencionFiltrados.map(r => [
+            r.profesor, 
+            r.clase, 
+            r.sesiones?.[0] ? `${r.sesiones[0].presentes}\n(${r.sesiones[0].fecha})` : '-',
+            r.sesiones?.[1] ? `${r.sesiones[1].presentes}\n(${r.sesiones[1].fecha})` : '-',
+            r.sesiones?.[2] ? `${r.sesiones[2].presentes}\n(${r.sesiones[2].fecha})` : '-',
+            r.sesiones?.[3] ? `${r.sesiones[3].presentes}\n(${r.sesiones[3].fecha})` : '-'
+          ]),
+          styles: { ...baseTableStyles.styles, cellPadding: 2, fontSize: 8 },
+          columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 35 }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } }
         });
         currentY = doc.lastAutoTable.finalY + 14;
       } else {
         doc.setFontSize(11);
         doc.setTextColor(100, 116, 139);
-        doc.text("No hay clases fijas para analizar retención.", 14, currentY + 6);
+        doc.text("No hay clases fijas para analizar retención en este rango.", 14, currentY + 6);
         doc.setTextColor(0, 0, 0);
         currentY += 16;
       }
@@ -504,10 +521,10 @@ export default function StaffReportes() {
 
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
-              Retención de Alumno por Profesor (Clases Fijas)
-              {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Últimas 4 Semanas Fijas</span>}
+              Retención de Alumno por Profesor (Evolución de Sesiones)
+              {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Dinámico en Rango</span>}
             </h2>
-            <p style={s.bajada}>Mide la consistencia de los alumnos mes a mes en clases estables, independientemente del rango de fechas superior.</p>
+            <p style={s.bajada}>Muestra hasta 4 sesiones consecutivas de una clase para medir la fluctuación de alumnos. Las sesiones sombreadas en gris cayeron fuera de tu rango de fechas seleccionado.</p>
             
             {profesoresRetencionFiltrados?.length > 0 ? (
               <div style={s.wrapperTabla}>
@@ -515,11 +532,11 @@ export default function StaffReportes() {
                   <thead>
                     <tr>
                       <th style={s.thOrdenable}>Profesor</th>
-                      <th style={s.thOrdenable}>Clase / Especialidad</th>
-                      <th style={s.thOrdenable}>Semana 1</th>
-                      <th style={s.thOrdenable}>Semana 2</th>
-                      <th style={s.thOrdenable}>Semana 3</th>
-                      <th style={s.thOrdenable}>Semana 4</th>
+                      <th style={s.thOrdenable}>Clase / Esp.</th>
+                      <th style={{...s.thOrdenable, textAlign: 'center'}}>Sesión 1</th>
+                      <th style={{...s.thOrdenable, textAlign: 'center'}}>Sesión 2</th>
+                      <th style={{...s.thOrdenable, textAlign: 'center'}}>Sesión 3</th>
+                      <th style={{...s.thOrdenable, textAlign: 'center'}}>Sesión 4</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -527,17 +544,38 @@ export default function StaffReportes() {
                       <tr key={i}>
                         <td style={s.td}><strong>{r.profesor}</strong></td>
                         <td style={s.td}>{r.clase}</td>
-                        <td style={s.td}><span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{r.semana_1}</span></td>
-                        <td style={s.td}><span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{r.semana_2}</span></td>
-                        <td style={s.td}><span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{r.semana_3}</span></td>
-                        <td style={s.td}><span style={{...s.badgePorcentaje, background: '#dcfce7', color: '#166534'}}>{r.semana_4}</span></td>
+                        
+                        {/* Iteramos para dibujar las 4 sesiones posibles */}
+                        {[0, 1, 2, 3].map(index => {
+                          const sesion = r.sesiones?.[index];
+                          return (
+                            <td key={index} style={{ ...s.td, textAlign: 'center' }}>
+                              {sesion ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                  <span style={{
+                                    ...s.badgePorcentaje, 
+                                    background: sesion.in_range ? '#e0f2fe' : '#f1f5f9', 
+                                    color: sesion.in_range ? '#0369a1' : '#64748b'
+                                  }}>
+                                    {sesion.presentes} asist.
+                                  </span>
+                                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>
+                                    {sesion.fecha}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span style={{ color: '#cbd5e1' }}>-</span>
+                              )}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <ReportesEmptyState entidad="clases fijas para analizar retención" filtroEspecialidad={filtroEspecialidad} />
+              <ReportesEmptyState entidad="clases fijas para analizar retención en este rango" filtroEspecialidad={filtroEspecialidad} />
             )}
           </div>
 
