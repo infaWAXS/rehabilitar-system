@@ -1,6 +1,5 @@
 # Responsable: Agustin - logica de negocio de registro e inicio de sesion.
 # Francis: resto de funciones de gestion de usuarios.
-from urllib import request
 from threading import Thread
 from datetime import datetime
 from sqlalchemy import or_
@@ -35,7 +34,10 @@ def register_user(user_data, db: Session):
         User.email == user_data.email
     ).first()
 
-    if existing_user:
+    # El email es unique en la BD, así que no se puede insertar otra fila con el mismo.
+    # Si pertenece a una cuenta activa, se rechaza; si pertenece a una cuenta dada de baja
+    # lógica, más abajo se reactiva ese mismo registro en vez de crear uno nuevo.
+    if existing_user and not existing_user.is_deleted:
         raise email_already_exists_exception()
 
     # Validar que profesores tengan especialidad asignada
@@ -50,15 +52,44 @@ def register_user(user_data, db: Session):
 
     dni = getattr(user_data, "dni", None)
     if dni:
-        existing_dni = db.query(User).filter(
-            User.dni == dni, User.role == role
-        ).first()
-        if existing_dni:
+        # El DNI puede repetirse entre roles distintos (una persona puede ser cliente y
+        # profesor), por eso se filtra por rol. Se excluye la cuenta que se está reactivando.
+        dni_query = db.query(User).filter(
+            User.dni == dni,
+            User.role == role,
+            User.is_deleted == False,
+        )
+        if existing_user:
+            dni_query = dni_query.filter(User.id != existing_user.id)
+        if dni_query.first():
             raise dni_already_exists_exception()
 
     hashed_password = hash_password(
         user_data.password
     )
+
+    # Reactivación: el email pertenece a una cuenta dada de baja lógica. Se reutiliza
+    # ese mismo registro (conserva su id e historial) con los datos del nuevo registro.
+    if existing_user:
+        existing_user.name = user_data.name
+        existing_user.lastname = user_data.lastname
+        existing_user.password = hashed_password
+        existing_user.role = role
+        existing_user.dni = dni
+        existing_user.direccion = getattr(user_data, "direccion", None)
+        existing_user.telefono = getattr(user_data, "telefono", None)
+        existing_user.specialization = specialization
+        existing_user.birth_date = getattr(user_data, "birth_date", None)
+        existing_user.is_deleted = False
+        existing_user.deleted_at = None
+        existing_user.deleted_by = None
+        existing_user.account_status = "active"
+        existing_user.failed_login_attempts = 0
+
+        db.commit()
+        db.refresh(existing_user)
+
+        return existing_user
 
     new_user = User(
         name=user_data.name,
