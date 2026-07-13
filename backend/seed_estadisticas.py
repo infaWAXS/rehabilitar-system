@@ -6,9 +6,12 @@ from app.models.plan import Plan
 from app.models.room import Room
 from app.models.activity import Activity
 from app.models.attendance import Attendance
+# 🚨 Agregamos los modelos de Reservas y Transacciones
+from app.models.reservation import Reservation
+from app.models.credit_transaction import CreditTransaction
 
 def seed_estadisticas(db: Session):
-    print("⏳ Iniciando carga de datos de Testing (Clases específicas y control de ausencias)...")
+    print("⏳ Iniciando carga de datos de Testing (Clases, Reservas, Pagos y Asistencias)...")
 
     # ──────────────────────────────────────────────────────────────────────────
     # 1. PLANES BASE Y CLIENTES
@@ -82,27 +85,25 @@ def seed_estadisticas(db: Session):
     sala_4 = next((s for s in salas if "4" in s.name or "4" in str(s.id)), salas[-1])
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 4. INYECCIÓN DE CLASES (AHORA CON AUSENTES Y PRECIOS VARIABLES)
+    # 4. INYECCIÓN DE CLASES (CON RESERVAS Y TRANSACCIONES)
     # ──────────────────────────────────────────────────────────────────────────
-    print("⏳ Inyectando clases individuales, pagos y alumnos ausentes...")
+    print("⏳ Generando transacciones financieras y reservas...")
 
-    # Agregamos la clave 'ausentes' y un 'precio' para impactar las métricas de ingresos
     clases_test = [
         {"fecha": date(2026, 1, 5), "nombre": "Yoga", "hora": "08:00", "sala": sala_4, "profe": "Carlos Gómez", "capacidad": 6, "presentes": 2, "ausentes": 1, "precio": 3000.00, "esp": "Tren Medio"},
         {"fecha": date(2026, 1, 20), "nombre": "Hip Trass", "hora": "10:00", "sala": sala_1, "profe": "María Rodríguez", "capacidad": 9, "presentes": 3, "ausentes": 2, "precio": 3500.00, "esp": "Tren Inferior"},
         {"fecha": date(2026, 1, 22), "nombre": "twrk", "hora": "12:00", "sala": sala_1, "profe": "Leyma", "capacidad": 9, "presentes": 2, "ausentes": 0, "precio": 3000.00, "esp": "Tren Inferior"},
         {"fecha": date(2026, 1, 29), "nombre": "perreo", "hora": "12:00", "sala": sala_1, "profe": "Leyma", "capacidad": 9, "presentes": 1, "ausentes": 2, "precio": 3000.00, "esp": "Tren Inferior"},
-        # Nueva clase extra con un precio mayor para ver un pico financiero de individuales
         {"fecha": date(2026, 1, 15), "nombre": "Pilates Clínico", "hora": "18:00", "sala": sala_4, "profe": "Carlos Gómez", "capacidad": 8, "presentes": 4, "ausentes": 3, "precio": 6500.00, "esp": "Tren Superior"}
     ]
 
     for c in clases_test:
-        # 1. Crear la Actividad Individual (Esto factura en Finanzas)
+        # 1. Crear la Actividad
         nueva_act_test = Activity(
             room_id=c["sala"].id,
             name=c["nombre"],
             specialization=c["esp"],
-            activity_type="individual", # Obliga al sistema a considerarlo un ingreso individual
+            activity_type="individual", 
             specific_date=c["fecha"],
             time_slot=c["hora"],
             professor=c["profe"],
@@ -111,13 +112,11 @@ def seed_estadisticas(db: Session):
             status="active"
         )
         db.add(nueva_act_test)
-        db.flush() # Obtenemos el ID de la clase
+        db.flush() 
 
-        # 2. Seleccionar el total de alumnos que PAGARON (Presentes + Ausentes)
         total_anotados = c["presentes"] + c["ausentes"]
         alumnos_disponibles = [u for u in clientes_creados if u.created_at.date() <= c["fecha"]]
         
-        # Nos aseguramos de no pedir más alumnos de los que existen
         if total_anotados > len(alumnos_disponibles):
             alumnos_anotados = alumnos_disponibles
         else:
@@ -126,11 +125,37 @@ def seed_estadisticas(db: Session):
         hora_int = int(c["hora"].split(":")[0])
         fecha_dt = datetime.combine(c["fecha"], datetime.min.time()) + timedelta(hours=hora_int)
 
-        # 3. Repartir el estado: Los primeros 'X' van, los últimos 'Y' faltan
         for index, alumno in enumerate(alumnos_anotados):
-            # Si el índice es menor a los presentes que definimos, fue. Si no, faltó pero pagó igual.
             estado_asistencia = "present" if index < c["presentes"] else "absent"
             
+            # Simulamos que la reserva y el pago se hicieron de 1 a 3 días antes de la clase
+            fecha_reserva_pago = fecha_dt - timedelta(days=random.randint(1, 3))
+            
+           # 2. Registrar la Reserva (Reservation)
+            nueva_reserva = Reservation(
+                user_id=alumno.id,
+                activity_id=nueva_act_test.id,
+                reservation_type="individual",  # <-- FIX 1: Campo obligatorio en BD
+                reservation_date=c["fecha"],    # <-- FIX 2: Agregado por seguridad (suele ser obligatorio)
+                status="confirmed",
+                payment_status="paid",          # <-- Opcional: lo marcamos pagado de una vez
+                created_at=fecha_reserva_pago
+            )
+            db.add(nueva_reserva)
+            db.flush() # Obtenemos el ID de la reserva para enlazarla al pago
+            
+            # 3. Registrar la Transacción Financiera (CreditTransaction)
+            nueva_transaccion = CreditTransaction(
+                user_id=alumno.id,
+                amount=c["precio"], # Valor facturado por la clase individual
+                activity_type="class_reservation", 
+                reservation_id=nueva_reserva.id,
+                reason=f"Pago por reserva de clase individual: {c['nombre']}",
+                created_at=fecha_reserva_pago
+            )
+            db.add(nueva_transaccion)
+
+            # 4. Registrar la Asistencia (Attendance)
             nueva_asistencia_test = Attendance(
                 user_id=alumno.id,
                 activity_id=nueva_act_test.id,
@@ -140,4 +165,4 @@ def seed_estadisticas(db: Session):
             db.add(nueva_asistencia_test)
             
     db.commit()
-    print("✅ Seed finalizado. Ingresos por clases individuales sumados (Incluyendo ausentes facturados).")
+    print("✅ Seed finalizado. Reservas y transacciones cargadas a la base de datos correctamente.")

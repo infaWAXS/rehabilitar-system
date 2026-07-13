@@ -67,9 +67,6 @@ export default function HubReports() {
   const profesoresOrdenados = reporte ? procesarOrdenamiento(reporte.profesores_mayor_concurrencia, sortProfesores) : [];
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
 
-  // ─────────────────────────────────────────────────────────
-  // LÓGICA DE EXPORTACIÓN (EXCEL MEJORADO Y MAPA DE CALOR)
-  // ─────────────────────────────────────────────────────────
   const handleExport = (formato) => {
     if (!reporte) return;
     const filename = `Hub_Estadistico_Completo_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
@@ -77,7 +74,6 @@ export default function HubReports() {
     if (formato === 'excel') {
       const wb = XLSX.utils.book_new();
 
-      // 1. Resumen General
       const wsResumen = XLSX.utils.json_to_sheet([{
         "Métrica": "Clientes Totales", "Valor": reporte.resumen.clientes_totales
       }, {
@@ -87,11 +83,9 @@ export default function HubReports() {
       }, {
         "Métrica": "Tasa de Presentismo Promedio", "Valor": `${100 - reporte.resumen.tasa_ausentismo}%`
       }]);
-      // Ancho de columnas para Resumen
       wsResumen['!cols'] = [{ wch: 35 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
 
-      // 2. Mapa de Calor
       if (reporte.mapa_calor && listaHorarios.length > 0) {
         const dataMapaCalor = reporte.mapa_calor.map(row => {
           const fila = { "Día / Módulo": row.dia };
@@ -101,30 +95,24 @@ export default function HubReports() {
           return fila;
         });
         const wsMapa = XLSX.utils.json_to_sheet(dataMapaCalor);
-        
-        // Ancho de columnas para Mapa de Calor (Primera ancha, el resto ajustadas)
         const colWidths = [{ wch: 15 }];
         listaHorarios.forEach(() => colWidths.push({ wch: 10 }));
         wsMapa['!cols'] = colWidths;
-        
         XLSX.utils.book_append_sheet(wb, wsMapa, "Mapa de Calor");
       }
 
-      // 3. Ocupación de Salas
       const wsSalas = XLSX.utils.json_to_sheet(reporte.ocupacion_aulas.map(a => ({
         "Espacio Físico": a.aula, "Capacidad Máxima": a.capacidad_maxima, "Usos Totales": a.cantidad_usos
       })));
       wsSalas['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsSalas, "Ocupación de Salas");
 
-      // 4. Concurrencia Profesores
       const wsProfes = XLSX.utils.json_to_sheet(reporte.profesores_mayor_concurrencia.map(p => ({
         "Kinesiólogo": p.nombre, "Alumnos Atendidos": p.total_alumnos_atendidos, "Clases Dadas": p.cantidad_clases_dictadas
       })));
       wsProfes['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsProfes, "Concurrencia Profesores");
 
-      // 5. Evolución Financiera
       if (reporte.evolucion_temporal?.datos) {
         const wsFinanzas = XLSX.utils.json_to_sheet(reporte.evolucion_temporal.datos.map(f => ({
           "Mes": f.mes_corto, "Ingresos Brutos": `$${f.ingresos_brutos}`
@@ -147,17 +135,15 @@ export default function HubReports() {
         }
       };
 
-      // Título
       doc.setFontSize(18);
       doc.text(`Centro de Control: Hub Estadistico ${anioActual}`, 14, currentY);
       currentY += 10;
 
-      // Resumen Global
       doc.setFontSize(12);
       doc.text(`Clientes Totales: ${reporte.resumen.clientes_totales}`, 14, currentY); currentY += 6;
       doc.text(`Ingresos por Planes: $${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR')}`, 14, currentY); currentY += 6;
       doc.text(`Staff de Profesores: ${reporte.resumen.profesores_totales}`, 14, currentY); currentY += 6;
-      doc.text(`Tasa de Presentismo: ${100 - reporte.resumen.tasa_ausentismo}%`, 14, currentY);
+      doc.text(`Tasa de Presentismo: ${100 - (reporte.resumen.tasa_ausentismo || 0)}%`, 14, currentY);
 
       const baseTableStyles = {
         theme: 'striped',
@@ -167,7 +153,6 @@ export default function HubReports() {
         margin: { top: 14 }
       };
 
-      // Tabla 0: Mapa de Calor
       if (reporte.mapa_calor && listaHorarios.length > 0) {
         checkPageBreak(50);
         doc.setFontSize(14);
@@ -190,7 +175,6 @@ export default function HubReports() {
         currentY = doc.lastAutoTable.finalY + 14;
       }
 
-      // Tabla 1: Ocupación de Salas
       checkPageBreak(30);
       doc.setFontSize(14);
       doc.text("Ocupacion de Salas", 14, currentY);
@@ -199,15 +183,10 @@ export default function HubReports() {
         startY: currentY + 4,
         head: [['Espacio Físico', 'Capacidad Máxima', 'Usos Totales']],
         body: reporte.ocupacion_aulas.map(a => [a.aula, `${a.capacidad_maxima} alumnos`, a.cantidad_usos]),
-        columnStyles: {
-          0: { cellWidth: 70 },
-          1: { halign: 'center' },
-          2: { halign: 'center' }
-        }
+        columnStyles: { 0: { cellWidth: 70 }, 1: { halign: 'center' }, 2: { halign: 'center' } }
       });
       currentY = doc.lastAutoTable.finalY + 14;
 
-      // Tabla 2: Concurrencia de Profesores
       checkPageBreak(30);
       doc.setFontSize(14);
       doc.text("Concurrencia de Profesores", 14, currentY);
@@ -216,15 +195,10 @@ export default function HubReports() {
         startY: currentY + 4,
         head: [['Kinesiologo', 'Alumnos Atendidos', 'Clases Dadas']],
         body: reporte.profesores_mayor_concurrencia.map(p => [p.nombre, p.total_alumnos_atendidos, p.cantidad_clases_dictadas]),
-        columnStyles: {
-          0: { cellWidth: 70 },
-          1: { halign: 'center' },
-          2: { halign: 'center' }
-        }
+        columnStyles: { 0: { cellWidth: 70 }, 1: { halign: 'center' }, 2: { halign: 'center' } }
       });
       currentY = doc.lastAutoTable.finalY + 14;
 
-      // Tabla 3: Evolución Financiera
       if (reporte.evolucion_temporal?.datos) {
         checkPageBreak(30);
         doc.setFontSize(14);
@@ -234,13 +208,9 @@ export default function HubReports() {
           startY: currentY + 4,
           head: [['Mes', 'Ingresos Brutos']],
           body: reporte.evolucion_temporal.datos.map(f => [f.mes_corto, `$${Number(f.ingresos_brutos).toLocaleString('es-AR')}`]),
-          columnStyles: {
-            0: { halign: 'center', cellWidth: 50 },
-            1: { halign: 'center', cellWidth: 60 }
-          }
+          columnStyles: { 0: { halign: 'center', cellWidth: 50 }, 1: { halign: 'center', cellWidth: 60 } }
         });
       }
-
       doc.save(filename);
     }
   };
@@ -266,7 +236,7 @@ export default function HubReports() {
               <p style={s.valorMini}>{reporte.resumen.clientes_totales}</p>
             </div>
             <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Ingresos por Planes</span>
+              <span style={s.labelMini}>Ingresos Generales</span>
               <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>
                 ${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </p>
@@ -278,7 +248,7 @@ export default function HubReports() {
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Presentismo Promedio</span>
               <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>
-                {100 - reporte.resumen.tasa_ausentismo}%
+                {100 - (reporte.resumen.tasa_ausentismo || 0)}%
               </p>
             </div>
           </div>
@@ -409,7 +379,7 @@ export default function HubReports() {
               Evolución Financiera Mensual
               <span style={s.badgeGlobalTitulo}>{anioActual}</span>
             </h2>
-            <p style={s.bajada}>Ganancias brutas generadas por mes durante el año en curso.</p>
+            <p style={s.bajada}>Ganancias brutas (Planes y Transacciones individuales) generadas por mes durante el año.</p>
             
             <div style={s.contenedorGrafico}>
               {reporte.evolucion_temporal?.datos && (() => {
@@ -419,7 +389,7 @@ export default function HubReports() {
                 return datosMeses.map((d, i) => {
                   const alturaPorcentaje = (d.ingresos_brutos / maxIngreso) * 100;
                   const textoTooltip = d.ingresos_brutos >= 1000 
-                    ? `$${(d.ingresos_brutos / 1000).toFixed(0)}k` 
+                    ? `$${(d.ingresos_brutos / 1000).toFixed(1)}k` 
                     : `$${d.ingresos_brutos}`;
 
                   return (
