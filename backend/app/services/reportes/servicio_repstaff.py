@@ -102,48 +102,76 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
             "por_especialidad": por_especialidad_prof
         })
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # 3. RETENCIÓN DE ALUMNO POR PROFESOR
+# ──────────────────────────────────────────────────────────────────────────
+    # 3. RETENCIÓN REAL POR SESIONES (CONSECUTIVAS)
     # ──────────────────────────────────────────────────────────────────────────
     retencion_lista = []
     actividades_fijas = db.query(Activity).filter(Activity.activity_type == "fixed", Activity.status == "active").all()
     
-    now_dt = datetime.now()
-    rango_semanas = [
-        (now_dt - timedelta(days=28), now_dt - timedelta(days=21)), 
-        (now_dt - timedelta(days=21), now_dt - timedelta(days=14)), 
-        (now_dt - timedelta(days=14), now_dt - timedelta(days=7)),  
-        (now_dt - timedelta(days=7), now_dt)                        
-    ]
-
     for act in actividades_fijas:
-        semanas_data = []
-        total_presentes = 0
+        # Buscamos todas las fechas distintas donde se tomó asistencia para esta clase
+        fechas_db = db.query(func.date(Attendance.timestamp)).filter(
+            Attendance.activity_id == act.id
+        ).group_by(func.date(Attendance.timestamp)).order_by(func.date(Attendance.timestamp).desc()).all()
         
-        for s_start, s_end in rango_semanas:
+        fechas_clase = []
+        for f in fechas_db:
+            if f[0]:
+                val = f[0]
+                # SQLAlchemy/SQLite a menudo devuelve strings al usar func.date()
+                if isinstance(val, str):
+                    try:
+                        # Convertimos el string a objeto date real para poder compararlo
+                        val = datetime.strptime(val, "%Y-%m-%d").date()
+                    except ValueError:
+                        continue
+                elif isinstance(val, datetime):
+                    val = val.date()
+                
+                fechas_clase.append(val)
+        
+        # Filtramos para ver si al menos una clase cayó en el rango seleccionado
+        fechas_en_rango = [f for f in fechas_clase if fecha_inicio <= f <= fecha_fin]
+        
+        if not fechas_en_rango:
+            continue # Si no hubo ninguna clase en este rango, la omitimos
+            
+        # Tomamos la clase más reciente que cayó en el rango (índice de la más cercana al fin)
+        idx = fechas_clase.index(fechas_en_rango[0])
+        
+        # Extraemos hasta 4 sesiones en total (la encontrada + las 3 anteriores)
+        fechas_ventana = fechas_clase[idx:idx+4] 
+        fechas_ventana.reverse() # Invertimos para que queden en orden cronológico (Sesión 1 -> 2 -> 3 -> 4)
+        
+        sesiones_data = []
+        for d in fechas_ventana:
+            # Contamos los presentes de ese día exacto (pasamos d a string por seguridad para el filtro de la DB)
             count = db.query(func.count(Attendance.id)).filter(
                 Attendance.activity_id == act.id,
                 Attendance.status == 'present',
-                Attendance.timestamp >= s_start,
-                Attendance.timestamp < s_end
+                func.date(Attendance.timestamp) == str(d) 
             ).scalar() or 0
             
-            semanas_data.append(count if count > 0 else "-")
-            total_presentes += count
-
-        if total_presentes >= 2:
-            prof_name = act.professor if act.professor else "Sin asignar"
-            clase_name = getattr(act, 'name', act.specialization) or "Clase Fija"
-
-            retencion_lista.append({
-                "profesor": prof_name,
-                "clase": clase_name,
-                "especialidad": act.specialization or "General",
-                "semana_1": semanas_data[0],
-                "semana_2": semanas_data[1],
-                "semana_3": semanas_data[2],
-                "semana_4": semanas_data[3]
+            in_range = (fecha_inicio <= d <= fecha_fin)
+            sesiones_data.append({
+                "fecha": d.strftime("%d/%m"),
+                "presentes": count,
+                "in_range": in_range
             })
+            
+        # Rellenamos con nulos si hubo menos de 4 clases en la historia de esta actividad
+        while len(sesiones_data) < 4:
+            sesiones_data.insert(0, None)
+            
+        prof_name = act.professor if act.professor else "Sin asignar"
+        clase_name = getattr(act, 'name', act.specialization) or "Clase Fija"
+        
+        retencion_lista.append({
+            "profesor": prof_name,
+            "clase": clase_name,
+            "especialidad": act.specialization or "General",
+            "sesiones": sesiones_data
+        })
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4. ABSENTISMO DEL STAFF (Basado en audit_logs con Fecha Actividad)
