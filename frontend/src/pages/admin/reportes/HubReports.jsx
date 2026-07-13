@@ -85,7 +85,7 @@ export default function HubReports() {
       }, {
         "Métrica": "Staff de Profesores", "Valor": reporte.resumen.profesores_totales
       }, {
-        "Métrica": "Tasa de Ausentismo Promedio", "Valor": `${reporte.resumen.tasa_ausentismo}%`
+        "Métrica": "Tasa de Presentismo Promedio", "Valor": `${100 - reporte.resumen.tasa_ausentismo}%`
       }]);
       // Ancho de columnas para Resumen
       wsResumen['!cols'] = [{ wch: 35 }, { wch: 20 }];
@@ -157,7 +157,7 @@ export default function HubReports() {
       doc.text(`Clientes Totales: ${reporte.resumen.clientes_totales}`, 14, currentY); currentY += 6;
       doc.text(`Ingresos por Planes: $${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR')}`, 14, currentY); currentY += 6;
       doc.text(`Staff de Profesores: ${reporte.resumen.profesores_totales}`, 14, currentY); currentY += 6;
-      doc.text(`Tasa de Ausentismo: ${reporte.resumen.tasa_ausentismo}%`, 14, currentY); currentY += 14;
+      doc.text(`Tasa de Presentismo: ${100 - reporte.resumen.tasa_ausentismo}%`, 14, currentY);
 
       const baseTableStyles = {
         theme: 'striped',
@@ -276,8 +276,10 @@ export default function HubReports() {
               <p style={{ ...s.valorMini, color: '#0369a1' }}>{reporte.resumen.profesores_totales}</p>
             </div>
             <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Tasa de Ausentismo Promedio</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>{reporte.resumen.tasa_ausentismo}%</p>
+              <span style={s.labelMini}>Presentismo Promedio</span>
+              <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>
+                {100 - reporte.resumen.tasa_ausentismo}%
+              </p>
             </div>
           </div>
 
