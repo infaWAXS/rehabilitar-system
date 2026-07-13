@@ -239,7 +239,7 @@ function SolicitarReintegro() {
             )}
 
             <div style={s.centrado}>
-              <a href="/" style={s.enlace}>Cancelar</a>
+              <a href="/login" style={s.enlace}>Cancelar</a>
             </div>
           </>
         )}

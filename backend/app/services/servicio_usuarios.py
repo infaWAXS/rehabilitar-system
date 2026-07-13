@@ -493,7 +493,8 @@ def reset_password(token: str, new_password: str, confirm_password: str, db: Ses
 
     hashed_password = hash_password(new_password)
     user.password = hashed_password
-    user.account_status = "active"
+    if user.failed_login_attempts == 3:
+        user.account_status = "active"
     user.failed_login_attempts = 0
 
     if user.role in ["admin", "receptionist", "professor"]:
