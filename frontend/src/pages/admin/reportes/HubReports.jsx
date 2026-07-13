@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStatisticsReport } from '../../../services/reportsService';
+import { getHubReport } from '../../../services/reportsService';
 import { s } from './reportesStyles';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -29,7 +29,7 @@ export default function HubReports() {
         const dia = String(hoy.getDate()).padStart(2, '0');
         const fin = `${anio}-${mes}-${dia}`;
 
-        const data = await getStatisticsReport(inicio, fin);
+        const data = await getHubReport(inicio, fin);
         setReporte(data);
       } catch (err) {
         setErrorValidacion(err.message || 'Error al cargar el resumen anual. (Revisa tu sesión)');
@@ -156,7 +156,7 @@ export default function HubReports() {
       if (reporte.mapa_calor && listaHorarios.length > 0) {
         checkPageBreak(50);
         doc.setFontSize(14);
-        doc.text("Mapa de Calor: Ocupacion (%)", 14, currentY);
+        doc.text("Mapa de Calor: Ocupacion Comercial (%)", 14, currentY);
         
         const bodyMapa = reporte.mapa_calor.map(row => {
           const celdasHoras = listaHorarios.map(h => `${row.horas[h]?.general ?? 0.0}%`);
@@ -228,26 +228,30 @@ export default function HubReports() {
       
       {errorValidacion && <div style={s.error}>{errorValidacion}</div>}
 
-      {reporte && (
+      {reporte && reporte.resumen && (
         <>
           <div style={s.gridResumen}>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Clientes Totales</span>
-              <p style={s.valorMini}>{reporte.resumen.clientes_totales}</p>
+              <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>
+                {reporte.resumen.clientes_totales}
+              </p>
             </div>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Ingresos Generales</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>
+              <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>
                 ${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </p>
             </div>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Staff de Profesores</span>
-              <p style={{ ...s.valorMini, color: '#0369a1' }}>{reporte.resumen.profesores_totales}</p>
+              <p style={{ ...s.valorMini, color: '#0f766e' }}>
+                {reporte.resumen.profesores_totales}
+              </p>
             </div>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Presentismo Promedio</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>
+              <p style={{ ...s.valorMini, color: '#0369a1' }}>
                 {100 - (reporte.resumen.tasa_ausentismo || 0)}%
               </p>
             </div>
@@ -256,22 +260,22 @@ export default function HubReports() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginTop: '16px', marginBottom: '32px' }}>
             <div style={{ background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', padding: '2px', borderRadius: '8px' }}>
               <button style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} onClick={() => navigate('/admin/reportes/clientes')}>
-                Control registros →
+                Reportes Clientes →
               </button>
             </div>
             <div style={{ background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', padding: '2px', borderRadius: '8px' }}>
               <button style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} onClick={() => navigate('/admin/reportes/finanzas')}>
-                Ir a Finanzas →
+                Reportes Finanzas →
               </button>
             </div>
             <div style={{ background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', padding: '2px', borderRadius: '8px' }}>
               <button style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} onClick={() => navigate('/admin/reportes/staff')}>
-                Auditoría de Staff →
+                Reportes Staff →
               </button>
             </div>
             <div style={{ background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', padding: '2px', borderRadius: '8px' }}>
               <button style={{ ...s.boton, background: '#f4f9f9', color: 'var(--color-primario-oscuro)', width: '100%', border: 'none', margin: 0 }} onClick={() => navigate('/admin/reportes/salas')}>
-                Logística de Salas →
+                Reportes Salas →
               </button>
             </div>
           </div>
@@ -279,10 +283,10 @@ export default function HubReports() {
           {reporte.mapa_calor && (
             <div style={s.seccionReporte}>
               <h2 style={s.subtitulo}>
-                Mapa de Calor: Concurrencia de Alumnos (Grid)
+                Mapa de Calor: Ocupación Comercial de Cupos
                 <span style={s.badgeGlobalTitulo}>{anioActual}</span>
               </h2>
-              <p style={s.bajada}>Ocupación real anual basada en el flujo de asistencia sobre cupos ofertados (08:00 a 20:00 hs).</p>
+              <p style={s.bajada}>Mide el volumen de lugares vendidos o reservados sobre el total de cupos ofertados (incluye ausentes).</p>
               <div style={s.wrapperTabla}>
                 <div style={s.gridCalorDinamico(listaHorarios.length)}>
                   <div style={s.celdaCalorCabecera}>Día / Módulo</div>
@@ -299,7 +303,7 @@ export default function HubReports() {
                 </div>
               </div>
               <button style={{ ...s.boton, width: '100%', marginTop: '24px' }} onClick={() => navigate('/admin/reportes/clientes')}>
-                Control Alumnos →
+                Reportes Clientes →
               </button>
             </div>
           )}
@@ -335,7 +339,7 @@ export default function HubReports() {
                 </table>
               </div>
               <button style={{ ...s.boton, width: '100%', marginTop: '24px' }} onClick={() => navigate('/admin/reportes/salas')}>
-                Reporte Salas →
+                Reportes Salas →
               </button>
             </div>
 
@@ -369,7 +373,7 @@ export default function HubReports() {
                 </table>
               </div>
               <button style={{ ...s.boton, width: '100%', marginTop: '24px' }} onClick={() => navigate('/admin/reportes/staff')}>
-                Reporte Staff →
+                Reportes Staff →
               </button>
             </div>
           </div>
@@ -405,7 +409,7 @@ export default function HubReports() {
             </div>
 
             <button style={{ ...s.boton, width: '100%', marginTop: '40px' }} onClick={() => navigate('/admin/reportes/finanzas')}>
-              Reporte Financiero →
+              Reportes Finanzas →
             </button>
           </div>
 
