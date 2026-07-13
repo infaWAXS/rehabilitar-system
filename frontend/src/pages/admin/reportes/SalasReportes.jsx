@@ -4,6 +4,8 @@ import { s } from './reportesStyles';
 import ReportesHeader from './components/ReportesHeader';
 import ReportesExportar from './components/ReportesExportar';
 import ReportesEmptyState from './components/ReportesEmptyState';
+
+// IMPORTACIONES PARA EXPORTACIÓN
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -56,25 +58,6 @@ export default function SalasReportes() {
     filtroEspecialidad ? c.especialidad === filtroEspecialidad : true
   ) || [];
 
-
-/*
-
-    XLSX.writeFile(wb, filename);
-  } else {
-    // Lógica PDF: usa el mismo patrón de autoTable con checkPageBreak del reporte de clientes
-    const doc = new jsPDF();
-    doc.text("Reporte de Salas", 14, 15);
-    autoTable(doc, {
-      startY: 25,
-      head: [['Sala', 'Capacidad', 'Usos', 'Reserva %', 'Ocupación %']],
-      body: reporte.ocupacion_aulas.map(a => [a.aula, a.capacidad, a.cantidad_usos, `${a.porcentaje_reserva}%`, `${a.porcentaje_ocupacion}%`]),
-      styles: { fontSize: 9 }
-    });
-    doc.save(filename);
-  }
-}
-*/
-
   // ─────────────────────────────────────────────────────────
   // LÓGICA DE EXPORTACIÓN DETALLADA (PDF / EXCEL)
   // ─────────────────────────────────────────────────────────
@@ -89,7 +72,7 @@ export default function SalasReportes() {
 
       // Pestaña 1: Resumen General
       const wsResumen = XLSX.utils.json_to_sheet([
-        { "Métrica": "Ocupación Promedio", "Valor": reporte.resumen?.ocupacion_promedio || 0 },
+        { "Métrica": "Ocupación Promedio", "Valor": `${reporte.resumen?.ocupacion_promedio || 0}%` },
         { "Métrica": "Salas Reservadas", "Valor": reporte.resumen?.salas_reservadas || 0 },
         { "Métrica": "Lista de Espera", "Valor": reporte.resumen?.lista_espera || 0 },
       ]);
@@ -99,67 +82,36 @@ export default function SalasReportes() {
       // Pestaña 2: Mapa de Calor (Ocupación de Infraestructura)
       if (reporte.mapa_infraestructura && listaHorarios.length > 0) {
         const dataMapaInfra = reporte.mapa_infraestructura.map(row => {
-          // Definimos la columna fija del grid con el nombre del día
           const fila = { "Día / Módulo": row.dia };
-          
-          // Iteramos sobre los horarios para capturar el valor en formato "X/Y"
           listaHorarios.forEach(h => {
-            // row.horas[h] ya contiene el string "usadas/totales" (ej: "4/364")
             fila[`${h} hs`] = row.horas[h] || "0/0";
           });
           return fila;
         });
 
         const wsMapa = XLSX.utils.json_to_sheet(dataMapaInfra);
-
-        // Ajuste de legibilidad:
-        // La columna del día es más ancha (15)
-        // Las columnas de horarios son de 12 para que el texto "XXX/XXX" entre cómodo
         const colWidths = [{ wch: 15 }];
         listaHorarios.forEach(() => colWidths.push({ wch: 12 }));
-        
         wsMapa['!cols'] = colWidths;
         
         XLSX.utils.book_append_sheet(wb, wsMapa, "Mapa Ocupación Aulas");
       }
 
+      // Pestaña 3: Top Clases
+      if (topClasesFiltradas.length > 0) {
+        const dataTopClases = topClasesFiltradas.slice(0, 5).map(c => ({
+          "Nombre de la Clase": c.nombre_clase,
+          "Especialidad": c.especialidad,
+          "Aula": c.aula,
+          "Profesor": c.profesor,
+          "Ocupación %": `${c.ocupacion}%`
+        }));
+        const wsTopClases = XLSX.utils.json_to_sheet(dataTopClases);
+        wsTopClases['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, wsTopClases, "Top 5 Clases");
+      }
 
-      // Pestaña: Ocupación de Salas
-      const dataSalas = reporte.ocupacion_aulas
-        .filter(a => {
-          // Aplicamos el filtro si existe
-          const pct = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
-          return !filtroEspecialidad || pct > 0;
-        })
-        .map(a => {
-          const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
-          const usosRender = filtroEspecialidad ? (a.por_especialidad?.[`${filtroEspecialidad}_cantidad_usos`] ?? 0) : a.cantidad_usos;
-          
-          return {
-            "Espacio Físico": a.aula,
-            "Capacidad": a.capacidad,
-            "Usos Totales": usosRender,
-            "Tasa Reserva %": `${a.porcentaje_reserva}%`,
-            "Ocupación (Anotados) %": `${pctRender}%`,
-            "Presentismo %": `${a.porcentaje_presentes}%`
-          };
-        });
-
-      const wsSalas = XLSX.utils.json_to_sheet(dataSalas);
-
-      // Ajuste de legibilidad (anchos en caracteres)
-      wsSalas['!cols'] = [
-        { wch: 20 }, // Espacio Físico
-        { wch: 12 }, // Capacidad
-        { wch: 12 }, // Usos
-        { wch: 15 }, // Tasa Reserva
-        { wch: 20 }, // Ocupación %
-        { wch: 15 }  // Presentismo
-      ];
-
-      XLSX.utils.book_append_sheet(wb, wsSalas, "Ocupación de Salas");
-
-      // Pestaña: Ocupación Fija por Sala
+      // Pestaña 4: Ocupación Fija por Sala
       const dataOcupacionFija = reporte.ocupacion_aulas
         .filter(a => {
           const pct = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
@@ -179,19 +131,15 @@ export default function SalasReportes() {
           };
         });
 
-      const wsOcupacion = XLSX.utils.json_to_sheet(dataOcupacionFija);
+      if (dataOcupacionFija.length > 0) {
+        const wsOcupacion = XLSX.utils.json_to_sheet(dataOcupacionFija);
+        wsOcupacion['!cols'] = [
+          { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 25 }, { wch: 18 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsOcupacion, "Ocupación por Sala");
+      }
 
-      // Ajuste de legibilidad: anchos definidos para columnas claras
-      wsOcupacion['!cols'] = [
-        { wch: 25 }, // Espacio Físico
-        { wch: 12 }, // Capacidad
-        { wch: 12 }, // Usos
-        { wch: 18 }, // Tasa Reserva %
-        { wch: 25 }, // Ocupación %
-        { wch: 18 }  // Presentismo %
-      ];
-
-      XLSX.utils.book_append_sheet(wb, wsOcupacion, "Ocupación por Sala");
+      XLSX.writeFile(wb, filename);
 
     } else if (formato === 'pdf') {
       const doc = new jsPDF();
@@ -204,7 +152,7 @@ export default function SalasReportes() {
 
       // Título
       doc.setFontSize(18);
-      doc.text(`Reporte de Salas ${anioActual}`, 14, currentY);
+      doc.text(`Reporte de Logística de Salas ${anioActual}`, 14, currentY);
       currentY += 8;
 
       if (filtroEspecialidad) {
@@ -218,103 +166,90 @@ export default function SalasReportes() {
       }
 
       // Resumen Global
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Resumen de Logística", 14, currentY);
+      currentY += 6;
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
-      doc.text(`Prof. Tren Superior: ${reporte.resumen?.tren_superior || 0}`, 14, currentY); currentY += 6;
-      doc.text(`Prof. Tren Inferior: ${reporte.resumen?.tren_inferior || 0}`, 14, currentY); currentY += 6;
-      doc.text(`Prof. Tren Medio: ${reporte.resumen?.tren_medio || 0}`, 14, currentY); currentY += 14;
+      doc.text(`Ocupación Promedio de Salas: ${reporte.resumen?.ocupacion_promedio || 0}%`, 14, currentY); currentY += 6;
+      doc.text(`Salas Reservadas: ${reporte.resumen?.salas_reservadas || 0}`, 14, currentY); currentY += 6;
+      doc.text(`Gente en Lista de Espera: ${reporte.resumen?.lista_espera || 0}`, 14, currentY); currentY += 10;
 
       const baseTableStyles = {
         theme: 'striped',
-        headStyles: { fillColor: [15, 118, 110], fontSize: 11, halign: 'center' },
-        bodyStyles: { fontSize: 10, valign: 'middle' },
-        styles: { cellPadding: 5, overflow: 'linebreak' },
-        margin: { top: 14 }
+        headStyles: { fillColor: [15, 118, 110], fontSize: 10, halign: 'center' },
+        bodyStyles: { fontSize: 9, valign: 'middle' },
+        styles: { cellPadding: 3, overflow: 'linebreak' },
+        margin: { top: 10 }
       };
 
-      // Tabla de Concurrencia
-      checkPageBreak(40);
-      doc.setFontSize(14);
-      doc.text("Concurrencia de Profesores", 14, currentY);
-      
-      const bodyConcurrencia = profesoresOrdenados
-        .filter(p => {
-          const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
-          return !filtroEspecialidad || clasesDictadas > 0;
-        })
-        .map(p => {
-          const atendidos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.atendidos ?? 0) : p.total_alumnos_atendidos;
-          const cancelados = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cancelados ?? 0) : p.total_cancelaciones_recibidas;
-          const cupos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.uso_cupos ?? 0.0) : p.porcentaje_ocupacion_clases;
-          const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
-          return [p.nombre, atendidos, cancelados, clasesDictadas, `${cupos}%`];
+      // Mapa de Calor (Infraestructura)
+      if (reporte.mapa_infraestructura && listaHorarios.length > 0 && totalUsosGlobal > 0) {
+        checkPageBreak(50);
+        doc.setFontSize(14);
+        doc.text("Mapa de Calor: Ocupación de Infraestructura", 14, currentY);
+        
+        const bodyMapa = reporte.mapa_infraestructura.map(row => {
+          const celdasHoras = listaHorarios.map(h => row.horas[h] || "0/0");
+          return [{ content: row.dia, styles: { fontStyle: 'bold' } }, ...celdasHoras];
         });
 
-      bodyConcurrencia.push([{ content: 'TOTALES / PROMEDIOS', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, totalAtendidosGlobal, totalCanceladosGlobal, totalClasesDictadasGlobal, `${promedioCuposGlobal}%`]);
-
-      autoTable(doc, {
-        ...baseTableStyles,
-        startY: currentY + 4,
-        head: [['Kinesiólogo', 'Atendidos', 'Ausencias', 'Clases Dadas', 'Cupos (%)']],
-        body: bodyConcurrencia,
-        columnStyles: { 0: { cellWidth: 55 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' } }
-      });
-      currentY = doc.lastAutoTable.finalY + 14;
-
-      // Absentismo
-      checkPageBreak(40);
-      doc.setFontSize(14);
-      doc.text("Absentismo del Staff (Registro de Faltas)", 14, currentY);
-      
-      if (absentismoFiltrado.length > 0) {
         autoTable(doc, {
           ...baseTableStyles,
           startY: currentY + 4,
-          head: [['Profesor', 'Clase', 'Fecha Actividad', 'Última Acción (Baja)']],
-          body: absentismoFiltrado.map(a => [a.profesor, a.clase, a.fecha_actividad, a.fecha_baja ? String(a.fecha_baja).split('.')[0] : '-']),
-          columnStyles: { 0: { cellWidth: 45 } }
+          head: [['Día', ...listaHorarios.map(h => h)]],
+          body: bodyMapa,
+          styles: { ...baseTableStyles.styles, fontSize: 8, cellPadding: 2, halign: 'center' },
+          headStyles: { ...baseTableStyles.headStyles, fontSize: 8 },
+          columnStyles: { 0: { halign: 'left', cellWidth: 20 } }
         });
         currentY = doc.lastAutoTable.finalY + 14;
-      } else {
-        doc.setFontSize(11);
-        doc.setTextColor(100, 116, 139);
-        doc.text("No se registraron faltas en este período.", 14, currentY + 6);
-        doc.setTextColor(0, 0, 0);
-        currentY += 16;
       }
 
-      // Retención
-      checkPageBreak(40);
-      doc.setFontSize(14);
-      doc.text("Retención de Alumno por Profesor", 14, currentY);
-      
-      if (profesoresRetencionFiltrados.length > 0) {
-        autoTable(doc, {
-          ...baseTableStyles,
-          startY: currentY + 4,
-          head: [['Profesor', 'Clase/Esp.', 'Sem 1', 'Sem 2', 'Sem 3', 'Sem 4']],
-          body: profesoresRetencionFiltrados.map(r => [r.profesor, r.clase, r.semana_1, r.semana_2, r.semana_3, r.semana_4]),
-          columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 45 }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } }
-        });
-        currentY = doc.lastAutoTable.finalY + 14;
-      } else {
-        doc.setFontSize(11);
-        doc.setTextColor(100, 116, 139);
-        doc.text("No hay clases fijas para analizar retención.", 14, currentY + 6);
-        doc.setTextColor(0, 0, 0);
-        currentY += 16;
-      }
-
-      // Profesores Dados de Baja
-      if (reporte.profesores_eliminados?.length > 0) {
+      // Top Clases
+      if (topClasesFiltradas.length > 0) {
         checkPageBreak(40);
         doc.setFontSize(14);
-        doc.text("Profesores Dados de Baja (Histórico)", 14, currentY);
+        doc.text("Clases con Mayor Ocupación (Top 5)", 14, currentY);
+        
+        const bodyTopClases = topClasesFiltradas.slice(0, 5).map(c => [
+          c.nombre_clase, c.especialidad, c.aula, c.profesor, `${c.ocupacion}%`
+        ]);
+
         autoTable(doc, {
           ...baseTableStyles,
           startY: currentY + 4,
-          head: [['Nombre', 'Fecha de Baja']],
-          body: reporte.profesores_eliminados.map(p => [p.nombre, new Date(p.fecha_baja).toLocaleDateString()]),
-          columnStyles: { 0: { cellWidth: 80 } }
+          head: [['Clase', 'Especialidad', 'Aula', 'Profesor', 'Ocupación (%)']],
+          body: bodyTopClases,
+          columnStyles: { 4: { halign: 'center' } }
+        });
+        currentY = doc.lastAutoTable.finalY + 14;
+      }
+
+      // Ocupación Fija por Sala
+      if (totalUsosFiltrados > 0) {
+        checkPageBreak(40);
+        doc.setFontSize(14);
+        doc.text("Ocupación Fija por Sala", 14, currentY);
+        
+        const bodyOcupacion = reporte.ocupacion_aulas
+          .filter(a => {
+            const pct = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+            return !filtroEspecialidad || pct > 0;
+          })
+          .map(a => {
+            const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+            const usosRender = filtroEspecialidad ? (a.por_especialidad?.[`${filtroEspecialidad}_cantidad_usos`] ?? 0) : a.cantidad_usos;
+            return [a.aula, a.capacidad, usosRender, `${a.porcentaje_reserva}%`, `${pctRender}%`, `${a.porcentaje_presentes}%`];
+          });
+
+        autoTable(doc, {
+          ...baseTableStyles,
+          startY: currentY + 4,
+          head: [['Espacio Físico', 'Capacidad', 'Usos', 'Reserva (%)', 'Ocupación (%)', 'Presentismo (%)']],
+          body: bodyOcupacion,
+          columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } }
         });
       }
 
@@ -486,7 +421,8 @@ export default function SalasReportes() {
             )}
           </div>
 
-          
+          {/* BOTÓN CON FUNCIÓN INYECTADA */}
+          <ReportesExportar tipoReporte="Salas" onExport={handleExport} />
         </>
       )}
     </div>
