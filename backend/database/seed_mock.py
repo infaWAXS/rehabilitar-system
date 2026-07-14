@@ -228,19 +228,23 @@ def seed():
         db.close()
 
     # ── Seed de planes ────────────────────────────────────────────────────────
+    # Único plan del sistema: mensual (30 días), hasta 4 clases fijas de la
+    # especialidad elegida al suscribirse. Un cliente puede tener varios planes
+    # (suscripciones) a la vez, por ejemplo uno por cada especialidad.
     PLANES = [
         {
             "name": "Plan Mensual",
-            "description": "Acceso a todas las clases fijas semanales de una especialidad.",
+            "description": "Hasta 4 clases fijas por mes de la especialidad elegida.",
             "price": 20000,
             "duration_days": 30,
-            "coverage_type": "Todas las clases de la especialidad elegida",
+            "coverage_type": "Hasta 4 clases fijas por mes",
         },
     ]
 
     db = SessionLocal()
     try:
         planes_creados = []
+        planes_actualizados = []
         for datos in PLANES:
             existe = db.query(Plan).filter(Plan.name == datos["name"]).first()
             if not existe:
@@ -253,10 +257,33 @@ def seed():
                     status="active",
                 ))
                 planes_creados.append(datos["name"])
+            else:
+                cambio = False
+                for campo in ("description", "price", "duration_days", "coverage_type"):
+                    if str(getattr(existe, campo)) != str(datos[campo]):
+                        setattr(existe, campo, datos[campo])
+                        cambio = True
+                if existe.status != "active":
+                    existe.status = "active"
+                    cambio = True
+                if cambio:
+                    planes_actualizados.append(datos["name"])
+
+        # Solo debe existir un plan disponible (el mensual): cualquier otro plan
+        # que haya quedado de versiones anteriores del sistema se desactiva.
+        nombres_vigentes = [datos["name"] for datos in PLANES]
+        obsoletos = db.query(Plan).filter(Plan.name.notin_(nombres_vigentes), Plan.status == "active").all()
+        for plan_obsoleto in obsoletos:
+            plan_obsoleto.status = "inactive"
+
         db.commit()
         if planes_creados:
             print(f"[seed_mock] Planes creados: {', '.join(planes_creados)}")
-        else:
+        if planes_actualizados:
+            print(f"[seed_mock] Planes actualizados: {', '.join(planes_actualizados)}")
+        if obsoletos:
+            print(f"[seed_mock] Planes desactivados (obsoletos): {', '.join(p.name for p in obsoletos)}")
+        if not planes_creados and not planes_actualizados and not obsoletos:
             print("[seed_mock] Planes: ya existían, sin cambios.")
     finally:
         db.close()

@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { reserveFixed, reserveIndividual, getMyReservations, getInscriptionOptions } from '../../../services/reservationsService';
-import { addToWaitlist } from '../../../services/waitlistService';
+import { addToWaitlist, getMyWaitlist } from '../../../services/waitlistService';
 import { getActivities, getActivityAvailability } from '../../../services/activitiesService';
 import { getMyPlan } from '../../../services/paymentsService';
 import { abrirVentanaPago } from '../../../services/mercadoPagoPopup';
@@ -254,17 +254,22 @@ function InscribirActividad() {
     Promise.all([
       getActivities(),
       getMyReservations().catch(() => []),
+      getMyWaitlist().catch(() => []),
     ])
-      .then(([data, reservations]) => {
+      .then(([data, reservations, waitlist]) => {
         const lista = Array.isArray(data) ? data : (data.activities || []);
         const normalizadas = lista.map(normalizarActividad);
 
         // Excluir actividades en las que el usuario ya tiene una reserva activa
+        // o ya está anotado en la lista de espera
         const idsInscritos = new Set(
           (Array.isArray(reservations) ? reservations : [])
             .filter((r) => r.status !== 'cancelled')
             .map((r) => r.activity_id)
         );
+        (Array.isArray(waitlist) ? waitlist : [])
+          .filter((w) => w.status !== 'cancelled')
+          .forEach((w) => idsInscritos.add(w.activity_id));
         const disponibles = normalizadas.filter((a) => !idsInscritos.has(a.id));
 
         setActividades(disponibles);
@@ -356,9 +361,11 @@ function InscribirActividad() {
 
     try {
       await addToWaitlist(actividad.id);
+      // Quitar la actividad del listado: el usuario ya está anotado en la lista de espera
+      setActividades((prev) => prev.filter((a) => a.id !== actividad.id));
       setResultado({
         tipo: 'lista_espera',
-        mensaje: 'Fuiste agregado a la lista de espera. Te notificaremos cuando haya un cupo disponible.',
+        mensaje: 'Te notificaremos cuando haya un cupo disponible.',
       });
       setPaso(2);
     } catch (err) {
@@ -385,10 +392,13 @@ function InscribirActividad() {
       const fn = tipoReserva === 'fixed' ? reserveFixed : reserveIndividual;
       await fn(payload);
 
+      // Quitar la actividad del listado: el usuario ya tiene una reserva activa
+      setActividades((prev) => prev.filter((a) => a.id !== actividad.id));
+
       if (paymentMethod === 'partial_payment') {
         setResultado({
           tipo: 'pendiente',
-          mensaje: `Tu reserva quedo en estado pendiente. Monto abonado (${depositPercent}%): ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.`,
+          mensaje: `Monto abonado: ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.`,
         });
       } else {
         setResultado({ tipo: 'confirmada', mensaje: 'Inscripcion confirmada. Tu lugar esta reservado.' });
@@ -646,8 +656,7 @@ function InscribirActividad() {
             <>
               {resultado.tipo === 'confirmada' && (
                 <>
-                  <div style={s.exito}>OK - {resultado.mensaje}</div>
-                  <div style={s.infoBox('green')}>Tu inscripción quedo confirmada. Podes verla en Mis Reservas.</div>
+                  <div style={s.exito}> {resultado.mensaje}</div>
                 </>
               )}
               {resultado.tipo === 'pendiente' && (

@@ -70,6 +70,9 @@ def _migrate(engine):
         if "cancellation_result" not in reservation_cols:
             conn.execute(text("ALTER TABLE reservations ADD COLUMN cancellation_result TEXT"))
             conn.commit()
+        if "user_plan_id" not in reservation_cols:
+            conn.execute(text("ALTER TABLE reservations ADD COLUMN user_plan_id INTEGER"))
+            conn.commit()
         if "is_deleted" not in cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0"))
             conn.commit()
