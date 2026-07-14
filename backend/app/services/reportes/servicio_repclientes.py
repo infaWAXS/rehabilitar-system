@@ -6,6 +6,9 @@ from app.models.user import User
 from app.models.activity import Activity
 from app.models.attendance import Attendance
 from app.models.user_suspension import UserSuspension
+from app.models.reservation import Reservation
+from app.models.waitlist import Waitlist
+
 
 def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin: date):
     datetime_inicio = datetime.combine(fecha_inicio, datetime.min.time())
@@ -46,33 +49,65 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
     especialidades_db = db.query(Activity.specialization).distinct().filter(Activity.specialization.isnot(None)).all()
     lista_especialidades = [esp[0] for esp in especialidades_db if esp[0]]
 
+    # 🚨 AGREGA ESTAS LÍNEAS PARA DEFINIR LA VARIABLE FALTANTE
+    actividades_filtradas = db.query(Activity).filter(
+        Activity.status == "active"
+    ).all()
+
     clases_lista = []
+    
     for esp in lista_especialidades:
-        asist_fijas = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.specialization == esp, Activity.activity_type == 'fixed', Attendance.status == 'present', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
-        asist_indiv = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.specialization == esp, Activity.activity_type == 'individual', Attendance.status == 'present', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
-        canc_fijas = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.specialization == esp, Activity.activity_type == 'fixed', Attendance.status == 'absent', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
-        canc_indiv = db.query(func.count(Attendance.id)).join(Activity).filter(Activity.specialization == esp, Activity.activity_type == 'individual', Attendance.status == 'absent', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
+        acts_esp = [a for a in actividades_filtradas if a.specialization == esp]
         
-        cant_fijas = db.query(func.count(Activity.id)).filter(Activity.specialization == esp, Activity.activity_type == 'fixed', Activity.status == 'active', Activity.specific_date.between(fecha_inicio, fecha_fin)).scalar() or 0
-        cant_indiv = db.query(func.count(Activity.id)).filter(Activity.specialization == esp, Activity.activity_type == 'individual', Activity.status == 'active', Activity.specific_date.between(fecha_inicio, fecha_fin)).scalar() or 0
-
-        cupos_iniciales_fijos = db.query(func.sum(Activity.capacity)).filter(Activity.specialization == esp, Activity.activity_type == 'fixed', Activity.status == 'active', Activity.specific_date.between(fecha_inicio, fecha_fin)).scalar() or 0
-        cupos_iniciales_indiv = db.query(func.sum(Activity.capacity)).filter(Activity.specialization == esp, Activity.activity_type == 'individual', Activity.status == 'active', Activity.specific_date.between(fecha_inicio, fecha_fin)).scalar() or 0
-
-        anotados_fijas = asist_fijas + canc_fijas
-        anotados_indiv = asist_indiv + canc_indiv
-
-        ocupacion_fijas = (anotados_fijas / cupos_iniciales_fijos * 100) if cupos_iniciales_fijos > 0 else 0.0
-        ocupacion_indiv = (anotados_indiv / cupos_iniciales_indiv * 100) if cupos_iniciales_indiv > 0 else 0.0
-        total_anotados_esp = anotados_fijas + anotados_indiv
-        pct_cancelacion = (max(0, canc_fijas + canc_indiv) / total_anotados_esp * 100) if total_anotados_esp > 0 else 0.0
+        cant_clases = len(acts_esp)
+        cupos_iniciales = sum([a.capacity for a in acts_esp])
+        
+        asistencias = 0
+        inasistencias = 0
+        cancelaciones = 0
+        lista_espera = 0
+        
+        if acts_esp:
+            ids_actividades = [a.id for a in acts_esp]
+            
+            # 1. Asistencias (Presentes físicos en la sala)
+            asistencias = db.query(func.count(Attendance.id)).filter(
+                Attendance.activity_id.in_(ids_actividades),
+                Attendance.status == 'present',
+                Attendance.timestamp.between(datetime_inicio, datetime_fin)
+            ).scalar() or 0
+            
+            # 2. Inasistencias (Ocuparon el cupo pero no fueron)
+            inasistencias = db.query(func.count(Attendance.id)).filter(
+                Attendance.activity_id.in_(ids_actividades),
+                Attendance.status == 'absent',
+                Attendance.timestamp.between(datetime_inicio, datetime_fin)
+            ).scalar() or 0
+            
+            # 3. Cancelaciones (Última acción: Reservaron pero cancelaron y no volvieron a anotarse)
+            # Contamos las reservas canceladas que NO tienen un registro de asistencia posterior para esa misma clase
+            cancelaciones = db.query(func.count(Reservation.id)).filter(
+                Reservation.activity_id.in_(ids_actividades),
+                Reservation.status == 'cancelled',
+                ~Reservation.user_id.in_(
+                    db.query(Attendance.user_id).filter(Attendance.activity_id.in_(ids_actividades))
+                )
+            ).scalar() or 0
+            
+            # 4. Lista de Espera (Gente que quedó en status waiting y nunca pasó a confirmed)
+            lista_espera = db.query(func.count(Waitlist.id)).filter(
+                Waitlist.activity_id.in_(ids_actividades),
+                Waitlist.status == 'waiting' 
+            ).scalar() or 0
 
         clases_lista.append({
-            "tipo": esp, "asistencias_fijas": asist_fijas, "asistencias_individuales": asist_indiv,
-            "cant_fijas": cant_fijas, "cant_individuales": cant_indiv, "cancelaciones_fijas": canc_fijas,
-            "cancelaciones_individuales": canc_indiv, "porcentaje_cancelacion": round(pct_cancelacion, 2),
-            "cupos_iniciales_fijas": cupos_iniciales_fijos, "cupos_iniciales_indiv": cupos_iniciales_indiv,
-            "ocupacion_fijas": round(ocupacion_fijas, 2), "ocupacion_indiv": round(ocupacion_indiv, 2)
+            "tipo": esp,
+            "cant_clases": cant_clases,
+            "cupos_iniciales": cupos_iniciales,
+            "asistencias": asistencias,
+            "inasistencias": inasistencias,
+            "cancelaciones": cancelaciones,
+            "lista_espera": lista_espera
         })
 
     # ──────────────────────────────────────────────────────────────────────────
