@@ -19,8 +19,9 @@ const s = {
   layout: (isMobile) => ({
     display: 'flex',
     flexDirection: isMobile ? 'column' : 'row',
-    gap: isMobile ? '0' : '24px',
-    alignItems: 'flex-start',
+    gap: '20px',
+    alignItems: isMobile ? 'stretch' : 'flex-start',
+    flexWrap: 'wrap',
   }),
   contenedor: { maxWidth: '640px' },
   cabecera: { marginBottom: '24px' },
@@ -28,7 +29,7 @@ const s = {
   subtitulo: { fontSize: '14px', color: 'var(--color-texto-suave)' },
   actividadBanner: {
     background: 'var(--color-fondo-card)', borderRadius: '10px',
-    padding: '14px 18px', marginBottom: '28px',
+    padding: '14px 18px',
     borderLeft: '4px solid var(--color-primario)',
   },
   actividadNombre: { fontSize: '15px', fontWeight: '600', color: 'var(--color-texto)' },
@@ -107,9 +108,9 @@ const s = {
     borderBottom: '1px solid var(--color-borde)', verticalAlign: 'middle',
   },
   botonAccion: (color) => ({
-    padding: '4px 10px', borderRadius: '6px', border: 'none',
-    background: color === 'rojo' ? '#fee2e2' : color === 'verde' ? '#dcfce7' : '#eff6ff',
-    color: color === 'rojo' ? '#dc2626' : color === 'verde' ? '#16a34a' : '#2563eb',
+    padding: '6px 12px', borderRadius: '6px', border: 'none',
+    background: color === 'rojo' ? '#fee2e2' : color === 'verde' ? '#dcfce7' : color === 'gris' ? '#f3f4f6' : '#eff6ff',
+    color: color === 'rojo' ? '#dc2626' : color === 'verde' ? '#16a34a' : color === 'gris' ? '#4b5563' : '#2563eb',
     fontSize: '12px', fontWeight: '600', cursor: 'pointer', marginRight: '4px',
   }),
   inputInline: {
@@ -135,7 +136,67 @@ const s = {
   },
   qrTexto: {
     fontSize: '12px', color: 'var(--color-texto-suave)',
-    marginTop: '12px', maxWidth: '200px',
+    marginTop: '12px', lineHeight: 1.5,
+  },
+  // ── Layout de 3 columnas ──
+  colIzquierda: (isMobile) => ({
+    flex: isMobile ? '1 1 auto' : '0 0 340px',
+    width: isMobile ? '100%' : '340px',
+    display: 'flex', flexDirection: 'column', gap: '20px',
+    order: isMobile ? 0 : 2,
+  }),
+  colCentro: (isMobile) => ({ flex: '1 1 360px', minWidth: 0, order: isMobile ? 0 : 1 }),
+  colDerecha: (isMobile) => ({
+    flex: isMobile ? '1 1 auto' : '0 0 250px',
+    width: isMobile ? '100%' : '250px',
+    order: isMobile ? 0 : 3,
+  }),
+  panel: {
+    background: 'var(--color-fondo-card)', borderRadius: '12px',
+    padding: '20px', boxShadow: 'var(--sombra)',
+  },
+  qrPanelBody: { textAlign: 'center' },
+  // ── Tarjeta de inscripto ──
+  inscriptoCard: {
+    border: '1px solid var(--color-borde)', borderRadius: '10px',
+    padding: '14px 16px', marginBottom: '12px', background: 'var(--color-fondo)',
+  },
+  inscriptoHeader: {
+    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+    gap: '10px', marginBottom: '12px',
+  },
+  inscriptoNombre: { fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' },
+  inscriptoDni: { fontSize: '12px', color: 'var(--color-texto-suave)', marginTop: '2px' },
+  badgeAsistencia: (presente) => ({
+    display: 'inline-block', padding: '4px 12px', borderRadius: '20px',
+    fontSize: '12px', fontWeight: '700', whiteSpace: 'nowrap',
+    background: presente ? '#dcfce7' : '#f3f4f6',
+    color: presente ? '#16a34a' : '#6b7280',
+    border: `1px solid ${presente ? '#86efac' : '#e5e7eb'}`,
+  }),
+  comentarioBloque: {
+    background: 'var(--color-fondo-card)', borderRadius: '8px',
+    padding: '10px 12px', border: '1px solid var(--color-borde)',
+  },
+  comentarioLabel: {
+    fontSize: '11px', fontWeight: '700', textTransform: 'uppercase',
+    letterSpacing: '0.04em', color: 'var(--color-texto-suave)', marginBottom: '6px',
+  },
+  comentarioTexto: {
+    fontSize: '13px', lineHeight: 1.5, marginBottom: '10px',
+    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+  },
+  comentarioTextarea: {
+    width: '100%', padding: '8px 10px', borderRadius: '6px',
+    border: '1px solid var(--color-borde)', fontSize: '13px',
+    background: 'var(--color-fondo)', color: 'var(--color-texto)',
+    boxSizing: 'border-box', resize: 'vertical', minHeight: '64px', marginBottom: '10px',
+  },
+  comentarioBotones: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+  contador: {
+    display: 'inline-block', marginLeft: '8px', padding: '1px 10px',
+    borderRadius: '20px', fontSize: '13px', fontWeight: '700',
+    background: 'var(--color-primario)', color: '#fff', verticalAlign: 'middle',
   },
 };
 
@@ -323,32 +384,31 @@ useEffect(() => {
     }
   }
 
-  const qrPanel = qrData && (
-    <div style={s.qrPanel}>
-      <h3 style={s.qrTitulo}>Código QR de asistencia</h3>
-      <QRCodeSVG value={`${publicAppUrl}/asistencia/qr/${qrData.code}`} size={180} />
-      <p style={s.qrTexto}>
-        Válido por 15 minutos. Los alumnos pueden escanearlo para registrar su asistencia.
-      </p>
-    </div>
-  );
+  // El código QR se renderiza en la columna derecha (más abajo).
 
   return (
     <LayoutPrivado>
-      <div style={s.layout(isMobile)}>
-        <div style={s.contenedor}>
-          <button
-              type="button"
-              style={s.botonRegreso}
-              onClick={() => navigate('/profesor/actividades')}
-            >
-              Volver
-        </button>
-          <div style={s.cabecera}>
-            <h1 style={s.titulo}>Asistencias</h1>
-            <p style={s.subtitulo}>Registrar asistencias y gestionar comentarios.</p>
-          </div>
+      <button
+        type="button"
+        style={s.botonRegreso}
+        onClick={() => navigate('/profesor/actividades')}
+      >
+        Volver
+      </button>
+      <div style={s.cabecera}>
+        <h1 style={s.titulo}>Asistencias</h1>
+        <p style={s.subtitulo}>Registrar asistencias y gestionar comentarios.</p>
+      </div>
 
+      {!cargandoSesion && bloqueoPorSesion && (
+        <div style={s.alerta('error')}>
+          La clase aún no está en curso. Las funcionalidades de asistencia están bloqueadas.
+        </div>
+      )}
+
+      <div style={s.layout(isMobile)}>
+        {/* ── Columna izquierda: actividad + registro por DNI ── */}
+        <div style={s.colIzquierda(isMobile)}>
         {/* Banner de actividad */}
         {cargandoAct ? (
           <div style={s.actividadBanner}><span style={s.actividadNombre}>Cargando actividad...</span></div>
@@ -379,16 +439,12 @@ useEffect(() => {
           </div>
         ) : null}
 
-        {/* Sección: Registrar nueva asistencia */}
-        <h2 style={s.seccionTitulo}>Registrar nueva asistencia</h2>
+        {/* Panel: Registrar asistencia por DNI */}
+        <div style={s.panel}>
+        <h2 style={s.seccionTitulo}>Registrar asistencia por DNI</h2>
 
         {errorForm && <div style={s.alerta('error')}>{errorForm}</div>}
         {exitoForm && <div style={s.alerta('exito')}>{exitoForm}</div>}
-        {!cargandoSesion && bloqueoPorSesion && (
-          <div style={s.alerta('error')}>
-            La clase aún no está en curso. Las funcionalidades de asistencia están bloqueadas.
-          </div>
-        )}
 
         <form onSubmit={handleSubmit}>
           <div style={s.grupo}>
@@ -438,110 +494,123 @@ useEffect(() => {
             </button>
           </div>
         </form>
-
-        {isMobile && qrPanel}
-
-        <div style={s.divisor} />
-
-        {/* Sección: Asistencias registradas */}
-        <h2 style={s.seccionTitulo}>
-          Asistencias registradas
-          {!cargandoLista && ` (${asistencias.length})`}
-        </h2>
-
-        {errorLista && <div style={s.alerta('error')}>{errorLista}</div>}
-
-        {cargandoLista ? (
-          <div style={s.vacio}>Cargando asistencias...</div>
-        ) : asistencias.length === 0 ? (
-          <div style={s.vacio}>No hay asistencias registradas para esta actividad.</div>
-        ) : (
-          <table style={s.tabla}>
-            <thead>
-              <tr>
-                <th style={s.th}>Cliente</th>
-                <th style={s.th}>DNI</th>
-                <th style={s.th}>Estado</th>
-                <th style={s.th}>Comentario</th>
-                <th style={s.th}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {asistencias.map((a) => (
-                <tr key={a.id}>
-                  <td style={s.td}>{a.nombre} {a.apellido}</td>
-                  <td style={s.tdSuave}>{a.dni}</td>
-                  <td style={s.td}>
-                    <span style={{
-                      display: 'inline-block', padding: '3px 10px', borderRadius: '20px',
-                      fontSize: '12px', fontWeight: '600',
-                      background: a.status === 'present' ? '#dcfce7' : '#f3f4f6',
-                      color: a.status === 'present' ? '#16a34a' : '#6b7280',
-                    }}>
-                      {a.status === 'present' ? 'Presente' : 'Ausente'}
-                    </span>
-                  </td>
-                  <td style={s.td}>
-                    {editandoId === a.id ? (
-                      <input
-                        style={s.inputInline}
-                        value={comentarioEdit}
-                        onChange={(e) => setComentarioEdit(e.target.value)}
-                        autoFocus
-                        disabled={guardando || controlesBloqueados}
-                      />
-                    ) : (
-                      <span style={{ color: a.comment ? 'inherit' : 'var(--color-texto-suave)' }}>
-                        {a.comment || '-'}
-                      </span>
-                    )}
-                  </td>
-                  <td style={s.td}>
-                    {editandoId === a.id ? (
-                      <>
-                        <button
-                          style={s.botonAccion('verde')}
-                          onClick={() => guardarComentario(a.id)}
-                          disabled={guardando || !comentarioEdit.trim() || controlesBloqueados}
-                        >
-                          Guardar
-                        </button>
-                        <button
-                          style={s.botonAccion('gris')}
-                          onClick={cancelarEdicion}
-                          disabled={guardando || cargandoSesion}
-                        >
-                          Cancelar
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          style={s.botonAccion('azul')}
-                          onClick={() => iniciarEdicion(a)}
-                          disabled={guardando || controlesBloqueados}
-                        >
-                          {a.comment ? 'Editar' : 'Agregar'}
-                        </button>
-                        {a.comment && (
-                          <button
-                            style={s.botonAccion('rojo')}
-                            onClick={() => eliminarComentario(a.id)}
-                            disabled={guardando || controlesBloqueados}
-                          >
-                            Eliminar
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
         </div>
-        {!isMobile && qrPanel}
+        </div>
+
+        {/* ── Columna central: listado de inscriptos ── */}
+        <div style={s.colCentro(isMobile)}>
+          <div style={s.panel}>
+            <h2 style={s.seccionTitulo}>
+              Inscriptos
+              {!cargandoLista && <span style={s.contador}>{asistencias.length}</span>}
+            </h2>
+
+            {errorLista && <div style={s.alerta('error')}>{errorLista}</div>}
+
+            {cargandoLista ? (
+              <div style={s.vacio}>Cargando inscriptos...</div>
+            ) : asistencias.length === 0 ? (
+              <div style={s.vacio}>No hay inscriptos en esta actividad.</div>
+            ) : (
+              asistencias.map((a) => {
+                const presente = a.status === 'present';
+                const editando = editandoId === a.id;
+                return (
+                  <div key={a.id} style={s.inscriptoCard}>
+                    <div style={s.inscriptoHeader}>
+                      <div>
+                        <div style={s.inscriptoNombre}>{a.nombre} {a.apellido}</div>
+                        <div style={s.inscriptoDni}>DNI {a.dni}</div>
+                      </div>
+                      <span style={s.badgeAsistencia(presente)}>
+                        {presente ? 'Presente' : 'Ausente'}
+                      </span>
+                    </div>
+
+                    <div style={s.comentarioBloque}>
+                      <div style={s.comentarioLabel}>Comentario</div>
+                      {editando ? (
+                        <>
+                          <textarea
+                            style={s.comentarioTextarea}
+                            value={comentarioEdit}
+                            onChange={(e) => setComentarioEdit(e.target.value)}
+                            placeholder="Escribí un comentario para este inscripto..."
+                            autoFocus
+                            disabled={guardando || controlesBloqueados}
+                          />
+                          <div style={s.comentarioBotones}>
+                            <button
+                              style={s.botonAccion('verde')}
+                              onClick={() => guardarComentario(a.id)}
+                              disabled={guardando || !comentarioEdit.trim() || controlesBloqueados}
+                            >
+                              Guardar
+                            </button>
+                            <button
+                              style={s.botonAccion('gris')}
+                              onClick={cancelarEdicion}
+                              disabled={guardando || cargandoSesion}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{
+                            ...s.comentarioTexto,
+                            color: a.comment ? 'var(--color-texto)' : 'var(--color-texto-suave)',
+                            fontStyle: a.comment ? 'normal' : 'italic',
+                          }}>
+                            {a.comment || 'Sin comentario'}
+                          </div>
+                          <div style={s.comentarioBotones}>
+                            <button
+                              style={s.botonAccion('azul')}
+                              onClick={() => iniciarEdicion(a)}
+                              disabled={guardando || controlesBloqueados}
+                            >
+                              {a.comment ? 'Modificar' : 'Agregar'}
+                            </button>
+                            {a.comment && (
+                              <button
+                                style={s.botonAccion('rojo')}
+                                onClick={() => eliminarComentario(a.id)}
+                                disabled={guardando || controlesBloqueados}
+                              >
+                                Eliminar
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ── Columna derecha: código QR ── */}
+        <div style={s.colDerecha(isMobile)}>
+          <div style={{ ...s.panel, ...s.qrPanelBody }}>
+            <h3 style={s.qrTitulo}>Código QR de asistencia</h3>
+            {qrData ? (
+              <>
+                <QRCodeSVG value={`${publicAppUrl}/asistencia/qr/${qrData.code}`} size={180} />
+                <p style={s.qrTexto}>
+                  Válido por 15 minutos. Los alumnos pueden escanearlo para registrar su asistencia.
+                </p>
+              </>
+            ) : (
+              <p style={s.qrTexto}>
+                Generá un código QR desde el formulario para mostrarlo aquí. Los alumnos podrán escanearlo para registrar su asistencia.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     </LayoutPrivado>
   );
