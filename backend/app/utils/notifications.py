@@ -639,6 +639,41 @@ def notify_reservation_created(user_id: int, activity_id: int, db: Session) -> N
     )
 
 
+def notify_subscription_confirmed(user_id: int, plan_name: str, specialization: str,
+                                   end_date, price_paid: float, discount_percent: int,
+                                   db: Session) -> None:
+    """Notifica al cliente (email + in-app) que su suscripción a un plan fue confirmada."""
+    usuario = db.query(User).filter(User.id == user_id).first()
+    if not usuario:
+        return
+
+    fin = end_date.strftime("%d/%m/%Y") if hasattr(end_date, "strftime") else str(end_date)
+    linea_descuento = (
+        f"Se aplicó un {discount_percent}% de descuento por cancelación previa.\n"
+        if discount_percent else ""
+    )
+    resumen_descuento = f" (con {discount_percent}% de descuento)" if discount_percent else ""
+
+    subject = f"Suscripción confirmada: {plan_name} en {specialization}"
+    body_email = (
+        f"Hola {usuario.name} {usuario.lastname},\n\n"
+        f"Tu suscripción al plan '{plan_name}' en {specialization} fue confirmada con éxito.\n"
+        f"Pagaste ${price_paid:.2f} y tu suscripción está activa hasta el {fin}.\n"
+        f"{linea_descuento}\n"
+        "Podés ver el detalle en la sección Suscripciones de la plataforma.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(usuario, "email", None):
+        _send_email(usuario.email, subject, body_email)
+    crear_notificacion(
+        user_id,
+        f"Suscripción confirmada: {plan_name}",
+        f"Tu suscripción al plan '{plan_name}' en {specialization} fue confirmada y está activa hasta el {fin}{resumen_descuento}.",
+        db,
+        link="/cliente/suscripciones",
+    )
+
+
 def notify_waitlist_added(user_id: int, activity_id: int, position: int, db: Session) -> None:
     """Notifica al cliente (email + in-app) que quedó en lista de espera de una actividad."""
     from app.models.activity import Activity as _Activity

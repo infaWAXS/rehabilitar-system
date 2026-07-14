@@ -48,6 +48,19 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         if get_monthly_balance(user_id, db) <= 0:
             raise HTTPException(status_code=400, detail="No tenés créditos disponibles para usar este mes.")
 
+    # Validar disponibilidad de cupo en la suscripción (máximo 4 clases fijas por plan)
+    user_plan_usado = None
+    if payment_method == "subscription":
+        from app.utils.subscriptions import find_active_plan_for_specialization, MAX_SUBSCRIPTION_FIXED_CLASSES
+        if reservation_type != "fixed":
+            raise HTTPException(status_code=400, detail="La suscripción solo aplica a clases fijas.")
+        user_plan_usado = find_active_plan_for_specialization(user_id, activity.specialization, db, require_capacity=True)
+        if not user_plan_usado:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No tenés cupo disponible en tu suscripción para esta especialidad (máximo {MAX_SUBSCRIPTION_FIXED_CLASSES} clases fijas por plan).",
+            )
+
     # % efectivamente abonado (solo relevante para pagos monetarios; se usa luego para
     # calcular el reintegro exacto si el cliente cancela)
     deposit_percent_val = None
@@ -103,7 +116,8 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         payment_status=payment_status_val,
         reservation_date=reservation_date,
         deposit_percent=deposit_percent_val,
-    ) 
+        user_plan_id=user_plan_usado.id if user_plan_usado else None,
+    )
 
     db.add(new_reservation)
     db.commit()
@@ -234,7 +248,8 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
       no_refund        → no abonado + ≤ 24 h → pierde la seña, sin reintegro
     """
     from datetime import datetime, date as date_cls
-    from app.utils.subscriptions import is_abonado, get_active_user_plan
+    from app.utils.subscriptions import is_abonado, find_active_plan_for_specialization
+    from app.models.user_plan import UserPlan
 
     reservation = get_reservation_by_id(reservation_id, db)
 
@@ -256,8 +271,15 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
     abonado = is_abonado(user_id, db)
     user = db.query(User).filter(User.id == user_id).first()
     activity = db.query(Activity).filter(Activity.id == reservation.activity_id).first()
+    plan = None
     if abonado:
-        plan = get_active_user_plan(user_id, db)
+        # El usuario puede tener varios planes activos: se usa el que efectivamente
+        # pagó esta reserva y, si no aplicó suscripción, el que coincide con la
+        # especialidad de la actividad (si existe).
+        if reservation.user_plan_id:
+            plan = db.query(UserPlan).filter(UserPlan.id == reservation.user_plan_id).first()
+        if not plan:
+            plan = find_active_plan_for_specialization(user_id, activity.specialization, db)
 
     # Contar cancelaciones en la franja 24-48h ya registradas este mes (solo abonados)
     today = date_cls.today()
@@ -269,7 +291,7 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
     ).count()
 
     # ── Reglas de negocio ──────────────────────────────────────────────────────
-    if abonado and plan.specialization == activity.specialization:
+    if abonado and plan and plan.specialization == activity.specialization:
         if hours_until > 48:
             if was_paid_with_credit(reservation.id, db):
                 result = "no_benefit"
@@ -393,25 +415,34 @@ def confirm_reservation(reservation_id: int, db: Session):
 def check_subscription_availability(user_id: int, activity_id: int, db: Session):
     """
     Verifica si el usuario puede inscribirse a una actividad usando su suscripción activa.
+    Un plan es mensual (30 días) e incluye como máximo MAX_SUBSCRIPTION_FIXED_CLASSES
+    clases fijas de su especialidad; el usuario puede tener varios planes activos.
     Retorna:
     {
         "can_use_subscription": bool,
         "has_age_discount": bool,  # >65 años
-        "plan_specialization": str,  # especialidad del plan del usuario
+        "plan_specialization": str,  # especialidad del plan encontrado (con o sin cupo)
         "activity_specialization": str,  # especialidad de la actividad
+        "classes_used": int | None,
+        "classes_max": int,
+        "classes_remaining": int | None,
     }
     """
     from datetime import date as date_cls
-    from app.utils.subscriptions import get_active_user_plan
-    
+    from app.utils.subscriptions import (
+        find_active_plan_for_specialization,
+        count_subscription_classes_used,
+        MAX_SUBSCRIPTION_FIXED_CLASSES,
+    )
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise user_not_found_exception()
-    
+
     activity = db.query(Activity).filter(Activity.id == activity_id).first()
     if not activity:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
-    
+
     # Verificar edad del usuario (>65 años)
     today = date_cls.today()
     if user.birth_date:
@@ -419,20 +450,33 @@ def check_subscription_availability(user_id: int, activity_id: int, db: Session)
         has_age_discount = age > 65
     else:
         has_age_discount = False
-    
-    # Verificar si tiene plan activo
-    user_plan = get_active_user_plan(user_id, db)
+
     can_use_subscription = False
     plan_specialization = None
-    
-    if user_plan and activity.activity_type == "fixed":
-        plan_specialization = user_plan.specialization
-        # Solo puede usar suscripción si es de la misma especialidad y es una clase fija
-        can_use_subscription = (plan_specialization == activity.specialization)
-    
+    classes_used = None
+    classes_remaining = None
+
+    if activity.activity_type == "fixed":
+        plan_con_cupo = find_active_plan_for_specialization(user_id, activity.specialization, db, require_capacity=True)
+        if plan_con_cupo:
+            plan_specialization = plan_con_cupo.specialization
+            classes_used = count_subscription_classes_used(plan_con_cupo.id, db)
+            classes_remaining = MAX_SUBSCRIPTION_FIXED_CLASSES - classes_used
+            can_use_subscription = True
+        else:
+            # Puede tener un plan de esa especialidad pero sin cupo restante
+            plan_sin_cupo = find_active_plan_for_specialization(user_id, activity.specialization, db, require_capacity=False)
+            if plan_sin_cupo:
+                plan_specialization = plan_sin_cupo.specialization
+                classes_used = count_subscription_classes_used(plan_sin_cupo.id, db)
+                classes_remaining = 0
+
     return {
         "can_use_subscription": can_use_subscription,
         "has_age_discount": has_age_discount,
         "plan_specialization": plan_specialization,
         "activity_specialization": activity.specialization,
+        "classes_used": classes_used,
+        "classes_max": MAX_SUBSCRIPTION_FIXED_CLASSES,
+        "classes_remaining": classes_remaining,
     }

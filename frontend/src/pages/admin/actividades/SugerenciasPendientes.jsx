@@ -94,7 +94,7 @@ function SugerenciasPendientes() {
     setProcesando((prev) => ({ ...prev, [id]: true }));
     try {
       await rejectSuggestion(id);
-      setMensajes((prev) => ({ ...prev, [id]: { tipo: 'err', texto: 'Sugerencia rechazada.' } }));
+      setMensajes((prev) => ({ ...prev, [id]: { tipo: 'err', texto: 'Sugerencia rechazada' } }));
       setTimeout(() => setSugerencias((prev) => prev.filter((c) => c.id !== id)), 7500);
     } catch (err) {
       setMensajes((prev) => ({ ...prev, [id]: { tipo: 'err', texto: err.message || 'Error al rechazar.' } }));

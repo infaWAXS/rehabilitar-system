@@ -224,7 +224,7 @@ export default function MisReservas() {
       await removeWaitlistItem(id);
       setListaEspera((prev) => prev.filter((item) => item.id !== id));
       setConfirmandoId(null);
-      setMensajeExitoBaja(`Baja registrada de "${nombre}". Correo de confirmación enviado a tu casilla. (simulado — Sprint 2)`);
+      setMensajeExitoBaja(`Baja registrada con éxito. Se envió un mail confirmando la baja de "${nombre}" a tu casilla.`);
       setTimeout(() => setMensajeExitoBaja(''), 8000);
     } catch (err) {
       setErrorEspera(err?.message || 'No se pudo procesar la baja.');

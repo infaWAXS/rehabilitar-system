@@ -1,13 +1,15 @@
 // Responsable: Francis
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { reserveFixed, reserveIndividual, getMyReservations, getInscriptionOptions } from '../../../services/reservationsService';
-import { addToWaitlist } from '../../../services/waitlistService';
+import { addToWaitlist, getMyWaitlist } from '../../../services/waitlistService';
 import { getActivities, getActivityAvailability } from '../../../services/activitiesService';
 import { getMyPlan } from '../../../services/paymentsService';
+import { abrirVentanaPago } from '../../../services/mercadoPagoPopup';
+import OverlayEsperandoPago from '../../../components/OverlayEsperandoPago';
 
-const PASOS = ['Actividad', 'Metodo de pago', 'Confirmacion', 'Resultado'];
+const PASOS = ['Actividad', 'Metodo de pago', 'Resultado'];
 
 const s = {
   wrapper: { maxWidth: '640px' },
@@ -135,9 +137,6 @@ const s = {
   actCardPrecio: { fontSize: '14px', fontWeight: '700', color: 'var(--color-primario)' },
   resumenBox: { background: 'var(--color-fondo)', borderRadius: '8px', padding: '14px', marginBottom: '16px', fontSize: '14px', lineHeight: '1.8' },
   divider: { borderTop: '1px solid var(--color-borde)', margin: '18px 0' },
-  mpBox: { textAlign: 'center', padding: '20px 0' },
-  mpTitulo: { fontSize: '18px', fontWeight: '700', color: '#009EE3', marginBottom: '6px' },
-  mpSub: { fontSize: '13px', color: 'var(--color-texto-suave)', marginBottom: '20px' },
 };
 
 function formatPrecio(n) {
@@ -234,9 +233,10 @@ function InscribirActividad() {
   const [error, setError] = useState('');
   const [resultado, setResultado] = useState(null);
   const [cuposDisponibles, setCuposDisponibles] = useState(null);
-  const [testScenario, setTestScenario] = useState('success');
   const [filtro, setFiltro] = useState('');
   const [inscriptionOptions, setInscriptionOptions] = useState(null);
+  const [esperandoPago, setEsperandoPago] = useState(false);
+  const pagoHandleRef = useRef(null);
 
   // Detectar si el cliente es abonado desde el backend
   useEffect(() => {
@@ -254,17 +254,22 @@ function InscribirActividad() {
     Promise.all([
       getActivities(),
       getMyReservations().catch(() => []),
+      getMyWaitlist().catch(() => []),
     ])
-      .then(([data, reservations]) => {
+      .then(([data, reservations, waitlist]) => {
         const lista = Array.isArray(data) ? data : (data.activities || []);
         const normalizadas = lista.map(normalizarActividad);
 
         // Excluir actividades en las que el usuario ya tiene una reserva activa
+        // o ya está anotado en la lista de espera
         const idsInscritos = new Set(
           (Array.isArray(reservations) ? reservations : [])
             .filter((r) => r.status !== 'cancelled')
             .map((r) => r.activity_id)
         );
+        (Array.isArray(waitlist) ? waitlist : [])
+          .filter((w) => w.status !== 'cancelled')
+          .forEach((w) => idsInscritos.add(w.activity_id));
         const disponibles = normalizadas.filter((a) => !idsInscritos.has(a.id));
 
         setActividades(disponibles);
@@ -356,11 +361,13 @@ function InscribirActividad() {
 
     try {
       await addToWaitlist(actividad.id);
+      // Quitar la actividad del listado: el usuario ya está anotado en la lista de espera
+      setActividades((prev) => prev.filter((a) => a.id !== actividad.id));
       setResultado({
         tipo: 'lista_espera',
-        mensaje: 'Fuiste agregado a la lista de espera. Te notificaremos cuando haya un cupo disponible.',
+        mensaje: 'Te notificaremos cuando haya un cupo disponible.',
       });
-      setPaso(3);
+      setPaso(2);
     } catch (err) {
       setError(err.message || 'No se pudo agregar a la lista de espera.');
     } finally {
@@ -368,7 +375,7 @@ function InscribirActividad() {
     }
   };
 
-  const handleReservar = async (paymentMethod) => {
+  const handleReservar = async (paymentMethod, testScenario = 'success') => {
     setCargando(true);
     setError('');
 
@@ -385,21 +392,53 @@ function InscribirActividad() {
       const fn = tipoReserva === 'fixed' ? reserveFixed : reserveIndividual;
       await fn(payload);
 
+      // Quitar la actividad del listado: el usuario ya tiene una reserva activa
+      setActividades((prev) => prev.filter((a) => a.id !== actividad.id));
+
       if (paymentMethod === 'partial_payment') {
         setResultado({
           tipo: 'pendiente',
-          mensaje: `Tu reserva quedo en estado pendiente. Monto abonado (${depositPercent}%): ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.`,
+          mensaje: `Monto abonado: ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.`,
         });
       } else {
         setResultado({ tipo: 'confirmada', mensaje: 'Inscripcion confirmada. Tu lugar esta reservado.' });
       }
-      setPaso(3);
+      setPaso(2);
     } catch (err) {
-      setResultado({ tipo: 'error', mensaje: err.message || 'Hubo un error al procesar tu inscripcion.' });
-      setPaso(3);
+      const esPago = paymentMethod === 'full_payment' || paymentMethod === 'partial_payment';
+      const mensaje = esPago
+        ? 'Hubo un error en el pago. Intenta nuevamente.'
+        : (err.message || 'Hubo un error al procesar tu inscripcion.');
+      setResultado({ tipo: 'error', mensaje });
+      setPaso(2);
     } finally {
       setCargando(false);
     }
+  };
+
+  const handleAbrirPago = () => {
+    setError('');
+    setEsperandoPago(true);
+    pagoHandleRef.current = abrirVentanaPago(
+      { monto: montoAPagar, descripcion: actividad?.name },
+      {
+        onResultado: (scenario) => {
+          setEsperandoPago(false);
+          handleReservar(metodo, scenario);
+        },
+        onCancelado: (motivo) => {
+          setEsperandoPago(false);
+          if (motivo === 'popup_bloqueado') {
+            setError('No se pudo abrir la ventana de pago. Verifica que tu navegador no bloquee ventanas emergentes.');
+          }
+        },
+      }
+    );
+  };
+
+  const handleCancelarPago = () => {
+    pagoHandleRef.current?.cancelar();
+    setEsperandoPago(false);
   };
 
   const handleConfirmarMetodo = () => {
@@ -411,11 +450,7 @@ function InscribirActividad() {
     setError('');
     if (metodo === 'waitlist') handleWaitlist();
     else if (metodo === 'subscription' || metodo === 'credit') handleReservar(metodo);
-    else setPaso(2);
-  };
-
-  const handlePagoSimulado = async () => {
-    await handleReservar(metodo);
+    else handleAbrirPago();
   };
 
   return (
@@ -617,50 +652,11 @@ function InscribirActividad() {
             </>
           )}
 
-          {paso === 2 && actividad && (
-            <>
-              <div style={s.mpBox}>
-                <div style={s.mpTitulo}>Mercado Pago</div>
-                <div style={s.mpSub}>Estas a punto de realizar un pago seguro</div>
-              </div>
-              <div style={s.resumenBox}>
-                <strong>Detalle del pago</strong><br />
-                Actividad: {actividad.name}<br />
-                Monto a pagar: <strong>{formatPrecio(montoAPagar)}</strong>
-                {metodo === 'partial_payment' && <><br /><span style={{ color: 'var(--color-texto-suave)', fontSize: '12px' }}>Seña del {depositPercent}% - monto restante: {formatPrecio(precioFinal - sena)}</span></>}
-              </div>
-
-              {/* Selector de escenario MP (solo visible en desarrollo/testing) */}
-              <div style={{ margin: '16px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', color: 'var(--color-texto-suave)', fontWeight: 600 }}>
-                  Simular escenario de pago:
-                </label>
-                <select
-                  value={testScenario}
-                  onChange={(e) => setTestScenario(e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px', width: 'fit-content' }}
-                >
-                  <option value="success">✅ Pago exitoso</option>
-                  <option value="insufficient_funds">❌ Fondos insuficientes</option>
-                  <option value="connection_error">⚠️ Error de conexión</option>
-                </select>
-              </div>
-
-              <div style={s.botones}>
-                <button style={cargando ? s.btnDisabled : s.btnPrimario} onClick={handlePagoSimulado} disabled={cargando}>
-                  {cargando ? 'Procesando...' : 'Simular pago'}
-                </button>
-                <button style={s.btnSecundario} onClick={handleCancelar}>Cancelar</button>
-              </div>
-            </>
-          )}
-
-          {paso === 3 && resultado && (
+          {paso === 2 && resultado && (
             <>
               {resultado.tipo === 'confirmada' && (
                 <>
-                  <div style={s.exito}>OK - {resultado.mensaje}</div>
-                  <div style={s.infoBox('green')}>Tu inscripcion quedo confirmada. Podes verla en Mis Reservas.</div>
+                  <div style={s.exito}> {resultado.mensaje}</div>
                 </>
               )}
               {resultado.tipo === 'pendiente' && (
@@ -691,6 +687,8 @@ function InscribirActividad() {
           )}
         </div>
       </div>
+
+      <OverlayEsperandoPago visible={esperandoPago} onCancelar={handleCancelarPago} />
     </LayoutPrivado>
   );
 }
