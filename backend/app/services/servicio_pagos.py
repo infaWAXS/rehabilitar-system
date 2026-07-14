@@ -70,11 +70,17 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
       - "connection_error"   → E3: falla de conexión con el banco → error de conexión
     """
     from app.utils.subscriptions import find_active_plan_for_specialization, get_age_discount_percent
+    from app.exceptions.http_exceptions import medical_certificate_not_approved_exception
 
     plan = db.query(Plan).filter(Plan.id == plan_id, Plan.status == "active").first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado o inactivo.")
     user = db.query(User).filter(User.id == user_id).first()
+
+    # Regla de negocio: sin apto físico aprobado el cliente no puede suscribirse a
+    # ningún plan (misma restricción que para inscribirse a actividades).
+    if not user or user.medical_certificate_status != "approved":
+        raise medical_certificate_not_approved_exception()
 
     # No permitir adquirir un plan en una especialidad en la que ya se tiene una suscripción activa.
     if find_active_plan_for_specialization(user_id, specialization, db):

@@ -94,7 +94,7 @@ def medical_certificate_not_approved_exception():
 
     return HTTPException(
         status_code=403,
-        detail="No podés inscribirte a actividades hasta que tu apto físico sea aprobado."
+        detail="No podés inscribirte a actividades ni suscribirte a planes hasta que tu apto físico sea aprobado."
     )
 
 
