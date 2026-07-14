@@ -90,6 +90,14 @@ def user_not_enrolled_exception():
     )
 
 
+def medical_certificate_not_approved_exception():
+
+    return HTTPException(
+        status_code=403,
+        detail="No podés inscribirte a actividades hasta que tu apto físico sea aprobado."
+    )
+
+
 def activity_session_not_active_exception():
 
     return HTTPException(
