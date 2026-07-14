@@ -1,6 +1,6 @@
 # app/services/reportes/servicio_repstaff.py
 from datetime import date, datetime, timedelta
-from sqlalchemy import func, text
+from sqlalchemy import func, text, or_
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.activity import Activity
@@ -11,21 +11,44 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
     datetime_inicio = datetime.combine(fecha_inicio, datetime.min.time())
     datetime_fin = datetime.combine(fecha_fin, datetime.max.time())
 
+# ──────────────────────────────────────────────────────────────────────────
+    # 1. LISTADO DE ESPECIALIDADES FIJAS Y RESUMEN
     # ──────────────────────────────────────────────────────────────────────────
-    # 1. LISTADO DE ESPECIALIDADES Y RESUMEN
-    # ──────────────────────────────────────────────────────────────────────────
-    especialidades_db = db.query(Activity.specialization).distinct().filter(Activity.specialization.isnot(None)).all()
-    lista_especialidades = [esp[0] for esp in especialidades_db if esp[0]]
+    lista_especialidades = ["Tren Superior", "Tren Medio", "Tren Inferior"]
     clases_lista = [{"tipo": esp} for esp in lista_especialidades]
 
-    prof_superior = db.query(Activity.professor).filter(Activity.status == "active", func.lower(Activity.specialization).like("%superior%")).distinct().count()
-    prof_inferior = db.query(Activity.professor).filter(Activity.status == "active", func.lower(Activity.specialization).like("%inferior%")).distinct().count()
-    prof_medio = db.query(Activity.professor).filter(Activity.status == "active", func.lower(Activity.specialization).like("%medio%")).distinct().count()
+    def contar_profesores_validos(palabra_clave):
+        # 1. Buscamos todas las cuentas de profesores que cumplen las reglas de fechas estrictas
+        profesores_activos_en_rango = db.query(User).filter(
+            User.role == "professor",
+            User.created_at <= datetime_fin, # Cuenta creada ANTES o DURANTE el fin del reporte
+            or_(
+                User.is_deleted == False,
+                User.is_deleted.is_(None),
+                User.deleted_at > datetime_fin # Si fue borrado, que la baja haya sido DESPUÉS del fin del reporte
+            )
+        ).all()
+
+        contador = 0
+        for prof in profesores_activos_en_rango:
+            nombre_completo = f"{prof.name} {prof.lastname}".strip()
+            
+            # 2. Solo verificamos si este profesor ejerce la especialidad que estamos buscando
+            tiene_especialidad = db.query(Activity.id).filter(
+                Activity.status == "active",
+                Activity.professor == nombre_completo,
+                func.lower(Activity.specialization).like(f"%{palabra_clave}%")
+            ).first()
+            
+            if tiene_especialidad:
+                contador += 1
+                
+        return contador
 
     resumen = {
-        "tren_superior": prof_superior,
-        "tren_inferior": prof_inferior,
-        "tren_medio": prof_medio
+        "tren_superior": contar_profesores_validos("superior"),
+        "tren_inferior": contar_profesores_validos("inferior"),
+        "tren_medio": contar_profesores_validos("medio")
     }
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -103,51 +126,83 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
         })
 
 # ──────────────────────────────────────────────────────────────────────────
-    # 3. RETENCIÓN REAL POR SESIONES (CONSECUTIVAS)
+    # 3. RETENCIÓN REAL POR SESIONES (AGRUPADO POR NOMBRE DE CLASE)
     # ──────────────────────────────────────────────────────────────────────────
     retencion_lista = []
-    actividades_fijas = db.query(Activity).filter(Activity.activity_type == "fixed", Activity.status == "active").all()
     
-    for act in actividades_fijas:
-        # Buscamos todas las fechas distintas donde se tomó asistencia para esta clase
-        fechas_db = db.query(func.date(Attendance.timestamp)).filter(
-            Attendance.activity_id == act.id
+    # 1. Agrupamos por nombre de clase y profesor (ignoramos IDs individuales)
+    clases_unicas = db.query(
+        Activity.name, 
+        Activity.professor, 
+        Activity.specialization
+    ).filter(
+        Activity.status == "active",
+        Activity.name.isnot(None),
+        Activity.name != ""
+    ).distinct().all()
+
+    for c_name, c_prof, c_esp in clases_unicas:
+        # 2. Buscamos todas las fechas en las que se tomó asistencia para esta combinación exacta
+        query_fechas = db.query(func.date(Attendance.timestamp)).join(
+            Activity, Attendance.activity_id == Activity.id
+        ).filter(
+            Activity.name == c_name,
+            Activity.professor == c_prof,
+            Activity.status == "active"
         ).group_by(func.date(Attendance.timestamp)).order_by(func.date(Attendance.timestamp).desc()).all()
         
         fechas_clase = []
-        for f in fechas_db:
+        for f in query_fechas:
             if f[0]:
                 val = f[0]
-                # SQLAlchemy/SQLite a menudo devuelve strings al usar func.date()
                 if isinstance(val, str):
                     try:
-                        # Convertimos el string a objeto date real para poder compararlo
                         val = datetime.strptime(val, "%Y-%m-%d").date()
                     except ValueError:
                         continue
                 elif isinstance(val, datetime):
                     val = val.date()
-                
                 fechas_clase.append(val)
-        
-        # Filtramos para ver si al menos una clase cayó en el rango seleccionado
+                
+        # 3. Filtramos para ver si al menos una clase cayó en el rango seleccionado
         fechas_en_rango = [f for f in fechas_clase if fecha_inicio <= f <= fecha_fin]
         
         if not fechas_en_rango:
-            continue # Si no hubo ninguna clase en este rango, la omitimos
+            continue
             
-        # Tomamos la clase más reciente que cayó en el rango (índice de la más cercana al fin)
+        # 4. Tomamos la clase más reciente que cayó en el rango
         idx = fechas_clase.index(fechas_en_rango[0])
         
-        # Extraemos hasta 4 sesiones en total (la encontrada + las 3 anteriores)
-        fechas_ventana = fechas_clase[idx:idx+4] 
-        fechas_ventana.reverse() # Invertimos para que queden en orden cronológico (Sesión 1 -> 2 -> 3 -> 4)
+        # 5. Extraemos hasta 4 sesiones hacia atrás, validando la "distancia temporal"
+        MAX_DIAS_BRECHA = 40 # Si pasan más de 40 días entre una clase y la anterior, se corta la racha
         
+        sesiones_validas = [fechas_clase[idx]]
+        
+        for i in range(idx + 1, min(idx + 4, len(fechas_clase))):
+            fecha_actual = sesiones_validas[-1]
+            fecha_anterior = fechas_clase[i]
+            
+            # Validamos que no sea una clase del año pasado con el mismo nombre
+            diferencia_dias = (fecha_actual - fecha_anterior).days
+            if diferencia_dias > MAX_DIAS_BRECHA:
+                break # Rompemos el ciclo, no sumamos más clases antiguas
+                
+            sesiones_validas.append(fecha_anterior)
+            
+        sesiones_validas.reverse() # Invertimos para orden cronológico (Sesión 1 -> 2 -> 3 -> 4)
+        
+        # REGLA DE NEGOCIO: Exigimos al menos 2 sesiones para medir retención
+        if len(sesiones_validas) < 2:
+            continue
+            
         sesiones_data = []
-        for d in fechas_ventana:
-            # Contamos los presentes de ese día exacto (pasamos d a string por seguridad para el filtro de la DB)
-            count = db.query(func.count(Attendance.id)).filter(
-                Attendance.activity_id == act.id,
+        for d in sesiones_validas:
+            # Contamos los presentes de ese día sumando todos los IDs que compartan el nombre
+            count = db.query(func.count(Attendance.id)).join(
+                Activity, Attendance.activity_id == Activity.id
+            ).filter(
+                Activity.name == c_name,
+                Activity.professor == c_prof,
                 Attendance.status == 'present',
                 func.date(Attendance.timestamp) == str(d) 
             ).scalar() or 0
@@ -159,17 +214,14 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
                 "in_range": in_range
             })
             
-        # Rellenamos con nulos si hubo menos de 4 clases en la historia de esta actividad
+        # Rellenamos con nulos a la izquierda si hubo menos de 4 clases en la racha
         while len(sesiones_data) < 4:
             sesiones_data.insert(0, None)
             
-        prof_name = act.professor if act.professor else "Sin asignar"
-        clase_name = getattr(act, 'name', act.specialization) or "Clase Fija"
-        
         retencion_lista.append({
-            "profesor": prof_name,
-            "clase": clase_name,
-            "especialidad": act.specialization or "General",
+            "profesor": c_prof if c_prof else "Sin asignar",
+            "clase": c_name,
+            "especialidad": c_esp or "General",
             "sesiones": sesiones_data
         })
 
