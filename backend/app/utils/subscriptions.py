@@ -9,6 +9,24 @@ from app.models.user_plan import UserPlan
 
 MAX_SUBSCRIPTION_FIXED_CLASSES = 4
 
+# Descuento para adultos mayores: quien tiene 65 años o más recibe este % de
+# descuento al adquirir un plan.
+SENIOR_AGE = 65
+SENIOR_AGE_DISCOUNT_PERCENT = 20
+
+
+def calcular_edad(birth_date, hoy: date = None) -> int:
+    """Edad en años cumplidos a la fecha `hoy` (por defecto hoy)."""
+    hoy = hoy or date.today()
+    return hoy.year - birth_date.year - ((hoy.month, hoy.day) < (birth_date.month, birth_date.day))
+
+
+def get_age_discount_percent(user, hoy: date = None) -> int:
+    """% de descuento por edad al adquirir un plan: 20% si el cliente tiene 65 años o más."""
+    if not user or not getattr(user, "birth_date", None):
+        return 0
+    return SENIOR_AGE_DISCOUNT_PERCENT if calcular_edad(user.birth_date, hoy) >= SENIOR_AGE else 0
+
 
 def is_abonado(user_id: int, db: Session) -> bool:
     hoy = date.today()
