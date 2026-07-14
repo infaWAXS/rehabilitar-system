@@ -1,12 +1,13 @@
 # app/services/reportes/servicio_repfinanzas.py
 import calendar
 from datetime import date, datetime, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
+from app.models.user import User
 from app.models.user_plan import UserPlan
 from app.models.plan import Plan
 from app.models.activity import Activity
-from app.models.attendance import Attendance
+from app.models.reservation import Reservation
 
 def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fin: date):
     datetime_inicio = datetime.combine(fecha_inicio, datetime.min.time())
@@ -17,6 +18,15 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
     lista_especialidades = [esp[0] for esp in especialidades_db if esp[0]]
 
     # ──────────────────────────────────────────────────────────────────────────
+    # EXPRESIÓN MATEMÁTICA CENTRAL PARA EL CÁLCULO DE INGRESOS POR RESERVA
+    # ──────────────────────────────────────────────────────────────────────────
+    monto_reserva_expr = case(
+        (Reservation.payment_status.in_(['paid', 'completed']), Activity.price),
+        (Reservation.payment_status == 'partial', Activity.price * (func.coalesce(Reservation.deposit_percent, 0) / 100.0)),
+        else_=0.0
+    )
+
+    # ──────────────────────────────────────────────────────────────────────────
     # 1. TARJETAS DE RESUMEN Y DESGLOSE GLOBAL
     # ──────────────────────────────────────────────────────────────────────────
     suscripciones_activas = db.query(func.count(UserPlan.id)).filter(
@@ -24,27 +34,40 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
         UserPlan.end_date >= fecha_inicio
     ).scalar() or 0
 
-    ingresos_planes_db = db.query(func.sum(Plan.price)).join(UserPlan, UserPlan.plan_id == Plan.id).filter(UserPlan.start_date.between(fecha_inicio, fecha_fin)).scalar()
+    clientes_activos = db.query(func.count(User.id)).filter(
+        User.role == 'client',
+        User.account_status == 'active'
+    ).scalar() or 0
+
+    ingresos_planes_db = db.query(func.sum(Plan.price)).join(UserPlan, UserPlan.plan_id == Plan.id).filter(
+        UserPlan.start_date.between(fecha_inicio, fecha_fin)
+    ).scalar()
     ingresos_planes = float(ingresos_planes_db) if ingresos_planes_db else 0.0
         
-    ingresos_individuales_db = db.query(func.sum(Activity.price)).join(Attendance, Attendance.activity_id == Activity.id).filter(
-        Activity.activity_type == 'individual',
-        Attendance.status == 'present',
-        Attendance.timestamp.between(datetime_inicio, datetime_fin)
+    # FIX: Se cambia reservation_date por created_at (Contabilidad de Caja)
+    ingresos_individuales_db = db.query(func.sum(monto_reserva_expr)).select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).filter(
+        Reservation.status != 'cancelled',
+        Reservation.payment_status.in_(['paid', 'completed']),
+        Reservation.created_at.between(datetime_inicio, datetime_fin)
     ).scalar()
     ingresos_individuales = float(ingresos_individuales_db) if ingresos_individuales_db else 0.0
         
-    ingresos_senas = 0.0 
-    ingresos_totales_reales = ingresos_planes + ingresos_individuales + ingresos_senas
-    ingreso_promedio = (ingresos_totales_reales / suscripciones_activas) if suscripciones_activas > 0 else 0.0
+    # FIX: Se cambia reservation_date por created_at (Contabilidad de Caja)
+    ingresos_senas_db = db.query(func.sum(monto_reserva_expr)).select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).filter(
+        Reservation.status != 'cancelled',
+        Reservation.payment_status == 'partial',
+        Reservation.created_at.between(datetime_inicio, datetime_fin)
+    ).scalar()
+    ingresos_senas = float(ingresos_senas_db) if ingresos_senas_db else 0.0
 
-    # Desglose de ingresos individuales POR ESPECIALIDAD para el filtro
+    ingresos_totales_reales = ingresos_planes + ingresos_individuales + ingresos_senas
+    ingreso_promedio = (ingresos_totales_reales / clientes_activos) if clientes_activos > 0 else 0.0
+
     ing_indiv_global_esp_db = db.query(
-        Activity.specialization, func.sum(Activity.price)
-    ).join(Attendance, Attendance.activity_id == Activity.id).filter(
-        Activity.activity_type == 'individual',
-        Attendance.status == 'present',
-        Attendance.timestamp.between(datetime_inicio, datetime_fin)
+        Activity.specialization, func.sum(monto_reserva_expr)
+    ).select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).filter(
+        Reservation.status != 'cancelled',
+        Reservation.created_at.between(datetime_inicio, datetime_fin)
     ).group_by(Activity.specialization).all()
     
     ingresos_individuales_por_esp = {e[0] or "General": float(e[1] or 0.0) for e in ing_indiv_global_esp_db}
@@ -66,14 +89,15 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
             ing_planes_dia_db = db.query(func.sum(Plan.price)).join(UserPlan, UserPlan.plan_id == Plan.id).filter(UserPlan.start_date == dia_evaluado).scalar()
             ing_planes_dia = float(ing_planes_dia_db) if ing_planes_dia_db else 0.0
 
-            ing_indiv_dia_db = db.query(func.sum(Activity.price)).join(Attendance, Attendance.activity_id == Activity.id).filter(
-                Activity.activity_type == 'individual', Attendance.status == 'present', Attendance.timestamp.between(dt_ini, dt_fin)
+            ing_indiv_dia_db = db.query(func.sum(monto_reserva_expr)).select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).filter(
+                Reservation.status != 'cancelled', 
+                Reservation.created_at.between(dt_ini, dt_fin)
             ).scalar()
             ing_indiv_dia = float(ing_indiv_dia_db) if ing_indiv_dia_db else 0.0
 
-            # Sub-consulta por especialidad para este día
-            ing_esp_dia_db = db.query(Activity.specialization, func.sum(Activity.price)).join(Attendance, Attendance.activity_id == Activity.id).filter(
-                Activity.activity_type == 'individual', Attendance.status == 'present', Attendance.timestamp.between(dt_ini, dt_fin)
+            ing_esp_dia_db = db.query(Activity.specialization, func.sum(monto_reserva_expr)).select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).filter(
+                Reservation.status != 'cancelled', 
+                Reservation.created_at.between(dt_ini, dt_fin)
             ).group_by(Activity.specialization).all()
             ing_esp_dia = {e[0] or "General": float(e[1] or 0.0) for e in ing_esp_dia_db}
 
@@ -99,14 +123,15 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
             ing_planes_mes_db = db.query(func.sum(Plan.price)).join(UserPlan, UserPlan.plan_id == Plan.id).filter(UserPlan.start_date.between(rango_real_ini, rango_real_fin)).scalar()
             ing_planes_mes = float(ing_planes_mes_db) if ing_planes_mes_db else 0.0
 
-            ing_indiv_mes_db = db.query(func.sum(Activity.price)).join(Attendance, Attendance.activity_id == Activity.id).filter(
-                Activity.activity_type == 'individual', Attendance.status == 'present', Attendance.timestamp.between(dt_ini, dt_fin)
+            ing_indiv_mes_db = db.query(func.sum(monto_reserva_expr)).select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).filter(
+                Reservation.status != 'cancelled', 
+                Reservation.created_at.between(dt_ini, dt_fin)
             ).scalar()
             ing_indiv_mes = float(ing_indiv_mes_db) if ing_indiv_mes_db else 0.0
 
-            # Sub-consulta por especialidad para este mes
-            ing_esp_mes_db = db.query(Activity.specialization, func.sum(Activity.price)).join(Attendance, Attendance.activity_id == Activity.id).filter(
-                Activity.activity_type == 'individual', Attendance.status == 'present', Attendance.timestamp.between(dt_ini, dt_fin)
+            ing_esp_mes_db = db.query(Activity.specialization, func.sum(monto_reserva_expr)).select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).filter(
+                Reservation.status != 'cancelled', 
+                Reservation.created_at.between(dt_ini, dt_fin)
             ).group_by(Activity.specialization).all()
             ing_esp_mes = {e[0] or "General": float(e[1] or 0.0) for e in ing_esp_mes_db}
 
@@ -121,32 +146,34 @@ def generar_reporte_financiero_service(db: Session, fecha_inicio: date, fecha_fi
             else:
                 fecha_iter_ini = date(fecha_iter_ini.year, fecha_iter_ini.month + 1, 1)
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # 3. RANKINGS (Enviamos TODOS para que el Frontend filtre el Top 5)
+   # ──────────────────────────────────────────────────────────────────────────
+    # 3. RANKINGS DE RECAUDACIÓN (BASADO EN INGRESOS DE RESERVAS)
     # ──────────────────────────────────────────────────────────────────────────
     todas_clases_db = db.query(
         Activity.name.label('nombre'),
         Activity.specialization.label('especialidad'),
-        func.sum(Activity.price).label('recaudacion')
-    ).join(Attendance, Attendance.activity_id == Activity.id).filter(
-        Activity.activity_type == 'individual',
-        Attendance.status == 'present',
-        Attendance.timestamp.between(datetime_inicio, datetime_fin)
+        func.sum(monto_reserva_expr).label('recaudacion')
+    ).select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).filter(
+        Reservation.status != 'cancelled',
+        Reservation.created_at.between(datetime_inicio, datetime_fin)
     ).group_by(Activity.name, Activity.specialization).all()
 
     todas_clases = [{"nombre": c.nombre or "Clase", "especialidad": c.especialidad or "General", "recaudacion": float(c.recaudacion or 0.0)} for c in todas_clases_db]
 
+    # FIX: Se agregan filtros explícitos para ignorar actividades sin profesor asignado
     todos_profesores_db = db.query(
         Activity.professor.label('nombre'),
         Activity.specialization.label('especialidad'),
-        func.sum(Activity.price).label('recaudacion')
-    ).join(Attendance, Attendance.activity_id == Activity.id).filter(
-        Activity.activity_type == 'individual',
-        Attendance.status == 'present',
-        Attendance.timestamp.between(datetime_inicio, datetime_fin)
+        func.sum(monto_reserva_expr).label('recaudacion')
+    ).select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).filter(
+        Reservation.status != 'cancelled',
+        Reservation.created_at.between(datetime_inicio, datetime_fin),
+        Activity.professor.isnot(None),  # Ignora los nulos
+        Activity.professor != ""         # Ignora los strings vacíos
     ).group_by(Activity.professor, Activity.specialization).all()
 
-    todos_profesores = [{"nombre": p.nombre or "Profesor", "especialidad": p.especialidad or "General", "recaudacion": float(p.recaudacion or 0.0)} for p in todos_profesores_db]
+    # Ya no hace falta el 'or "Profesor"' porque garantizamos que siempre hay un nombre real
+    todos_profesores = [{"nombre": p.nombre, "especialidad": p.especialidad or "General", "recaudacion": float(p.recaudacion or 0.0)} for p in todos_profesores_db]
 
     # ──────────────────────────────────────────────────────────────────────────
     # 4. EMPAQUETADO FINAL
