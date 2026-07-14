@@ -5,7 +5,6 @@ import ReportesHeader from './components/ReportesHeader';
 import ReportesExportar from './components/ReportesExportar';
 import ReportesEmptyState from './components/ReportesEmptyState';
 
-// IMPORTACIONES PARA EXPORTACIÓN
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -48,14 +47,17 @@ export default function ClientesReportes() {
   const clasesFiltradas = reporte ? (filtroEspecialidad ? reporte.clase.filter(c => c.tipo === filtroEspecialidad) : reporte.clase) : [];
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
   
+  // Nuevo cálculo de totales basado en la nueva estructura de datos
   const totales = clasesFiltradas.reduce((acc, c) => ({
-    inscripciones: acc.inscripciones + (c.asistencias_fijas + c.asistencias_individuales + c.cancelaciones_fijas + c.cancelaciones_individuales),
-    cancelaciones: acc.cancelaciones + (c.cancelaciones_fijas + c.cancelaciones_individuales),
-    asistencias: acc.asistencias + (c.asistencias_fijas + c.asistencias_individuales),
-    inasistencias: acc.inasistencias + (c.cancelaciones_fijas + c.cancelaciones_individuales)
-  }), { inscripciones: 0, cancelaciones: 0, asistencias: 0, inasistencias: 0 });
+    clases: acc.clases + (c.cant_clases || 0),
+    cupos: acc.cupos + (c.cupos_iniciales || 0),
+    asistencias: acc.asistencias + (c.asistencias || 0),
+    inasistencias: acc.inasistencias + (c.inasistencias || 0),
+    cancelaciones: acc.cancelaciones + (c.cancelaciones || 0),
+    espera: acc.espera + (c.lista_espera || 0)
+  }), { clases: 0, cupos: 0, asistencias: 0, inasistencias: 0, cancelaciones: 0, espera: 0 });
 
-  const hayDatos = totales.inscripciones > 0;
+  const hayDatos = totales.clases > 0;
   const motivosOcultos = ["Acumulación De 3 Faltas Consecutivas", "Inasistencia mayor al 50%"];
 
   const statsSanciones = React.useMemo(() => {
@@ -86,9 +88,6 @@ export default function ClientesReportes() {
     };
   }, [reporte]);
 
-  // ─────────────────────────────────────────────────────────
-  // LÓGICA DE EXPORTACIÓN DETALLADA (PDF / EXCEL MEJORADO)
-  // ─────────────────────────────────────────────────────────
   const handleExport = (formato) => {
     if (!reporte) return;
     const anioActual = new Date().getFullYear();
@@ -98,54 +97,39 @@ export default function ClientesReportes() {
     if (formato === 'excel') {
       const wb = XLSX.utils.book_new();
 
-      // Pestaña 1: Resumen General e Inteligencia de Sanciones
       const wsResumen = XLSX.utils.json_to_sheet([{
         "Métrica": "Ausentismo Promedio", "Valor": `${reporte.resumen.tasa_ausentismo}%`
       }, {
         "Métrica": "Nuevos Registros", "Valor": reporte.resumen.nuevos_registros || 0
       }, {
         "Métrica": "Clientes Suspendidos", "Valor": reporte.resumen.clientes_suspendidos_rango || 0
-      }, {
-        "Métrica": "Sanciones: Por 3 Faltas", "Valor": statsSanciones.tresFaltas
-      }, {
-        "Métrica": "Sanciones: Ausencia > 50%", "Valor": statsSanciones.cincuentaPorciento
-      }, {
-        "Métrica": "Sanciones: Otros Motivos", "Valor": statsSanciones.otrosMotivos
-      }, {
-        "Métrica": "Sanciones: Reincidentes", "Valor": statsSanciones.reincidentes
       }]);
-      // Ajuste de legibilidad para el resumen
       wsResumen['!cols'] = [{ wch: 35 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
 
-      // Pestaña 2: Concurrencia a Detalle
-      const dataConcurrencia = clasesFiltradas.map(c => {
-        const inscripcionesTotales = c.asistencias_fijas + c.asistencias_individuales + c.cancelaciones_fijas + c.cancelaciones_individuales;
-        return {
-          "Especialidad": c.tipo,
-          "Alumnos Únicos": Math.floor(inscripcionesTotales * 0.6),
-          "Inscripciones a Clases": inscripcionesTotales,
-          "Cancelaciones": c.cancelaciones_fijas + c.cancelaciones_individuales,
-          "Lista de Espera": 0,
-          "Asistencias": c.asistencias_fijas + c.asistencias_individuales,
-          "Inasistencias": c.cancelaciones_fijas + c.cancelaciones_individuales
-        };
-      });
+      // Actualización de la pestaña de Concurrencia a la nueva estructura
+      const dataConcurrencia = clasesFiltradas.map(c => ({
+        "Especialidad": c.tipo,
+        "Clases": c.cant_clases,
+        "Cupos Iniciales": c.cupos_iniciales,
+        "Asistencias": c.asistencias,
+        "Inasistencias": c.inasistencias,
+        "Cancelaciones": c.cancelaciones,
+        "Lista Espera": c.lista_espera
+      }));
       dataConcurrencia.push({
         "Especialidad": "TOTALES",
-        "Alumnos Únicos": Math.floor(totales.inscripciones * 0.6),
-        "Inscripciones a Clases": totales.inscripciones,
-        "Cancelaciones": totales.cancelaciones,
-        "Lista de Espera": 0,
+        "Clases": totales.clases,
+        "Cupos Iniciales": totales.cupos,
         "Asistencias": totales.asistencias,
-        "Inasistencias": totales.inasistencias
+        "Inasistencias": totales.inasistencias,
+        "Cancelaciones": totales.cancelaciones,
+        "Lista Espera": totales.espera
       });
       const wsConcurrencia = XLSX.utils.json_to_sheet(dataConcurrencia);
-      // Ajuste de legibilidad para Concurrencia
-      wsConcurrencia['!cols'] = [{ wch: 25 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 15 }];
+      wsConcurrencia['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsConcurrencia, "Concurrencia");
 
-      // Pestaña 3: Mapa de Calor
       if (reporte.mapa_calor && listaHorarios.length > 0) {
         const dataMapaCalor = reporte.mapa_calor.map(row => {
           const fila = { "Día / Módulo": row.dia };
@@ -157,14 +141,12 @@ export default function ClientesReportes() {
           return fila;
         });
         const wsMapa = XLSX.utils.json_to_sheet(dataMapaCalor);
-        // Ajuste de legibilidad para el Mapa
         const colWidths = [{ wch: 15 }];
         listaHorarios.forEach(() => colWidths.push({ wch: 10 }));
         wsMapa['!cols'] = colWidths;
         XLSX.utils.book_append_sheet(wb, wsMapa, "Mapa de Calor");
       }
 
-      // Pestaña 4: Sancionados (Módulo Aparte y Legible)
       const sancionadosFiltrados = reporte.sancionados?.filter(user => !motivosOcultos.includes(user.motivo)) || [];
       if (sancionadosFiltrados.length > 0) {
         const dataSanciones = sancionadosFiltrados.map(user => ({
@@ -173,11 +155,9 @@ export default function ClientesReportes() {
           "Inicio de Suspensión": user.fecha_inicio
         }));
         const wsSanciones = XLSX.utils.json_to_sheet(dataSanciones);
-        // Anchos de columna súper claros para este módulo
         wsSanciones['!cols'] = [{ wch: 30 }, { wch: 45 }, { wch: 25 }];
         XLSX.utils.book_append_sheet(wb, wsSanciones, "Cuentas Suspendidas");
       } else {
-        // Si no hay sancionados, dejamos constancia en una hoja
         const wsSancionesVacia = XLSX.utils.json_to_sheet([{ "Estado": "No se registraron suspensiones en este período." }]);
         wsSancionesVacia['!cols'] = [{ wch: 50 }];
         XLSX.utils.book_append_sheet(wb, wsSancionesVacia, "Cuentas Suspendidas");
@@ -194,7 +174,6 @@ export default function ClientesReportes() {
         if (currentY + espacioNecesario >= pageHeight - 10) { doc.addPage(); currentY = 14; }
       };
 
-      // Título
       doc.setFontSize(18);
       doc.text(`Reporte de Clientes y Asistencias ${anioActual}`, 14, currentY);
       currentY += 8;
@@ -209,7 +188,6 @@ export default function ClientesReportes() {
         currentY += 4;
       }
 
-      // Resumen Global
       doc.setFontSize(11);
       doc.text(`Ausentismo Promedio: ${reporte.resumen.tasa_ausentismo}%`, 14, currentY); currentY += 6;
       doc.text(`Nuevos Registros: ${reporte.resumen.nuevos_registros || 0}`, 14, currentY); currentY += 6;
@@ -223,30 +201,25 @@ export default function ClientesReportes() {
         margin: { top: 14 }
       };
 
-      // Tabla de Concurrencia
       checkPageBreak(40);
       doc.setFontSize(14);
       doc.text("Concurrencia y Cancelaciones", 14, currentY);
       
-      const bodyConcurrencia = clasesFiltradas.map(c => {
-        const insc = c.asistencias_fijas + c.asistencias_individuales + c.cancelaciones_fijas + c.cancelaciones_individuales;
-        const canc = c.cancelaciones_fijas + c.cancelaciones_individuales;
-        const asist = c.asistencias_fijas + c.asistencias_individuales;
-        return [c.tipo, Math.floor(insc * 0.6), insc, canc, 0, asist, canc]; 
-      });
-      bodyConcurrencia.push([{ content: 'TOTALES', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, Math.floor(totales.inscripciones * 0.6), totales.inscripciones, totales.cancelaciones, 0, totales.asistencias, totales.inasistencias]);
+      const bodyConcurrencia = clasesFiltradas.map(c => [
+        c.tipo, c.cant_clases, c.cupos_iniciales, c.asistencias, c.inasistencias, c.cancelaciones, c.lista_espera
+      ]);
+      bodyConcurrencia.push([{ content: 'TOTALES', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, totales.clases, totales.cupos, totales.asistencias, totales.inasistencias, totales.cancelaciones, totales.espera]);
 
       autoTable(doc, {
         ...baseTableStyles,
         startY: currentY + 4,
-        head: [['Especialidad', 'Alumnos', 'Inscrip.', 'Cancel.', 'Espera', 'Asist.', 'Inasist.']],
+        head: [['Especialidad', 'Clases', 'Cupos', 'Asist.', 'Inasist.', 'Cancel.', 'Espera']],
         body: bodyConcurrencia,
         styles: { ...baseTableStyles.styles, fontSize: 9, cellPadding: 3 },
         columnStyles: { 0: { cellWidth: 35 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' } }
       });
       currentY = doc.lastAutoTable.finalY + 14;
 
-      // Mapa de Calor
       if (reporte.mapa_calor && listaHorarios.length > 0) {
         checkPageBreak(50);
         doc.setFontSize(14);
@@ -272,7 +245,6 @@ export default function ClientesReportes() {
         currentY = doc.lastAutoTable.finalY + 14;
       }
 
-      // Bloque de Cuentas Suspendidas
       checkPageBreak(40);
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 0);
@@ -335,7 +307,6 @@ export default function ClientesReportes() {
             </div>
           </div>
 
-           {/* SECCIÓN SANCIONADOS */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
               Cuentas Suspendidas por Inasistencia
@@ -403,7 +374,6 @@ export default function ClientesReportes() {
             </div>
           </div>
                   
-          {/*Filtro especialidad*/}        
           <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)' }}>
             <div style={s.grupo}>
               <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
@@ -414,7 +384,6 @@ export default function ClientesReportes() {
             </div>
           </div>
 
-          {/* TABLA DE CONCURRENCIA */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
               Control de Concurrencia y Cancelaciones
@@ -427,52 +396,46 @@ export default function ClientesReportes() {
                   <thead>
                     <tr>
                       <th style={s.thOrdenable} onClick={() => cambiarOrden('tipo')}>Especialidad</th>
-                      <th style={s.thOrdenable}>Cantidad de Alumnos</th>
-                      <th style={s.thOrdenable}>Inscripciones a Clases</th>
-                      <th style={s.thOrdenable}>Cancelaciones</th>
-                      <th style={s.thOrdenable}>Lista de Espera</th>
+                      <th style={s.thOrdenable}>Clases</th>
+                      <th style={s.thOrdenable}>Cupos Iniciales</th>
                       <th style={s.thOrdenable}>Asistencias</th>
                       <th style={s.thOrdenable}>Inasistencias</th>
+                      <th style={s.thOrdenable}>Cancelaciones</th>
+                      <th style={s.thOrdenable}>Lista de Espera</th>
                     </tr>
                   </thead>
                   <tbody>
                     {clasesFiltradas.map((c, i) => {
-                      const inscripcionesTotales = c.asistencias_fijas + c.asistencias_individuales + c.cancelaciones_fijas + c.cancelaciones_individuales;
-                      if (inscripcionesTotales === 0) return null;
-                      const cancelacionesTotales = c.cancelaciones_fijas + c.cancelaciones_individuales;
-                      const asistenciasTotales = c.asistencias_fijas + c.asistencias_individuales;
-                      const alumnosUnicos = Math.floor(inscripcionesTotales * 0.6); 
-
+                      if (!c.cant_clases || c.cant_clases === 0) return null;
                       return (
                         <tr key={i}>
                           <td style={s.td}><strong>{c.tipo}</strong></td>
-                          <td style={s.td}>{alumnosUnicos}</td>
-                          <td style={s.td}>{inscripcionesTotales}</td>
-                          <td style={s.td}>{cancelacionesTotales}</td>
-                          <td style={s.td}>0</td>
-                          <td style={s.td}>{asistenciasTotales}</td>
-                          <td style={s.td}>{cancelacionesTotales}</td>
+                          <td style={s.td}>{c.cant_clases}</td>
+                          <td style={s.td}>{c.cupos_iniciales}</td>
+                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{c.asistencias}</span></td>
+                          <td style={s.td}>{c.inasistencias}</td>
+                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{c.cancelaciones}</span></td>
+                          <td style={s.td}>{c.lista_espera}</td>
                         </tr>
                       );
                     })}
                     <tr style={{ fontWeight: 'bold', background: '#f8fafc', borderTop: '2px solid var(--color-borde)' }}>
                       <td style={{...s.td, color: 'var(--color-primario-oscuro)'}}>TOTALES</td>
-                      <td style={s.td}>{Math.floor(totales.inscripciones * 0.6)}</td>
-                      <td style={s.td}>{totales.inscripciones}</td>
-                      <td style={s.td}>{totales.cancelaciones}</td>
-                      <td style={s.td}>0</td>
+                      <td style={s.td}>{totales.clases}</td>
+                      <td style={s.td}>{totales.cupos}</td>
                       <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{totales.asistencias}</span></td>
-                      <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#f1f5f9', color: '#475569' }}>{totales.inasistencias}</span></td>
+                      <td style={s.td}>{totales.inasistencias}</td>
+                      <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{totales.cancelaciones}</span></td>
+                      <td style={s.td}>{totales.espera}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             ) : (
-              <ReportesEmptyState entidad="asistencias ni cancelaciones" filtroEspecialidad={filtroEspecialidad} />
+              <ReportesEmptyState entidad="clases programadas" filtroEspecialidad={filtroEspecialidad} />
             )}
           </div>
 
-          {/* MAPA DE CALOR */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
               Mapa de Calor: Concurrencia de Alumnos (Grid)
@@ -502,7 +465,6 @@ export default function ClientesReportes() {
             )}
           </div>
 
-          {/* EL BOTÓN AHORA RECIBE LA FUNCIÓN HANDLE EXPORT */}
           <ReportesExportar tipoReporte="Clientes" onExport={handleExport} />
         </>
       )}
