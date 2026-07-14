@@ -3,9 +3,9 @@
 // E2: sin clientes → "No hay clientes registrados." (sin filtros) o "No se encontraron clientes con los filtros aplicados."
 // E3: limpiar filtros → limpiarFiltros() resetea a FILTROS_VACIOS y recarga lista completa
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getClients } from '../../../services/usersService';
+import { suspendClient } from '../../../services/clientsService';
 import { getRole } from '../../../services/authService';
 
 const STATUS_LABEL = { active: 'Activo', disabled: 'Deshabilitado', suspended: 'Suspendido', pending_reintegration: 'Reintegro pend.' };
@@ -52,18 +52,66 @@ const s = {
   vacio: { textAlign: 'center', padding: '48px', color: 'var(--color-texto-suave)', fontSize: '15px' },
   card: { background: 'var(--color-fondo-card)', borderRadius: '12px', padding: '0', boxShadow: 'var(--sombra)', overflowX: 'auto' },
   link: { color: 'var(--color-primario)', textDecoration: 'none', fontWeight: '600', fontSize: '13px' },
+  botonSuspender: {
+    display: 'inline-block', padding: '6px 14px', borderRadius: '6px', border: '1px solid #dc2626',
+    background: 'transparent', color: '#dc2626', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+  },
   error: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '16px' },
+  exito: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '10px 14px', color: '#15803d', fontSize: '13px', marginBottom: '16px' },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  modal: { background: '#fff', borderRadius: '12px', padding: '28px 32px', maxWidth: '420px', width: '100%', boxShadow: '0 16px 48px rgba(0,0,0,0.18)' },
+  modalTitulo: { fontSize: '18px', fontWeight: '700', marginBottom: '10px', color: 'var(--color-texto)' },
+  modalTexto: { fontSize: '14px', color: 'var(--color-texto-suave)', marginBottom: '16px', lineHeight: 1.5 },
+  modalLabel: { display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '600', color: 'var(--color-texto)' },
+  modalInput: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-borde)', fontSize: '14px', marginBottom: '16px', boxSizing: 'border-box', resize: 'vertical', minHeight: '80px' },
+  modalBotones: { display: 'flex', gap: '10px', justifyContent: 'flex-end' },
+  modalCancelar: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)' },
+  modalConfirmar: { padding: '9px 18px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '700' },
 };
 
 const FILTROS_VACIOS = { busqueda: '', estado: '' };
 
 function ListaClientes() {
   const rol = getRole();
-  const basePath = rol === 'admin' ? '/admin/clientes' : '/recepcionista/clientes';
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [exito, setExito] = useState('');
   const [filtros, setFiltros] = useState(FILTROS_VACIOS);
+
+  // Modal de suspensión directa desde la lista
+  const [clienteASuspender, setClienteASuspender] = useState(null);
+  const [motivoSuspender, setMotivoSuspender] = useState('');
+  const [errMotivo, setErrMotivo] = useState('');
+  const [suspendiendo, setSuspendiendo] = useState(false);
+
+  const abrirModalSuspender = (cliente) => {
+    setClienteASuspender(cliente);
+    setMotivoSuspender('');
+    setErrMotivo('');
+    setExito('');
+  };
+  const cerrarModalSuspender = () => {
+    setClienteASuspender(null);
+    setMotivoSuspender('');
+    setErrMotivo('');
+  };
+
+  const confirmarSuspender = async () => {
+    if (!motivoSuspender.trim()) { setErrMotivo('El motivo es obligatorio.'); return; }
+    setSuspendiendo(true);
+    try {
+      const updated = await suspendClient(clienteASuspender.id, motivoSuspender.trim());
+      const nuevoEstado = updated?.account_status || 'suspended';
+      setClientes((prev) => prev.map((c) => (c.id === clienteASuspender.id ? { ...c, account_status: nuevoEstado } : c)));
+      setExito(`La cuenta de ${clienteASuspender.name} ${clienteASuspender.lastname} fue suspendida correctamente.`);
+      cerrarModalSuspender();
+    } catch (err) {
+      setErrMotivo(err.message || 'No se pudo suspender la cuenta.');
+    } finally {
+      setSuspendiendo(false);
+    }
+  };
 
   const cargar = useCallback((f) => {
     setCargando(true);
@@ -100,6 +148,7 @@ function ListaClientes() {
       </div>
 
       {error && <div style={s.error}>{error}</div>}
+      {exito && <div style={s.exito}>{exito}</div>}
 
       {/* Filtros */}
       <div style={s.filtros}>
@@ -170,14 +219,44 @@ function ListaClientes() {
                     </span>
                   </td>
                   <td style={s.td}>
-                    {(rol === 'admin' || rol === 'recepcionista') && (
-                      <Link to={`${basePath}/${c.id}`} style={s.link}>Ver detalle</Link>
+                    {(rol === 'admin' || rol === 'recepcionista') &&
+                      (c.account_status === 'active' || c.account_status === 'disabled') && (
+                        <button style={s.botonSuspender} onClick={() => abrirModalSuspender(c)}>
+                          Suspender cuenta
+                        </button>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal suspender cuenta — directo desde la lista */}
+      {clienteASuspender && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <p style={s.modalTitulo}>Suspender cuenta</p>
+            <p style={s.modalTexto}>
+              Vas a suspender la cuenta de <strong>{clienteASuspender.name} {clienteASuspender.lastname}</strong>.
+              Ingresá el motivo de la suspensión. El cliente será notificado.
+            </p>
+            <label style={s.modalLabel}>Motivo *</label>
+            <textarea
+              style={s.modalInput}
+              value={motivoSuspender}
+              onChange={(e) => { setMotivoSuspender(e.target.value); setErrMotivo(''); }}
+              placeholder="Escribí el motivo..."
+            />
+            {errMotivo && <div style={{ ...s.error, marginBottom: '12px' }}>{errMotivo}</div>}
+            <div style={s.modalBotones}>
+              <button style={s.modalCancelar} onClick={cerrarModalSuspender} disabled={suspendiendo}>Cancelar</button>
+              <button style={s.modalConfirmar} onClick={confirmarSuspender} disabled={suspendiendo}>
+                {suspendiendo ? 'Suspendiendo...' : 'Confirmar suspensión'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </LayoutPrivado>

@@ -9,6 +9,7 @@ import {
   registerAttendanceByDni,
   getAttendancesByActivity,
   initializeAttendances,
+  finalizeAttendances,
   updateAttendanceComment,
   deleteAttendanceComment,
   generateAttendanceQr,
@@ -230,6 +231,10 @@ export default function RegistrarAsistencia() {
   const [errorQr, setErrorQr] = useState('');
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
+  // Finalización de clase (registra inasistencias y evalúa suspensiones)
+  const [finalizando, setFinalizando] = useState(false);
+  const [resultadoFinal, setResultadoFinal] = useState(null); // { tipo, mensaje }
+
     // Sesión de actividad
   const [sesionActiva, setSesionActiva] = useState(false);
   const [cargandoSesion, setCargandoSesion] = useState(true);
@@ -324,6 +329,31 @@ useEffect(() => {
       setErrorForm(e?.message || 'No se pudo registrar la asistencia.');
     } finally {
       setEnviando(false);
+    }
+  }
+
+  async function handleFinalizar() {
+    if (finalizando) return;
+    const confirmar = window.confirm(
+      'Al finalizar la clase, los inscriptos que no registraron asistencia quedarán como ausentes ' +
+      'y se evaluará la suspensión automática por inasistencias. ¿Continuar?'
+    );
+    if (!confirmar) return;
+
+    setFinalizando(true);
+    setResultadoFinal(null);
+    try {
+      const res = await finalizeAttendances(actividadId);
+      const suspendidos = res?.clientes_suspendidos ?? 0;
+      const mensaje = suspendidos > 0
+        ? `Clase finalizada. Se registraron ${res.ausentes_registrados} inasistencia(s) y se suspendieron ${suspendidos} cuenta(s) por asistencia. Se notificó el motivo a cada cliente.`
+        : `Clase finalizada. Se registraron ${res.ausentes_registrados} inasistencia(s). Ninguna cuenta fue suspendida.`;
+      setResultadoFinal({ tipo: 'exito', mensaje });
+      cargarAsistencias();
+    } catch (e) {
+      setResultadoFinal({ tipo: 'error', mensaje: e?.message || 'No se pudo finalizar la clase.' });
+    } finally {
+      setFinalizando(false);
     }
   }
 
@@ -589,6 +619,28 @@ useEffect(() => {
                   </div>
                 );
               })
+            )}
+
+            {/* Finalizar clase: registra inasistencias y evalúa suspensiones */}
+            {!cargandoLista && asistencias.length > 0 && (
+              <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--color-borde)' }}>
+                {resultadoFinal && (
+                  <div style={s.alerta(resultadoFinal.tipo === 'error' ? 'error' : 'exito')}>
+                    {resultadoFinal.mensaje}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  style={{ ...s.botonPrimario, width: '100%', opacity: finalizando ? 0.7 : 1 }}
+                  onClick={handleFinalizar}
+                  disabled={finalizando}
+                >
+                  {finalizando ? 'Finalizando...' : 'Finalizar clase y registrar inasistencias'}
+                </button>
+                <p style={{ fontSize: '12px', color: 'var(--color-texto-suave)', marginTop: '8px', textAlign: 'center' }}>
+                  Los ausentes quedarán registrados. Un cliente con más de 3 inasistencias o menos del 50% de asistencia mensual será suspendido automáticamente.
+                </p>
+              </div>
             )}
           </div>
         </div>

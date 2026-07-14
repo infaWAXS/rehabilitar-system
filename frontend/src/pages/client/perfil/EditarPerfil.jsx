@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getCurrentUser, updateUserInfo } from '../../../services/usersService';
+import { updateStoredName } from '../../../services/authService';
 
 const s = {
   seccion: {
@@ -100,6 +101,8 @@ function EditarPerfil() {
         telefono: form.telefono || null,
         birth_date: form.fecha_nacimiento || null,
       });
+      // Refrescar el nombre en sesión para que la cabecera lo muestre actualizado
+      updateStoredName(form.nombre, form.apellido);
       setExito('Perfil actualizado correctamente.');
       setTimeout(() => navigate('/perfil'), 1500);
     } catch (err) {
