@@ -9,6 +9,7 @@ from app.models.activity import Activity
 from app.models.attendance import Attendance
 from app.models.reservation import Reservation
 from app.models.credit_transaction import CreditTransaction
+from app.models.waitlist import Waitlist # ◄── AGREGAMOS EL MODELO WAITLIST
 
 def seed_estadisticas(db: Session):
     print("⏳ Iniciando carga de datos de Testing (Clases, Reservas, Pagos, Auditoría y Asistencias)...")
@@ -95,7 +96,8 @@ def seed_estadisticas(db: Session):
         {"fecha": date(2026, 1, 20), "nombre": "Hip Trass", "hora": "10:00", "sala": sala_1, "profe": "María Rodríguez", "capacidad": 9, "presentes": 3, "ausentes": 2, "precio": 3500.00, "esp": "Tren Inferior"},
         {"fecha": date(2026, 1, 22), "nombre": "twrk", "hora": "12:00", "sala": sala_1, "profe": "María Rodríguez", "capacidad": 9, "presentes": 2, "ausentes": 0, "precio": 3000.00, "esp": "Tren Inferior"},
         {"fecha": date(2026, 1, 29), "nombre": "perreo", "hora": "12:00", "sala": sala_1, "profe": "María Rodríguez", "capacidad": 9, "presentes": 1, "ausentes": 2, "precio": 3000.00, "esp": "Tren Inferior"},
-        {"fecha": date(2026, 1, 15), "nombre": "Pilates Clínico", "hora": "18:00", "sala": sala_4, "profe": "Carlos Gómez", "capacidad": 8, "presentes": 4, "ausentes": 3, "precio": 6500.00, "esp": "Tren Superior"}
+        # 🚨 FIX: Capacidad colmada en Pilates Clínico (5 presentes + 3 ausentes = 8 de capacidad máxima)
+        {"fecha": date(2026, 1, 15), "nombre": "Pilates Clínico", "hora": "18:00", "sala": sala_4, "profe": "Carlos Gómez", "capacidad": 8, "presentes": 5, "ausentes": 3, "precio": 6500.00, "esp": "Tren Superior"}
     ]
 
     for c in clases_test:
@@ -114,6 +116,7 @@ def seed_estadisticas(db: Session):
         hora_int = int(c["hora"].split(":")[0])
         fecha_dt = datetime.combine(c["fecha"], datetime.min.time()) + timedelta(hours=hora_int)
 
+        # Matricular a los alumnos hasta llenar la capacidad
         for index, alumno in enumerate(alumnos_anotados):
             estado_asistencia = "present" if index < c["presentes"] else "absent"
             fecha_reserva_pago = fecha_dt - timedelta(days=random.randint(1, 3))
@@ -133,6 +136,19 @@ def seed_estadisticas(db: Session):
             db.add(nueva_transaccion)
 
             db.add(Attendance(user_id=alumno.id, activity_id=nueva_act_test.id, status=estado_asistencia, timestamp=fecha_dt))
+        
+        # 🚨 NUEVO: Agregar alumnos sobrantes a la Lista de Espera de Pilates Clínico
+        if c["nombre"] == "Pilates Clínico":
+            alumnos_sobrantes = [u for u in alumnos_disponibles if u not in alumnos_anotados]
+            if len(alumnos_sobrantes) >= 2:
+                alumnos_espera = random.sample(alumnos_sobrantes, 2)
+                for pos, alumno in enumerate(alumnos_espera):
+                    db.add(Waitlist(
+                        user_id=alumno.id,
+                        activity_id=nueva_act_test.id,
+                        status="waiting",
+                        position=pos + 1
+                    ))
             
     db.commit()
 
@@ -143,7 +159,6 @@ def seed_estadisticas(db: Session):
     fechas_febrero = [date(2026, 2, 2), date(2026, 2, 9), date(2026, 2, 16)]
     
     for i, f in enumerate(fechas_febrero):
-        # Creamos una actividad nueva y distinta para cada fecha
         act_fija = Activity(
             room_id=sala_1.id,
             name="Terapia Física Continua",
@@ -173,7 +188,7 @@ def seed_estadisticas(db: Session):
             ))
     db.commit()
 
-  # ──────────────────────────────────────────────────────────────────────────
+    # ──────────────────────────────────────────────────────────────────────────
     # 6. REGISTROS DE AUDITORÍA: ABSENTISMO DE STAFF (CON COLUMNA RESULT)
     # ──────────────────────────────────────────────────────────────────────────
     print("⏳ Generando bajas en el Staff (Absentismo)...")
@@ -181,10 +196,8 @@ def seed_estadisticas(db: Session):
     maria = db.query(User).filter(User.name == "María", User.role == "professor").first()
     
     # --- ACTIVIDADES PARA CARLOS (AGOSTO) ---
-    # 2 veces en la misma clase (mismo nombre, distinta fecha para simular sesiones)
     act_carlos_a1 = Activity(room_id=sala_1.id, name="Terapia Avanzada", specialization="Tren Superior", activity_type="individual", specific_date=date(2026, 8, 10), time_slot="09:00", professor=None, price=3000.0, capacity=10, status="active")
     act_carlos_a2 = Activity(room_id=sala_1.id, name="Terapia Avanzada", specialization="Tren Superior", activity_type="individual", specific_date=date(2026, 8, 17), time_slot="09:00", professor=None, price=3000.0, capacity=10, status="active")
-    # 1 vez en otra clase distinta
     act_carlos_b = Activity(room_id=sala_4.id, name="Pilates Clínico Extra", specialization="Tren Superior", activity_type="individual", specific_date=date(2026, 8, 20), time_slot="10:00", professor=None, price=3500.0, capacity=10, status="active")
     
     # --- ACTIVIDAD PARA MARÍA (FEBRERO) ---
@@ -198,10 +211,7 @@ def seed_estadisticas(db: Session):
         VALUES (:user_id, :action, :type, :result, :detail, :timestamp)
     """)
     
-    # ─────────────────────────────────────────────────────────
     # PROFESOR 1: CARLOS (3 Bajas en Agosto)
-    # ─────────────────────────────────────────────────────────
-    # Baja 1: Terapia Avanzada (Para la clase del 10 de Agosto)
     db.execute(query_audit, {
         "user_id": carlos.id, "action": "CLAIM_ACTIVITY", "type": "ACTIVITY", "result": "SUCCESS",
         "detail": f"Profesor Carlos Gómez asumió la actividad '{act_carlos_a1.name}' (id {act_carlos_a1.id})", 
@@ -213,7 +223,6 @@ def seed_estadisticas(db: Session):
         "timestamp": "2026-08-05 14:30:00" 
     })
     
-    # Baja 2: Terapia Avanzada (Para la clase del 17 de Agosto) - 2da vez en misma clase
     db.execute(query_audit, {
         "user_id": carlos.id, "action": "CLAIM_ACTIVITY", "type": "ACTIVITY", "result": "SUCCESS",
         "detail": f"Profesor Carlos Gómez asumió la actividad '{act_carlos_a2.name}' (id {act_carlos_a2.id})", 
@@ -225,7 +234,6 @@ def seed_estadisticas(db: Session):
         "timestamp": "2026-08-12 09:15:00" 
     })
 
-    # Baja 3: Pilates Clínico Extra (Para la clase del 20 de Agosto) - Otra clase
     db.execute(query_audit, {
         "user_id": carlos.id, "action": "CLAIM_ACTIVITY", "type": "ACTIVITY", "result": "SUCCESS",
         "detail": f"Profesor Carlos Gómez asumió la actividad '{act_carlos_b.name}' (id {act_carlos_b.id})", 
@@ -237,10 +245,7 @@ def seed_estadisticas(db: Session):
         "timestamp": "2026-08-18 16:00:00" 
     })
 
-    # ─────────────────────────────────────────────────────────
     # PROFESOR 2: MARÍA (1 Baja en Febrero)
-    # ─────────────────────────────────────────────────────────
-    # Baja 1: Rehabilitación Inferior (Para la clase del 15 de Febrero)
     db.execute(query_audit, {
         "user_id": maria.id, "action": "CLAIM_ACTIVITY", "type": "ACTIVITY", "result": "SUCCESS",
         "detail": f"Profesor María Rodríguez asumió la actividad '{act_maria_c.name}' (id {act_maria_c.id})", 
