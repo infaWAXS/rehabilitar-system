@@ -327,7 +327,7 @@ function CrearActividad() {
       if (name === 'specific_date' && newValue) {
         const dia = new Date(`${newValue}T00:00:00`).getDay();
         if (dia === 0 || dia === 6) {
-          setError('Las actividades no se pueden programar en fin de semana.');
+          setError('Las actividades individuales no se pueden programar en fin de semana.');
           return { ...prev, [name]: '' };
         }
         setError('');

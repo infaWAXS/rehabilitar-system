@@ -30,12 +30,14 @@ from app.models.user import User
 from app.models.room import Room
 from app.models.plan import Plan
 from app.models.user_plan import UserPlan
+from app.models.notification import Notification
+from app.models.activity import Activity
+from app.models.activity_suggestion import ActivitySuggestion
 from app.utils.security import hash_password
 
 # Importar todos los modelos para que Base cree las tablas si no existen
 import app.models.reservation  # noqa
 import app.models.waitlist      # noqa
-import app.models.activity      # noqa
 import app.models.attendance    # noqa
 
 USUARIOS_MOCK = [
@@ -114,6 +116,28 @@ USUARIOS_MOCK = [
         "role": "client",
         "dni": "55555555",
         "birth_date": date(1992, 8, 12),
+    },
+    # Profesores extra para escenarios de demo
+    {
+        "name": "Pepe",
+        "lastname": "Muñoz",
+        "email": "pepemunoz@rehabilitar.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "66666666",
+        "specialization": "Fisioterapia",
+        "birth_date": date(1978, 3, 22),
+    },
+    {
+        # DNI 46201004 usado en HU "Crear Cuenta" E7 (DNI ya registrado como profesor)
+        "name": "Bruno",
+        "lastname": "Demo",
+        "email": "brunodemo@rehabilitar.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "46201004",
+        "specialization": "Kinesiologia deportiva",
+        "birth_date": date(1982, 6, 15),
     },
 ]
 
@@ -278,11 +302,218 @@ def seed():
         db.close()
 
 
+    # ── Seed de notificaciones de demo (HU Marcar notificación como leído) ──────
+    # 4 notificaciones unread para cliente@rehabilitar.com.
+    # Idempotente: solo crea si el usuario tiene menos de 4 notificaciones unread.
+    NOTIFICACIONES_DEMO = [
+        {
+            "title": "Turno confirmado",
+            "body": "Tu reserva para Fisioterapia del lunes 14/07 a las 10:00 fue confirmada.",
+        },
+        {
+            "title": "Apto físico aprobado",
+            "body": "Tu certificado médico fue revisado y aprobado por el administrador.",
+        },
+        {
+            "title": "Nueva actividad disponible",
+            "body": "Se abrió una nueva clase de Pilates terapéutico. ¡Reservá tu lugar!",
+        },
+        {
+            "title": "Recordatorio de clase",
+            "body": "Mañana tenés Kinesiología deportiva a las 09:00. ¡No te olvides!",
+        },
+    ]
+
+    db = SessionLocal()
+    try:
+        cliente_demo = db.query(User).filter(User.email == "cliente@rehabilitar.com").first()
+        if cliente_demo:
+            unread_count = db.query(Notification).filter(
+                Notification.user_id == cliente_demo.id,
+                Notification.read == False,
+            ).count()
+            notifs_a_crear = NOTIFICACIONES_DEMO[unread_count:]
+            for datos in notifs_a_crear:
+                db.add(Notification(
+                    user_id=cliente_demo.id,
+                    title=datos["title"],
+                    body=datos["body"],
+                    read=False,
+                ))
+            db.commit()
+            if notifs_a_crear:
+                print(f"[seed_mock] Notificaciones demo creadas: {len(notifs_a_crear)}")
+            else:
+                print("[seed_mock] Notificaciones demo: ya existían 4 unread, sin cambios.")
+    finally:
+        db.close()
+
+
+    # ── Seed de actividades para demo ─────────────────────────────────────────
+    db = SessionLocal()
+    try:
+        sala1 = db.query(Room).filter(Room.name == "Sala 1").first()
+        sala2 = db.query(Room).filter(Room.name == "Sala 2").first()
+        sala3 = db.query(Room).filter(Room.name == "Sala 3").first()
+        marcos = db.query(User).filter(User.email == "profesor@rehabilitar.com").first()
+        carlos_pilates = db.query(User).filter(User.email == "profe3@rehabilitar.com").first()
+
+        actividades_nuevas = []
+
+        # "Rehabilitar Codo" fija — para HU Inscribir Actividad Fija
+        if sala1 and marcos and not db.query(Activity).filter(
+            Activity.name == "Rehabilitar Codo",
+            Activity.activity_type == "fixed",
+        ).first():
+            actividades_nuevas.append(Activity(
+                room_id=sala1.id,
+                name="Rehabilitar Codo",
+                specialization="Fisioterapia",
+                activity_type="fixed",
+                schedule="Martes · 10:00–11:00",
+                professor=f"{marcos.name} {marcos.lastname}",
+                price=5000,
+                capacity=3,
+                status="active",
+                description="Clase de rehabilitación enfocada en el codo.",
+            ))
+
+        # "Fisioterapia sin asignar" fija — para HU Asumir Actividad (E1)
+        if sala2 and not db.query(Activity).filter(
+            Activity.name == "Fisioterapia sin asignar",
+        ).first():
+            actividades_nuevas.append(Activity(
+                room_id=sala2.id,
+                name="Fisioterapia sin asignar",
+                specialization="Fisioterapia",
+                activity_type="fixed",
+                schedule="Jueves · 11:00–12:00",
+                professor=None,
+                price=4500,
+                capacity=5,
+                status="active",
+            ))
+
+        for act in actividades_nuevas:
+            db.add(act)
+        db.commit()
+        if actividades_nuevas:
+            print(f"[seed_mock] Actividades demo creadas: {len(actividades_nuevas)}")
+        else:
+            print("[seed_mock] Actividades demo fijas: ya existían, sin cambios.")
+
+        # "Rehabilitar Codo" individual — para HU Inscribir Actividad Individual
+        hoy = date.today()
+        hay_individual = db.query(Activity).filter(
+            Activity.name == "Rehabilitar Codo",
+            Activity.activity_type == "individual",
+            Activity.specific_date >= hoy,
+        ).first()
+        if sala1 and marcos and not hay_individual:
+            fecha_demo = hoy + timedelta(days=14)
+            db.add(Activity(
+                room_id=sala1.id,
+                name="Rehabilitar Codo",
+                specialization="Fisioterapia",
+                activity_type="individual",
+                specific_date=fecha_demo,
+                time_slot="14:00",
+                professor=f"{marcos.name} {marcos.lastname}",
+                price=8000,
+                capacity=3,
+                status="active",
+                description="Sesión individual de rehabilitación de codo.",
+            ))
+            db.commit()
+            print(f"[seed_mock] Actividad individual 'Rehabilitar Codo' creada para {fecha_demo}.")
+        else:
+            print("[seed_mock] Actividad individual 'Rehabilitar Codo': ya existe una futura, sin cambios.")
+
+        # Sugerencias pendientes — para HU Aceptar Actividad
+        # Necesitan time_slot y dates para que aceptar_sugerencia pueda llamar a crear_actividad.
+        def _proximas_fechas(dia_semana: int, cantidad: int = 4) -> str:
+            """Devuelve fechas futuras del día dado (0=Lun … 6=Dom) como CSV ISO."""
+            hoy_s = date.today()
+            dias_hasta = (dia_semana - hoy_s.weekday()) % 7 or 7
+            primera = hoy_s + timedelta(days=dias_hasta)
+            return ",".join((primera + timedelta(weeks=i)).isoformat() for i in range(cantidad))
+
+        SUGERENCIAS_CONFIG = [
+            {
+                "name": "Prueba",
+                "profesor": marcos,
+                "sala": sala3,
+                "specialization": "Fisioterapia",
+                "schedule": "Miércoles · 09:00–10:00",
+                "time_slot": "09:00",
+                "dates": _proximas_fechas(2),  # miércoles = weekday 2
+                "capacity": 5,
+            },
+            {
+                "name": "Pilates avanzado",
+                "profesor": carlos_pilates,
+                "sala": sala2,
+                "specialization": "Pilates terapeutico",
+                "schedule": "Viernes · 15:00–16:00",
+                "time_slot": "15:00",
+                "dates": _proximas_fechas(4),  # viernes = weekday 4
+                "capacity": 8,
+            },
+        ]
+
+        sugerencias_nuevas = []
+        sugerencias_actualizadas = 0
+        for cfg in SUGERENCIAS_CONFIG:
+            prof = cfg["profesor"]
+            sala = cfg["sala"]
+            if not prof or not sala:
+                continue
+
+            existente = db.query(ActivitySuggestion).filter(
+                ActivitySuggestion.name == cfg["name"],
+                ActivitySuggestion.status == "pending",
+            ).first()
+
+            if existente:
+                # Completar campos faltantes en sugerencias creadas sin time_slot/dates
+                if not existente.dates or not existente.time_slot:
+                    existente.dates = cfg["dates"]
+                    existente.time_slot = cfg["time_slot"]
+                    existente.professor_id = prof.id
+                    sugerencias_actualizadas += 1
+            else:
+                sugerencias_nuevas.append(ActivitySuggestion(
+                    professor_id=prof.id,
+                    room_id=sala.id,
+                    name=cfg["name"],
+                    specialization=cfg["specialization"],
+                    activity_type="fixed",
+                    schedule=cfg["schedule"],
+                    time_slot=cfg["time_slot"],
+                    dates=cfg["dates"],
+                    capacity=cfg["capacity"],
+                    status="pending",
+                ))
+
+        for sug in sugerencias_nuevas:
+            db.add(sug)
+        db.commit()
+        if sugerencias_nuevas:
+            print(f"[seed_mock] Sugerencias demo creadas: {len(sugerencias_nuevas)}")
+        if sugerencias_actualizadas:
+            print(f"[seed_mock] Sugerencias demo actualizadas (se agregaron dates/time_slot): {sugerencias_actualizadas}")
+        if not sugerencias_nuevas and not sugerencias_actualizadas:
+            print("[seed_mock] Sugerencias demo: ya existían completas, sin cambios.")
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     seed()
     print("\nCredenciales de acceso:")
-    print(f"  admin@rehabilitar.com    /  Admin123")
-    print(f"  cliente@rehabilitar.com  /  Cliente123")
-    print(f"  empleado@rehabilitar.com /  Empleado123")
-    print(f"  kinesio@rehabilitar.com  /  Kinesio123")
-    print(f"  abonado@rehabilitar.com  /  Abonado123")
+    print(f"  admin@rehabilitar.com      /  Admin123")
+    print(f"  cliente@rehabilitar.com    /  Cliente123")
+    print(f"  empleado@rehabilitar.com   /  Empleado123")
+    print(f"  profesor@rehabilitar.com   /  Profesor123")
+    print(f"  abonado@rehabilitar.com    /  Abonado123")
+    print(f"  pepemunoz@rehabilitar.com  /  Profesor123")

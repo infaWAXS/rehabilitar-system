@@ -180,6 +180,9 @@ def registrar_reintegro(cliente_id: int, motivo: str, db: Session):
 
 def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: User):
     """HU: Suspender cuenta. Motivo obligatorio."""
+    from app.models.waitlist import Waitlist
+    from app.services.servicio_lista_espera import promote_next_waitlist_entry
+
     cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -188,6 +191,34 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: U
         raise HTTPException(status_code=400, detail="El cliente ya esta suspendido")
 
     cliente.account_status = "suspended"
+
+    # Al suspender se libera al cliente de sus actividades: se cancelan sus reservas
+    # activas y sus posiciones en lista de espera para no seguir ocupando cupos que no
+    # puede usar mientras está suspendido. Los cupos liberados se ofrecen a la lista de
+    # espera (misma lógica que la baja de cuenta en delete_user).
+    reservas_activas = db.query(Reservation).filter(
+        Reservation.user_id == cliente_id,
+        Reservation.status.in_(["pending", "confirmed"]),
+    ).all()
+    activity_ids_liberados = [r.activity_id for r in reservas_activas]
+    for reserva in reservas_activas:
+        reserva.status = "cancelled"
+
+    entradas_espera = db.query(Waitlist).filter(
+        Waitlist.user_id == cliente_id,
+        Waitlist.status == "waiting",
+    ).all()
+    for entrada in entradas_espera:
+        entrada.status = "cancelled"
+        restantes = db.query(Waitlist).filter(
+            Waitlist.activity_id == entrada.activity_id,
+            Waitlist.waitlist_type == entrada.waitlist_type,
+            Waitlist.position > entrada.position,
+            Waitlist.status == "waiting",
+        ).order_by(Waitlist.position).all()
+        for idx, r in enumerate(restantes):
+            r.position = entrada.position + idx
+
     register_audit(
         db=db,
         user_id=current_user.id,
@@ -198,6 +229,24 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: U
     )
     db.commit()
     db.refresh(cliente)
+
+    for activity_id in activity_ids_liberados:
+        nueva_reserva = promote_next_waitlist_entry(activity_id, db)
+        if nueva_reserva:
+            uid_promovido = nueva_reserva.user_id
+            aid_promovido = nueva_reserva.activity_id
+
+            def _notif_promo_async(uid: int, aid: int) -> None:
+                from app.utils.notifications import notify_waitlist_promoted
+                db_n = SessionLocal()
+                try:
+                    notify_waitlist_promoted(uid, aid, db_n)
+                except Exception:
+                    pass
+                finally:
+                    db_n.close()
+
+            Thread(target=_notif_promo_async, args=(uid_promovido, aid_promovido), daemon=True).start()
 
     cliente_id_copia = cliente.id
 
