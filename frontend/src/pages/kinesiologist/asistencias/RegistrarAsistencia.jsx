@@ -245,12 +245,17 @@ useEffect(() => {
     setErrorForm('');
     setExitoForm('');
     try {
+      const comentario = comment.trim() || null;
       await registerAttendanceByDni({
         dni: dni.trim(),
         activity_id: Number(actividadId),
-        comment: comment.trim() || null,
+        comment: comentario,
       });
-      setExitoForm(`Asistencia registrada correctamente.`);
+      setExitoForm(
+        comentario
+          ? 'Asistencia registrada correctamente junto con el comentario.'
+          : 'Asistencia registrada correctamente.'
+      );
       setDni('');
       setComment('');
       cargarAsistencias();

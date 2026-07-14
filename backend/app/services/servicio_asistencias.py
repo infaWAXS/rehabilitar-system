@@ -23,7 +23,7 @@ from app.exceptions.http_exceptions import (
 )
 
 QR_VALIDITY_MINUTES = 15
-ENFORCE_ATTENDANCE_SESSION_RESTRICTIONS = False  # Cambiar a True para aplicar restricciones de tiempo en marcación de asistencias (recomendado)
+ENFORCE_ATTENDANCE_SESSION_RESTRICTIONS = True  # Cambiar a True para aplicar restricciones de tiempo en marcación de asistencias (recomendado)
 
 def _extraer_inicio_y_fin(schedule: str | None, time_slot: str | None) -> tuple[int | None, int | None]:
     if schedule:

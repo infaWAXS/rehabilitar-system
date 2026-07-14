@@ -1,9 +1,11 @@
 // Responsable: Ezequiel
 // HU: Ver suscripciones + Pagar Mercado Pago
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getPlans, getMyPlan, mercadoPagoCheckout } from '../../../services/paymentsService';
+import { abrirVentanaPago } from '../../../services/mercadoPagoPopup';
+import OverlayEsperandoPago from '../../../components/OverlayEsperandoPago';
 
 const ESPECIALIZACIONES = [
   'Kinesiologia deportiva', 'Fisioterapia', 'Kinesiologia neurologica',
@@ -20,12 +22,6 @@ const DURACION = (dias) => {
   if (dias === 365) return '1 año';
   return `${dias} días`;
 };
-
-const ESCENARIOS = [
-  { value: 'success',            label: 'Pago exitoso (saldo disponible)' },
-  { value: 'insufficient_funds', label: 'Saldo insuficiente' },
-  { value: 'connection_error',   label: 'Error de conexión con el banco' },
-];
 
 const s = {
   titulo: { fontSize: '22px', fontWeight: '700', color: 'var(--color-texto)', marginBottom: '8px' },
@@ -107,9 +103,10 @@ export default function MisSuscripciones() {
 
   // Modal
   const [planSeleccionado, setPlanSeleccionado] = useState(null);
-  const [escenario, setEscenario]               = useState('success');
   const [pagando, setPagando]                   = useState(false);
   const [resultado, setResultado]               = useState(null); // { tipo, mensaje }
+  const [esperandoPago, setEsperandoPago]       = useState(false);
+  const pagoHandleRef = useRef(null);
 
   const cargarMiPlan = useCallback(() => {
     getMyPlan()
@@ -133,23 +130,21 @@ export default function MisSuscripciones() {
 
   function abrirModal(plan) {
     setResultado(null);
-    setEscenario('success');
     setEspecialidadSeleccionada(ESPECIALIZACIONES[0]);
     setPlanSeleccionado(plan);
   }
 
   function cerrarModal() {
-    if (pagando) return;
+    if (pagando || esperandoPago) return;
     setPlanSeleccionado(null);
     setResultado(null);
   }
 
-  async function handlePagar() {
-    if (!planSeleccionado || !especialidadSeleccionada) return;
+  async function ejecutarPago(scenario) {
     setPagando(true);
     setResultado(null);
     try {
-      const res = await mercadoPagoCheckout(planSeleccionado.id, especialidadSeleccionada, escenario);
+      const res = await mercadoPagoCheckout(planSeleccionado.id, especialidadSeleccionada, scenario);
       setResultado({ tipo: res.success ? 'success' : 'warn', mensaje: res.message });
       if (res.success) cargarMiPlan(); // actualizar badge de plan activo
     } catch (err) {
@@ -158,6 +153,35 @@ export default function MisSuscripciones() {
     } finally {
       setPagando(false);
     }
+  }
+
+  function handleAbrirPago() {
+    if (!planSeleccionado || !especialidadSeleccionada) return;
+    const precioFinal = pendingDiscount > 0
+      ? Math.round(Number(planSeleccionado.price) * (1 - pendingDiscount / 100))
+      : Number(planSeleccionado.price);
+
+    setEsperandoPago(true);
+    pagoHandleRef.current = abrirVentanaPago(
+      { monto: precioFinal, descripcion: `Plan ${planSeleccionado.name}` },
+      {
+        onResultado: (scenario) => {
+          setEsperandoPago(false);
+          ejecutarPago(scenario);
+        },
+        onCancelado: (motivo) => {
+          setEsperandoPago(false);
+          if (motivo === 'popup_bloqueado') {
+            setResultado({ tipo: 'error', mensaje: 'No se pudo abrir la ventana de pago. Verificá que tu navegador no bloquee ventanas emergentes.' });
+          }
+        },
+      }
+    );
+  }
+
+  function handleCancelarPago() {
+    pagoHandleRef.current?.cancelar();
+    setEsperandoPago(false);
   }
 
   return (
@@ -252,18 +276,7 @@ export default function MisSuscripciones() {
                   ))}
                 </select>
 
-                <label style={s.label}>Escenario de prueba</label>
-                <select
-                  style={s.select}
-                  value={escenario}
-                  onChange={(e) => setEscenario(e.target.value)}
-                  disabled={pagando}
-                >
-                  {ESCENARIOS.map((op) => (
-                    <option key={op.value} value={op.value}>{op.label}</option>
-                  ))}
-                </select>
-                <button style={s.botonConfirmar} onClick={handlePagar} disabled={pagando}>
+                <button style={s.botonConfirmar} onClick={handleAbrirPago} disabled={pagando}>
                   {pagando ? 'Procesando...' : 'Pagar'}
                 </button>
               </>
@@ -275,6 +288,8 @@ export default function MisSuscripciones() {
           </div>
         </div>
       )}
+
+      <OverlayEsperandoPago visible={esperandoPago} onCancelar={handleCancelarPago} />
     </LayoutPrivado>
   );
 }

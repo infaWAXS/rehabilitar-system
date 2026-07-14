@@ -49,7 +49,10 @@ async function apiRequest(path, options = {}) {
 
   if (!response.ok) {
     const message = formatApiError(payload);
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    error.detail = typeof payload?.detail === 'string' ? payload.detail : message;
+    throw error;
   }
 
   return payload;

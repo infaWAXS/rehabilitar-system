@@ -139,3 +139,6 @@ npm start
 	- reservas/lista espera: `rutas_reservas.py`, `rutas_lista_espera.py`, `servicio_reservas.py`, `servicio_lista_espera.py`
 	- asistencias/pagos: `rutas_asistencias.py`, `rutas_pagos.py`, `servicio_asistencias.py`, `servicio_pagos.py`
 
+## Para test de asistencias con qr
+
+Cambiar de estado en el archivo C:\UNLP\2026 PRIMER SEMESTRE\ING2\rehabilitar-system\backend\app\services\servicio_asistencias.py linea 26

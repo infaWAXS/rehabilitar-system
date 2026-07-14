@@ -10,6 +10,9 @@ import RecuperarContrasena from './pages/public/RecuperarContrasena';
 import RestablecerContrasena from './pages/public/RestablecerContrasena';
 import Staff from './pages/public/Staff';
 
+// ── Simulación Mercado Pago (ventana de pago) ────────────
+import PagoMercadoPago from './pages/pago/PagoMercadoPago';
+
 // ── Perfil compartido (Agustin) ─────────────────────────
 import VerPerfil from './pages/client/perfil/VerPerfil';
 import EditarPerfil from './pages/client/perfil/EditarPerfil';
@@ -84,6 +87,7 @@ function App() {
         <Route path="/restablecer-contrasena" element={<RestablecerContrasena />} />
         <Route path="/solicitar-reintegro" element={<SolicitarReintegro />} />
         <Route path="/staff" element={<Staff />} />
+        <Route path="/pago/mercadopago" element={<PagoMercadoPago />} />
 
         {/* Perfil (todos los roles) */}
         <Route path="/perfil/editar" element={<EditarPerfil />} />
