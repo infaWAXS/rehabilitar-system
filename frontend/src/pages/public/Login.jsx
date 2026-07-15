@@ -151,7 +151,7 @@ function Login() {
               <>
                 Tu cuenta está deshabilitada. Para habilitarla hacé click en{' '}
                 <a href="/recuperar-contrasena" style={{ color: 'var(--color-primario)', textDecoration: 'none', fontWeight: 400 }}>
-                  recuperar contraseña
+                  recuperar contraseña.
                 </a>
               </>
             ) : (

@@ -213,9 +213,18 @@ def login_user(request: UserLogin, db: Session):
             detail="Email invalido"
         )
 
+    if existing_user.account_status.lower() == "suspended":
+        return {
+            "access_token": None,
+            "token_type": "bearer",
+            "role": existing_user.role,
+            "name": existing_user.name,
+            "lastname": existing_user.lastname,
+            "account_status": existing_user.account_status,
+            "id": existing_user.id,
+        }
 
     if existing_user.account_status.lower() == "disabled":
-
         raise HTTPException(
             status_code=403,
             detail="Cuenta deshabilitada"
@@ -230,9 +239,6 @@ def login_user(request: UserLogin, db: Session):
     if not password_correct:
         existing_user.failed_login_attempts += 1
 
-        if existing_user.failed_login_attempts >= 3:
-            existing_user.account_status = "disabled"
-
         if existing_user.role in ["admin", "receptionist", "professor"]:
             register_audit(
                 db=db,
@@ -240,9 +246,16 @@ def login_user(request: UserLogin, db: Session):
                 type=AuditType.ACCOUNT,
                 action=AuditAction.LOGIN,
                 result=AuditResult.ERROR,
-                detail=f"Intento de login fallido para {existing_user.name} {existing_user.lastname} por contraseña incorrecta."
+                detail=f"Intento de login fallido número {existing_user.failed_login_attempts} para {existing_user.name} {existing_user.lastname} por contraseña incorrecta."
             )
         db.commit()
+
+        if existing_user.failed_login_attempts >= 3:
+            existing_user.account_status = "disabled"
+            raise HTTPException(
+                status_code=403,
+                detail="Cuenta deshabilitada"
+            )
 
         raise HTTPException(
             status_code=401,
