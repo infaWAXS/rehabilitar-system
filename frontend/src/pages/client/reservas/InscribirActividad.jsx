@@ -411,14 +411,14 @@ function InscribirActividad() {
           mensaje: `Monto abonado: ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.`,
         });
       } else {
-        setResultado({ tipo: 'confirmada', mensaje: 'Inscripcion confirmada. Tu lugar esta reservado.' });
+        setResultado({ tipo: 'confirmada', mensaje: 'Inscripción confirmada. Tu lugar está reservado.' });
       }
       setPaso(2);
     } catch (err) {
       const esPago = paymentMethod === 'full_payment' || paymentMethod === 'partial_payment';
       const mensaje = esPago
         ? 'Hubo un error en el pago. Intenta nuevamente.'
-        : (err.message || 'Hubo un error al procesar tu inscripcion.');
+        : (err.message || 'Hubo un error al procesar tu inscripción.');
       setResultado({ tipo: 'error', mensaje });
       setPaso(2);
     } finally {
@@ -685,7 +685,7 @@ function InscribirActividad() {
               )}
               {resultado.tipo === 'pendiente' && (
                 <>
-                  <div style={{ ...s.infoBox('yellow'), fontSize: '15px', fontWeight: '600' }}>Inscripcion en estado pendiente</div>
+                  <div style={{ ...s.infoBox('yellow'), fontSize: '15px', fontWeight: '600' }}>Inscripción en estado pendiente</div>
                   <p style={{ fontSize: '14px', color: 'var(--color-texto)', lineHeight: 1.6 }}>{resultado.mensaje}</p>
                 </>
               )}

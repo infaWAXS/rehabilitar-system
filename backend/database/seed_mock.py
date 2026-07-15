@@ -34,6 +34,7 @@ from app.models.notification import Notification
 from app.models.activity import Activity
 from app.models.activity_suggestion import ActivitySuggestion
 from app.models.reservation import Reservation
+from app.models.credit_transaction import CreditTransaction
 from app.utils.security import hash_password
 
 # Importar todos los modelos para que Base cree las tablas si no existen
@@ -151,6 +152,67 @@ USUARIOS_MOCK = [
         "dni": "47000001",
         "specialization": "Yoga",
         "birth_date": date(1991, 9, 3),
+    },
+    {
+        # Profesor de "Rehabilitar Muñeca" — HU "Cancelar actividad" (E1).
+        # Especialidad exclusiva: así "Rehabilitar Muñeca" no aparece en la lista de
+        # "actividades para asumir" de ningún otro profesor.
+        "name": "Franco",
+        "lastname": "Ibarra",
+        "email": "franco@rehabilitar.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "47000002",
+        "specialization": "Kinesiologia respiratoria",
+        "birth_date": date(1986, 5, 14),
+    },
+    {
+        # Profesora saliente de "Tren superior" — HU "Modificar actividad" (E2).
+        "name": "Ámbar",
+        "lastname": "Soto",
+        "email": "ambar@rehabilitar.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "47000003",
+        "specialization": "Kinesiologia traumatologica",
+        "birth_date": date(1989, 1, 25),
+    },
+    {
+        # Profesor entrante de "Tren superior" — HU "Modificar actividad" (E2).
+        # Comparte especialidad con Ámbar: por eso "cumple la condición" y el selector
+        # de profesor de la pantalla de edición lo ofrece.
+        "name": "Pablo",
+        "lastname": "Ruiz",
+        "email": "pablo@rehabilitar.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "47000004",
+        "specialization": "Kinesiologia traumatologica",
+        "birth_date": date(1984, 10, 2),
+    },
+    {
+        # Profesor que renuncia — HU "Renunciar actividad" (E1). El mail es el que
+        # indica la HU.
+        "name": "Ariel",
+        "lastname": "Gómez",
+        "email": "profe@gmail.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "47000005",
+        "specialization": "Osteopatia",
+        "birth_date": date(1980, 12, 8),
+    },
+    {
+        # Cliente inscripto en "Pilates" — HU "Cancelar actividad" (E4). Es un cliente
+        # aparte para no ensuciar "Mis reservas" de cliente@, que se usa en las HUs de
+        # inscripción y de cancelar turno.
+        "name": "Nadia",
+        "lastname": "Pilatera",
+        "email": "pilates.demo@rehabilitar.com",
+        "password": "Cliente123",
+        "role": "client",
+        "dni": "47000006",
+        "birth_date": date(1993, 4, 4),
     },
 ]
 
@@ -699,6 +761,395 @@ def seed():
             print(f"[seed_mock] Sugerencias demo actualizadas (se agregaron dates/time_slot): {sugerencias_actualizadas}")
         if not sugerencias_nuevas and not sugerencias_actualizadas:
             print("[seed_mock] Sugerencias demo: ya existían completas, sin cambios.")
+    finally:
+        db.close()
+
+    _seed_apto_fisico_demo()
+    _reparar_profesor_rehabilitar_codo()
+    _seed_actividades_modificar_cancelar_renunciar()
+    _seed_cancelar_turno()
+
+
+def _reparar_profesor_rehabilitar_codo() -> None:
+    """Devuelve el profesor a "Rehabilitar Codo" si quedó sin asignar.
+
+    Las dos "Rehabilitar Codo" (fija e individual) solo se crean si no existen, así que
+    una demo previa de renuncia/edición puede dejarlas sin profesor y el seed ya no las
+    arregla. Sin profesor la clase entra en la cancelación automática de <= 12 hs y
+    aparece en el listado de "actividades para asumir", que no es lo que describen las
+    HUs de inscripción.
+    """
+    db = SessionLocal()
+    try:
+        marcos = db.query(User).filter(User.email == "profesor@rehabilitar.com").first()
+        if not marcos:
+            return
+        nombre = f"{marcos.name} {marcos.lastname}"
+        reparadas = (
+            db.query(Activity)
+            .filter(
+                Activity.name == "Rehabilitar Codo",
+                Activity.status == "active",
+                Activity.professor.is_(None),
+            )
+            .update({Activity.professor: nombre}, synchronize_session=False)
+        )
+        db.commit()
+        if reparadas:
+            print(f"[seed_mock] 'Rehabilitar Codo': profesor reasignado a {nombre} ({reparadas} actividad/es).")
+    finally:
+        db.close()
+
+
+def _seed_apto_fisico_demo() -> None:
+    """Aprueba el apto físico de los clientes de demo.
+
+    Sin apto aprobado, create_reservation rechaza cualquier inscripción, así que las
+    HUs de inscripción no se pueden demostrar en una base recién creada.
+    """
+    db = SessionLocal()
+    try:
+        emails = ["cliente@rehabilitar.com", "abonado@rehabilitar.com", "pilates.demo@rehabilitar.com"]
+        aprobados = []
+        for usuario in db.query(User).filter(User.email.in_(emails)).all():
+            if usuario.medical_certificate_status != "approved":
+                usuario.medical_certificate_status = "approved"
+                aprobados.append(usuario.email)
+        db.commit()
+        if aprobados:
+            print(f"[seed_mock] Apto físico aprobado para: {', '.join(aprobados)}")
+        else:
+            print("[seed_mock] Apto físico demo: ya estaba aprobado, sin cambios.")
+    finally:
+        db.close()
+
+
+# Fechas de las HUs de Modificar actividad. Son las que indica la HU y siguen siendo
+# futuras, así que se usan tal cual.
+FECHA_YOGA_MODIFICAR = date(2027, 10, 19)   # Martes
+FECHA_TREN_SUPERIOR = date(2026, 8, 20)     # Jueves
+
+
+def _proximo_dia(dia_semana: int, semanas_extra: int = 0) -> date:
+    """Próxima fecha futura estricta del día dado (0=Lunes … 6=Domingo)."""
+    hoy = date.today()
+    dias_hasta = (dia_semana - hoy.weekday()) % 7 or 7
+    return hoy + timedelta(days=dias_hasta, weeks=semanas_extra)
+
+
+def _seed_actividades_modificar_cancelar_renunciar() -> None:
+    """Datos para las HUs Modificar actividad, Cancelar actividad y Renunciar actividad.
+
+    Aditivo e idempotente: cada actividad se identifica por nombre + fecha, así que
+    volver a correr el seed no duplica ni pisa el estado de una demo ya hecha.
+    Para repetir una demo ya "gastada" (p. ej. una actividad ya cancelada) hay que
+    borrarla a mano; ver GUION_DEMO_HUS.md.
+    """
+    db = SessionLocal()
+    try:
+        salas = {sala.name: sala for sala in db.query(Room).all()}
+        cliente = db.query(User).filter(User.email == "cliente@rehabilitar.com").first()
+        nadia = db.query(User).filter(User.email == "pilates.demo@rehabilitar.com").first()
+        carlos_pilates = db.query(User).filter(User.email == "profe3@rehabilitar.com").first()
+
+        def _existe(nombre: str, fecha: date, hora: str) -> bool:
+            # La identidad incluye la hora: la base arrastra actividades canceladas de
+            # demos anteriores con el mismo nombre y fecha (p. ej. varias "Pilates" de
+            # los viernes), y sin la hora estas actividades no se sembrarían nunca.
+            return db.query(Activity).filter(
+                Activity.name == nombre,
+                Activity.specific_date == fecha,
+                Activity.time_slot == hora,
+            ).first() is not None
+
+        def _crear(nombre, sala, spec, fecha, hora_ini, hora_fin, profesor, price, capacity, desc):
+            dia = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][fecha.weekday()]
+            act = Activity(
+                room_id=sala.id,
+                name=nombre,
+                specialization=spec,
+                activity_type="fixed",
+                schedule=f"{dia} · {hora_ini}–{hora_fin}",
+                specific_date=fecha,
+                time_slot=hora_ini,
+                professor=profesor,
+                price=price,
+                capacity=capacity,
+                status="active",
+                description=desc,
+            )
+            db.add(act)
+            db.flush()
+            return act
+
+        creadas = []
+
+        # ── HU "Modificar actividad" E1: cambio de sala ────────────────────────
+        # La HU se contradice: el "Dado" habla de Sala 5 → Sala 6, pero el mensaje
+        # esperado dice "Sala: Sala 2 → Sala 3". Se siembra en Sala 2 para que la
+        # notificación coincida palabra por palabra con el mensaje de la HU.
+        # Sala 3 (cap. 10) queda libre ese día/hora y tiene capacidad ≥ Sala 2, que es
+        # lo que exige editar_actividad, así que el selector la ofrece.
+        if salas.get("Sala 2") and not _existe("Yoga", FECHA_YOGA_MODIFICAR, "10:00"):
+            yoga_mod = _crear(
+                "Yoga", salas["Sala 2"], "Yoga", FECHA_YOGA_MODIFICAR, "10:00", "11:00",
+                "Alex Rivas", 5000, 6,
+                "Demo HU Modificar actividad (E1): cambio de sala.",
+            )
+            creadas.append("Yoga (modificar sala)")
+            if cliente:
+                db.add(Reservation(
+                    user_id=cliente.id,
+                    activity_id=yoga_mod.id,
+                    reservation_type="fixed",
+                    status="confirmed",
+                    payment_status="completed",
+                    reservation_date=datetime(
+                        FECHA_YOGA_MODIFICAR.year, FECHA_YOGA_MODIFICAR.month,
+                        FECHA_YOGA_MODIFICAR.day, 10, 0,
+                    ),
+                ))
+
+        # ── HU "Modificar actividad" E2: cambio de profesor ────────────────────
+        # Ámbar y Pablo comparten especialidad y ningún otro profesor la tiene: el
+        # selector de profesor muestra exactamente esos dos.
+        if salas.get("Sala 3") and not _existe("Tren superior", FECHA_TREN_SUPERIOR, "13:00"):
+            tren_mod = _crear(
+                "Tren superior", salas["Sala 3"], "Kinesiologia traumatologica",
+                FECHA_TREN_SUPERIOR, "13:00", "14:00", "Ámbar Soto", 6000, 8,
+                "Demo HU Modificar actividad (E2): cambio de profesor.",
+            )
+            creadas.append("Tren superior (modificar profesor)")
+            if cliente:
+                db.add(Reservation(
+                    user_id=cliente.id,
+                    activity_id=tren_mod.id,
+                    reservation_type="fixed",
+                    status="confirmed",
+                    payment_status="completed",
+                    reservation_date=datetime(
+                        FECHA_TREN_SUPERIOR.year, FECHA_TREN_SUPERIOR.month,
+                        FECHA_TREN_SUPERIOR.day, 13, 0,
+                    ),
+                ))
+
+        # ── HU "Renunciar actividad" E1 ────────────────────────────────────────
+        # "Tren superior" aparte del de Modificar E2, para que las dos HUs no compitan
+        # por el mismo profesor. Se distinguen por fecha/sala/horario.
+        fecha_renuncia = _proximo_dia(0, semanas_extra=3)  # lunes, 3 semanas adelante
+        if salas.get("Sala 5") and not _existe("Tren superior", fecha_renuncia, "09:00"):
+            _crear(
+                "Tren superior", salas["Sala 5"], "Osteopatia", fecha_renuncia,
+                "09:00", "10:00", "Ariel Gómez", 6000, 8,
+                "Demo HU Renunciar actividad (E1).",
+            )
+            creadas.append("Tren superior (renunciar)")
+
+        # ── HU "Cancelar actividad" E1 y E2 ────────────────────────────────────
+        # Misma actividad para los dos escenarios: E2 aborta la cancelación y E1 la
+        # concreta. Hay que demostrar E2 ANTES que E1. Sin inscriptos, como pide la HU.
+        fecha_munieca = _proximo_dia(0, semanas_extra=1)  # lunes, para que el aviso diga "Lunes ..."
+        if salas.get("Sala 6") and not _existe("Rehabilitar Muñeca", fecha_munieca, "10:00"):
+            _crear(
+                "Rehabilitar Muñeca", salas["Sala 6"], "Kinesiologia respiratoria",
+                fecha_munieca, "10:00", "11:00", "Franco Ibarra", 5000, 4,
+                "Demo HU Cancelar actividad (E2 abortar y E1 confirmar, en ese orden).",
+            )
+            creadas.append("Rehabilitar Muñeca (con profesor)")
+
+        # ── HU "Cancelar actividad" E3: sin profesor ───────────────────────────
+        # Especialidad sin ningún profesor asignado: así no ensucia la lista de
+        # "actividades para asumir" de nadie.
+        fecha_munieca_sp = _proximo_dia(0, semanas_extra=2)
+        if salas.get("Sala 6") and not _existe("Rehabilitar Muñeca", fecha_munieca_sp, "12:00"):
+            _crear(
+                "Rehabilitar Muñeca", salas["Sala 6"], "Electroterapia",
+                fecha_munieca_sp, "12:00", "13:00", None, 5000, 4,
+                "Demo HU Cancelar actividad (E3): sin profesor ni inscriptos.",
+            )
+            creadas.append("Rehabilitar Muñeca (sin profesor)")
+
+        # ── HU "Cancelar actividad" E4: con inscriptos ─────────────────────────
+        # Viernes 17:00 en Sala 5 para no chocar con la sugerencia "Pilates" pendiente
+        # (Sala 2, viernes 15:00) que usa la HU de Aceptar actividad.
+        fecha_pilates = _proximo_dia(4)  # viernes
+        if salas.get("Sala 5") and carlos_pilates and not _existe("Pilates", fecha_pilates, "17:00"):
+            pilates = _crear(
+                "Pilates", salas["Sala 5"], "Pilates terapeutico", fecha_pilates,
+                "17:00", "18:00", f"{carlos_pilates.name} {carlos_pilates.lastname}",
+                5500, 8, "Demo HU Cancelar actividad (E4): tiene un cliente inscripto.",
+            )
+            creadas.append("Pilates (con inscripto)")
+            if nadia:
+                db.add(Reservation(
+                    user_id=nadia.id,
+                    activity_id=pilates.id,
+                    reservation_type="fixed",
+                    status="confirmed",
+                    payment_status="completed",
+                    reservation_date=datetime(
+                        fecha_pilates.year, fecha_pilates.month, fecha_pilates.day, 17, 0,
+                    ),
+                ))
+
+        db.commit()
+        if creadas:
+            print(f"[seed_mock] Actividades demo (modificar/cancelar/renunciar): {', '.join(creadas)}")
+        else:
+            print("[seed_mock] Actividades demo (modificar/cancelar/renunciar): ya existían, sin cambios.")
+    finally:
+        db.close()
+
+
+# Prefijo de las actividades de la HU "Cancelar turno". Se reconstruyen enteras en cada
+# corrida del seed, así que el prefijo tiene que ser exclusivo de esta demo.
+PREFIJO_CANCELAR_TURNO = "Cancelación "
+
+# nombre, horas desde ahora, email del cliente, % de seña abonada
+ESCENARIOS_CANCELAR_TURNO = [
+    ("Cancelación +48h (abonado)",      60, "abonado@rehabilitar.com", None),
+    ("Cancelación con crédito (+48h)",  72, "abonado@rehabilitar.com", None),
+    ("Cancelación 24-48h (1ra)",        36, "abonado@rehabilitar.com", None),
+    ("Cancelación 24-48h (2da)",        40, "abonado@rehabilitar.com", None),
+    ("Cancelación 24-48h (3ra)",        44, "abonado@rehabilitar.com", None),
+    ("Cancelación -24h (abonado)",      12, "abonado@rehabilitar.com", None),
+    ("Cancelación +24h (no abonado)",   30, "cliente@rehabilitar.com", 50),
+    ("Cancelación -24h (no abonado)",   10, "cliente@rehabilitar.com", 50),
+]
+
+
+def _seed_cancelar_turno() -> None:
+    """Datos para la HU "Cancelar turno" (8 escenarios).
+
+    A diferencia del resto del seed, este bloque NO es aditivo: borra y vuelve a crear
+    sus actividades, reservas y créditos en cada corrida. Es a propósito — las ventanas
+    de la HU (>48 h, 24-48 h, <24 h) se calculan como offsets desde "ahora", así que el
+    seed hay que correrlo el mismo día de la demo (idealmente un rato antes). Correrlo
+    de nuevo también es la forma de resetear la demo si ya se cancelaron los turnos.
+
+    Todo lo que toca es exclusivo de esta HU salvo dos cosas de abonado@rehabilitar.com
+    que se resetean a propósito: su descuento pendiente y su ledger de créditos.
+    """
+    db = SessionLocal()
+    try:
+        abonado = db.query(User).filter(User.email == "abonado@rehabilitar.com").first()
+        sala = db.query(Room).filter(Room.name == "Sala 6").first()
+        marcos = db.query(User).filter(User.email == "profesor@rehabilitar.com").first()
+        if not (abonado and sala and marcos):
+            print("[seed_mock] Cancelar turno: faltan usuario abonado / Sala 6 / profesor, se omite.")
+            return
+
+        # ── Reset ──────────────────────────────────────────────────────────────
+        viejas = db.query(Activity).filter(Activity.name.like(f"{PREFIJO_CANCELAR_TURNO}%")).all()
+        ids_viejas = [a.id for a in viejas]
+        if ids_viejas:
+            reservas_viejas = db.query(Reservation).filter(Reservation.activity_id.in_(ids_viejas)).all()
+            ids_reservas = [r.id for r in reservas_viejas]
+            if ids_reservas:
+                db.query(CreditTransaction).filter(
+                    CreditTransaction.reservation_id.in_(ids_reservas)
+                ).delete(synchronize_session=False)
+            db.query(Reservation).filter(
+                Reservation.activity_id.in_(ids_viejas)
+            ).delete(synchronize_session=False)
+            db.query(Activity).filter(
+                Activity.id.in_(ids_viejas)
+            ).delete(synchronize_session=False)
+
+        # El ledger de créditos y el descuento pendiente de abonado@ se reconstruyen
+        # desde cero: si no, los movimientos que dejó una demo anterior corren la cuenta
+        # de cancelaciones del mes y los escenarios E2/E3/E4 dan el descuento equivocado.
+        db.query(CreditTransaction).filter(CreditTransaction.user_id == abonado.id).delete(
+            synchronize_session=False
+        )
+        abonado.pending_discount_percent = 0
+        db.commit()
+        # Los delete() masivos no limpian la identity map y SQLite reusa los ids que
+        # acaban de quedar libres: sin esto, el alta de abajo avisa que está pisando
+        # objetos ya cargados. Hay que guardar los ids antes de expulgar: después de
+        # expunge_all() las instancias quedan desacopladas y ni se les puede leer.
+        abonado_id, sala_id, marcos_id = abonado.id, sala.id, marcos.id
+        db.expunge_all()
+        abonado = db.query(User).filter(User.id == abonado_id).first()
+        sala = db.query(Room).filter(Room.id == sala_id).first()
+        marcos = db.query(User).filter(User.id == marcos_id).first()
+
+        # ── Alta ───────────────────────────────────────────────────────────────
+        ahora = datetime.now()
+        dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        creadas = []
+
+        for nombre, horas, email, deposito in ESCENARIOS_CANCELAR_TURNO:
+            usuario = db.query(User).filter(User.email == email).first()
+            if not usuario:
+                continue
+            inicio = ahora + timedelta(hours=horas)
+            hora_ini = inicio.strftime("%H:00")
+            hora_fin = f"{(inicio.hour + 1) % 24:02d}:00"
+            actividad = Activity(
+                room_id=sala.id,
+                name=nombre,
+                # Fisioterapia = la especialidad del plan de abonado@. La política de
+                # cancelación del abonado solo aplica si el plan cubre la especialidad
+                # de la actividad; con otra especialidad caería en la rama de no abonado.
+                specialization="Fisioterapia",
+                activity_type="fixed",
+                schedule=f"{dias[inicio.weekday()]} · {hora_ini}–{hora_fin}",
+                specific_date=inicio.date(),
+                time_slot=hora_ini,
+                professor=f"{marcos.name} {marcos.lastname}",
+                price=5000,
+                capacity=5,
+                status="active",
+                description=f"Demo HU Cancelar turno — la clase empieza en ~{horas} h.",
+            )
+            db.add(actividad)
+            db.flush()
+
+            reserva = Reservation(
+                user_id=usuario.id,
+                activity_id=actividad.id,
+                reservation_type="fixed",
+                status="confirmed",
+                payment_status="completed" if deposito is None else "partial",
+                # Es lo que lee la política de cancelación para saber cuánto falta.
+                reservation_date=inicio.replace(minute=0, second=0, microsecond=0),
+                deposit_percent=deposito,
+                # Deliberadamente sin user_plan_id: si se imputaran al plan de abonado@,
+                # consumirían las 4 clases fijas incluidas y romperían la HU de
+                # inscripción por suscripción activa.
+                user_plan_id=None,
+            )
+            db.add(reserva)
+            db.flush()
+
+            # E8: la reserva tiene que figurar como pagada con un crédito para que la
+            # cancelación responda "No se otorga crédito: esta clase fue reservada
+            # usando un crédito."
+            if nombre == "Cancelación con crédito (+48h)":
+                db.add(CreditTransaction(
+                    user_id=usuario.id,
+                    amount=-1,
+                    reservation_id=reserva.id,
+                    reason="spent_reservation",
+                ))
+            creadas.append(nombre)
+
+        # Saldo base de abonado@: 2 créditos ganados este mes (uno se gasta en la reserva
+        # de E8, queda 1 disponible). Con 2 ganados sigue por debajo del tope de 3, así
+        # que el escenario E1 todavía puede otorgar el suyo; y el crédito que queda libre
+        # habilita la inscripción con crédito de la HU de actividad fija.
+        for _ in range(2):
+            db.add(CreditTransaction(
+                user_id=abonado.id,
+                amount=1,
+                activity_type="Fisioterapia",
+                reason="cancellation_48h",
+            ))
+
+        db.commit()
+        print(f"[seed_mock] Cancelar turno: {len(creadas)} turnos demo recreados (offsets desde {ahora:%Y-%m-%d %H:%M}).")
+        print("[seed_mock]   Creditos de abonado@ reseteados: 2 ganados, 1 gastado (saldo 1).")
     finally:
         db.close()
 

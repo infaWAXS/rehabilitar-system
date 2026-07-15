@@ -328,7 +328,7 @@ export default function MisSuscripciones() {
           <span style={s.badgeAbonado}>Abonado activo</span>
           {pendingDiscount > 0 && (
             <div style={s.alerta('success')}>
-              Tenés un <strong>{pendingDiscount}% de descuento</strong> pendiente por cancelación. Se aplicará automáticamente en el pago de tu próxima suscripción.
+              Tenés un <strong>{pendingDiscount}% de descuento</strong> pendiente por cancelación. Se aplicará automáticamente en el pago de tu próxima renovación de suscripción.
             </div>
           )}
           <div style={s.creditosBox}>
