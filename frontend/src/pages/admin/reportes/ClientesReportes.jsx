@@ -62,8 +62,14 @@ export default function ClientesReportes() {
     espera: acc.espera + (c.lista_espera || 0)
   }), { clases: 0, cupos: 0, asistencias: 0, inasistencias: 0, cancelaciones: 0, espera: 0 });
 
-  const hayDatos = totales.clases > 0;
+  const hayDatos = reporte && (
+    (reporte.clase && reporte.clase.length > 0) || 
+    (reporte.sancionados && reporte.sancionados.length > 0)
+  );
   const motivosOcultos = ["Acumulación De 3 Faltas Consecutivas", "Inasistencia mayor al 50%"];
+
+  // 🚨 CORRECCIÓN 1: Declarar la variable arriba a nivel de componente
+  const dataSanciones = sancionadosFiltrados.length > 0
 
   const statsSanciones = React.useMemo(() => {
     if (!reporte?.sancionados || reporte.sancionados.length === 0) {
@@ -109,7 +115,15 @@ export default function ClientesReportes() {
   }, [reporte, listaHorarios, filtroEspecialidad]);
 
   // Si al menos uno de los dos bloques tiene datos, se permite exportar
-  const tieneDatosParaExportar = tieneDatosConcurrencia || tieneDatosMapa;
+  const tieneDatosParaExportar = filtroEspecialidad 
+    ? (tieneDatosConcurrencia || tieneDatosMapa)
+    : (
+        tieneDatosConcurrencia || 
+        tieneDatosMapa || 
+        (reporte?.resumen?.nuevos_registros > 0) || 
+        (reporte?.resumen?.clientes_suspendidos_rango > 0) || 
+        (sancionadosFiltrados.length > 0) // 🚨 EL PROBLEMA
+      );
 
   const handleExport = (formato) => {
     if (!reporte) return;
@@ -177,7 +191,6 @@ export default function ClientesReportes() {
       }) : [];
 
       // Pestaña 4: Cuentas Suspendidas
-      const sancionadosFiltrados = reporte.sancionados?.filter(user => !motivosOcultos.includes(user.motivo)) || [];
       const dataSanciones = sancionadosFiltrados.length > 0 
         ? sancionadosFiltrados.map(user => ({
             "Nombre del Alumno": user.nombre,
@@ -187,6 +200,7 @@ export default function ClientesReportes() {
         : [["Estado"], ["No se registraron suspensiones en este período."]];
 
       // Estructuramos las láminas dinámicas para el generador central
+      // Estructuramos las láminas dinámicas filtrando hojas vacías
       const laminas = [
         {
           nombre: "Resumen General",
@@ -195,32 +209,36 @@ export default function ClientesReportes() {
         },
         {
           nombre: "Concurrencia",
-          incluir: tieneDatosConcurrencia, // 🚨 Condicional dinámico
+          // 🚨 MODIFICADO: Solo se crea la pestaña en el Excel si hay datos en este período/filtro
+          incluir: tieneDatosConcurrencia, 
           cols: [{ wch: 30 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }],
-          data: [
+          data: tieneDatosConcurrencia ? [
             ...prefacio,
             Object.keys(dataConcurrenciaRaw[0] || {}),
             ...dataConcurrenciaRaw.map(obj => Object.values(obj))
-          ]
+          ] : []
         },
         {
           nombre: "Mapa de Calor",
-          incluir: tieneDatosMapa, // 🚨 Condicional dinámico
+          // 🚨 MODIFICADO: Solo se crea la pestaña en el Excel si hay datos en este período/filtro
+          incluir: tieneDatosMapa, 
           cols: [{ wch: 15 }, ...listaHorarios.map(() => ({ wch: 10 }))],
-          data: [
+          data: tieneDatosMapa ? [
             ...prefacio,
             Object.keys(dataMapaCalor[0] || {}),
             ...dataMapaCalor.map(obj => Object.values(obj))
-          ]
+          ] : []
         },
         {
           nombre: "Cuentas Suspendidas",
-          cols: sancionadosFiltrados.length > 0 ? [{ wch: 30 }, { wch: 45 }, { wch: 25 }] : [{ wch: 50 }],
-          data: [
+          // 🚨 MODIFICADO: Solo incluimos la pestaña en el Excel si hay alumnos sancionados (en global)
+          incluir: sancionadosFiltrados.length > 0 && !filtroEspecialidad,
+          cols: [{ wch: 30 }, { wch: 45 }, { wch: 25 }],
+          data: sancionadosFiltrados.length > 0 ? [
             ...prefacio,
-            sancionadosFiltrados.length > 0 ? Object.keys(dataSanciones[0]) : ["Estado"],
-            ...dataSanciones.map(obj => Array.isArray(obj) ? obj : Object.values(obj))
-          ]
+            Object.keys(dataSanciones[0] || {}),
+            ...dataSanciones.map(obj => Object.values(obj))
+          ] : []
         }
       ];
 
@@ -290,21 +308,22 @@ export default function ClientesReportes() {
         currentY = doc.lastAutoTable.finalY + 14;
       }
 
-      // Sanciones
-      checkPageBreak(40);
-      doc.setFontSize(14);
-      doc.setTextColor(0, 0, 0);
-      doc.text("Cuentas Suspendidas por Inasistencia", 14, currentY);
-      currentY += 6;
-      
-      doc.setFontSize(10);
-      doc.setTextColor(71, 85, 105);
-      doc.text(`Desglose -> 3 Faltas: ${statsSanciones.tresFaltas} | >50% Ausencia: ${statsSanciones.cincuentaPorciento} | Otros: ${statsSanciones.otrosMotivos} | Reincidentes: ${statsSanciones.reincidentes}`, 14, currentY);
-      doc.setTextColor(0, 0, 0);
-      currentY += 8;
 
       const sancionadosFiltrados = reporte.sancionados?.filter(user => !motivosOcultos.includes(user.motivo)) || [];
       if (sancionadosFiltrados.length > 0) {
+        // Sanciones
+        checkPageBreak(40);
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text("Cuentas Suspendidas por Inasistencia", 14, currentY);
+        currentY += 6;
+        
+        doc.setFontSize(10);
+        doc.setTextColor(71, 85, 105);
+        doc.text(`Desglose -> 3 Faltas: ${statsSanciones.tresFaltas} | >50% Ausencia: ${statsSanciones.cincuentaPorciento} | Otros: ${statsSanciones.otrosMotivos} | Reincidentes: ${statsSanciones.reincidentes}`, 14, currentY);
+        doc.setTextColor(0, 0, 0);
+        currentY += 8;
+
         autoTable(doc, {
           ...baseTableStyles,
           startY: currentY,
@@ -334,187 +353,197 @@ export default function ClientesReportes() {
         cargando={cargando} errorValidacion={errorValidacion} consultarFechas={consultarFechas}
       />
 
-      {reporte && (
+    {reporte && (
         <>
-          <div style={s.gridResumen}>
-            <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Ausentismo Promedio (En Período)</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>{reporte.resumen.tasa_ausentismo}%</p>
-            </div>
-            <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Nuevos Registros (En Período)</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>{reporte.resumen.nuevos_registros || 0}</p>
-            </div>
-            <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Clientes Suspendidos (En Período)</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-texto)' }}>{reporte.resumen.clientes_suspendidos_rango || 0}</p>
-            </div>
-          </div>
+          {/* 🚨 1. EMPTY STATE GLOBAL: Si el rango de fechas viene completamente vacío */}
+          {!hayDatos && (
+            <ReportesEmptyState entidad="clases programadas ni asistencias" filtroEspecialidad="" />
+          )}
 
-          <div style={s.seccionReporte}>
-            <h2 style={s.subtitulo}>
-              Cuentas Suspendidas por Inasistencia
-              <span style={s.badgeGlobalTitulo}>Global</span>
-            </h2>
-            <p style={s.bajada}>Análisis de deserción y motivos de penalización automática.</p>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>POR +3 FALTAS</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.tresFaltas}</p>
-              </div>
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>AUSENCIA &gt; 50%</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.cincuentaPorciento}</p>
-              </div>
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>OTROS MOTIVOS</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.otrosMotivos}</p>
-              </div>
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>REINCIDENTES (2+)</span>
-                <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.reincidentes}</p>
-              </div>
-            </div>
-            
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', background: '#f0fbfb', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)', marginBottom: '24px' }}>
-              <div>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Récord más antiguo:</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
-                  {statsSanciones.masAntiguo.nombre !== '-' ? `${statsSanciones.masAntiguo.nombre} (${statsSanciones.masAntiguo.fecha})` : '-'}
-                </span>
-              </div>
-              <div>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Suspensión más reciente:</span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
-                  {statsSanciones.masReciente.nombre !== '-' ? `${statsSanciones.masReciente.nombre} (${statsSanciones.masReciente.fecha})` : '-'}
-                </span>
-              </div>
-            </div>
-
-            <div style={s.wrapperTabla}>
-             <table style={s.tabla}>
-              <thead>
-                <tr>
-                  <th style={s.thOrdenable}>Nombre</th>
-                  <th style={s.thOrdenable}>Motivo de la Suspensión</th>
-                  <th style={s.thOrdenable}>Inicio de Suspensión</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reporte.sancionados
-                  ?.filter(user => !motivosOcultos.includes(user.motivo)) 
-                  .map((user, idx) => (
-                    <tr key={idx}>
-                      <td style={s.td}><strong>{user.nombre}</strong></td>
-                      <td style={s.td}>{user.motivo}</td>
-                      <td style={s.td}>
-                        <span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{user.fecha_inicio}</span>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-            </div>
-          </div>
-                  
-          <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)' }}>
-            <div style={s.grupo}>
-              <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
-              <select id="filtroEsp" style={s.select} value={filtroEspecialidad} onChange={(e) => setFiltroEspecialidad(e.target.value)}>
-                <option value="">Mostrar todo (Perspectiva Global)</option>
-                {reporte?.clase ? [...new Set(reporte.clase.map(c => c.tipo))].sort().map((op, i) => <option key={i} value={op}>{op}</option>) : null}
-              </select>
-            </div>
-          </div>
-
-          <div style={s.seccionReporte}>
-            <h2 style={s.subtitulo}>
-              Control de Concurrencia y Cancelaciones
-              {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
-            </h2>
-            
-            {hayDatos ? (
-              <div style={s.wrapperTabla}>
-                <table style={s.tabla}>
-                  <thead>
-                    <tr>
-                      <th style={s.thOrdenable} onClick={() => cambiarOrden('tipo')}>Especialidad</th>
-                      <th style={s.thOrdenable}>Clases</th>
-                      <th style={s.thOrdenable}>Cupos Iniciales</th>
-                      <th style={s.thOrdenable}>Asistencias</th>
-                      <th style={s.thOrdenable}>Inasistencias</th>
-                      <th style={s.thOrdenable}>Cancelaciones</th>
-                      <th style={s.thOrdenable}>Lista de Espera</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clasesFiltradas.map((c, i) => {
-                      if (!c.cant_clases || c.cant_clases === 0) return null;
-                      return (
-                        <tr key={i}>
-                          <td style={s.td}><strong>{c.nombre_clase || c.tipo}</strong></td>
-                          <td style={s.td}>{c.cant_clases}</td>
-                          <td style={s.td}>{c.cupos_iniciales}</td>
-                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{c.asistencias}</span></td>
-                          <td style={s.td}>{c.inasistencias}</td>
-                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{c.cancelaciones}</span></td>
-                          <td style={s.td}>{c.lista_espera}</td>
-                        </tr>
-                      );
-                    })}
-                    <tr style={{ fontWeight: 'bold', background: '#f8fafc', borderTop: '2px solid var(--color-borde)' }}>
-                      <td style={{...s.td, color: 'var(--color-primario-oscuro)'}}>TOTALES</td>
-                      <td style={s.td}>{totales.clases}</td>
-                      <td style={s.td}>{totales.cupos}</td>
-                      <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{totales.asistencias}</span></td>
-                      <td style={s.td}>{totales.inasistencias}</td>
-                      <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{totales.cancelaciones}</span></td>
-                      <td style={s.td}>{totales.espera}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <ReportesEmptyState entidad="clases programadas" filtroEspecialidad={filtroEspecialidad} />
-            )}
-          </div>
-
-          <div style={s.seccionReporte}>
-            <h2 style={s.subtitulo}>
-              Mapa de Calor: Concurrencia de Alumnos (Grid)
-              {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
-            </h2>
-            <p style={s.bajada}>Ocupación real basada en el flujo de asistencia sobre cupos ofertados (08:00 a 20:00 hs).</p>
-            
-            {hayDatos ? (
-              <div style={s.wrapperTabla}>
-                <div style={s.gridCalorDinamico(listaHorarios.length)}>
-                  <div style={s.celdaCalorCabecera}>Día / Módulo</div>
-                  {listaHorarios.map((h, i) => <div key={i} style={s.celdaCalorCabecera}>{h} hs</div>)}
-                  {reporte.mapa_calor.map((row, i) => (
-                    <React.Fragment key={i}>
-                      <div style={s.celdaCalorDia}><strong>{row.dia}</strong></div>
-                      {listaHorarios.map((h, idx) => {
-                        const cellData = row.horas[h];
-                        const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
-                        return <div key={idx} style={s.celdaBloque(valorPct)}>{valorPct}%</div>;
-                      })}
-                    </React.Fragment>
-                  ))}
+          {/* 🚨 2. MÓDULOS DE DATOS CONDICIONADOS (Solo visibles si hay datos en el rango) */}
+          {hayDatos && (
+            <>
+              {/* Tarjetas de Resumen */}
+              <div style={s.gridResumen}>
+                <div style={s.tarjetaMini}>
+                  <span style={s.labelMini}>Ausentismo Promedio (En Período)</span>
+                  <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>{reporte.resumen.tasa_ausentismo}%</p>
+                </div>
+                <div style={s.tarjetaMini}>
+                  <span style={s.labelMini}>Nuevos Registros (En Período)</span>
+                  <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>{reporte.resumen.nuevos_registros || 0}</p>
+                </div>
+                <div style={s.tarjetaMini}>
+                  <span style={s.labelMini}>Clientes Suspendidos (En Período)</span>
+                  <p style={{ ...s.valorMini, color: 'var(--color-texto)' }}>{reporte.resumen.clientes_suspendidos_rango || 0}</p>
                 </div>
               </div>
-            ) : (
-              <ReportesEmptyState entidad="flujos de asistencia" filtroEspecialidad={filtroEspecialidad} />
-            )}
-          </div>
 
-          {/* 🚨 REEMPLAZÁ ESTA LÍNEA (Cambiá sePuedeExportarConFiltro por tieneDatosParaExportar) */}
-          {!tieneDatosParaExportar && (
-            <p style={{ color: '#e11d48', fontSize: '14px', fontWeight: '600', textAlign: 'center', marginTop: '16px' }}>
-              ⚠️ La especialidad seleccionada no tiene datos registrados. Filtra otra especialidad para poder exportar.
-            </p>
+              {/* Sección Cuentas Suspendidas */}
+              <div style={s.seccionReporte}>
+                <h2 style={s.subtitulo}>
+                  Cuentas Suspendidas por Inasistencia
+                  <span style={s.badgeGlobalTitulo}>Global</span>
+                </h2>
+                <p style={s.bajada}>Análisis de deserción y motivos de penalización automática.</p>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>POR +3 FALTAS</span>
+                    <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.tresFaltas}</p>
+                  </div>
+                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>AUSENCIA &gt; 50%</span>
+                    <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-primario-oscuro)' }}>{statsSanciones.cincuentaPorciento}</p>
+                  </div>
+                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>OTROS MOTIVOS</span>
+                    <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.otrosMotivos}</p>
+                  </div>
+                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-texto-suave)' }}>REINCIDENTES (2+)</span>
+                    <p style={{ fontSize: '24px', fontWeight: '800', margin: '4px 0 0 0', color: 'var(--color-texto)' }}>{statsSanciones.reincidentes}</p>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', background: '#f0fbfb', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-borde)', marginBottom: '24px' }}>
+                  <div>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Récord más antiguo:</span>
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
+                      {statsSanciones.masAntiguo.nombre !== '-' ? `${statsSanciones.masAntiguo.nombre} (${statsSanciones.masAntiguo.fecha})` : '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-texto-suave)', display: 'block' }}>Suspensión más reciente:</span>
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' }}>
+                      {statsSanciones.masReciente.nombre !== '-' ? `${statsSanciones.masReciente.nombre} (${statsSanciones.masReciente.fecha})` : '-'}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={s.wrapperTabla}>
+                  <table style={s.tabla}>
+                    <thead>
+                      <tr>
+                        <th style={s.thOrdenable}>Nombre</th>
+                        <th style={s.thOrdenable}>Motivo de la Suspensión</th>
+                        <th style={s.thOrdenable}>Inicio de Suspensión</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reporte.sancionados
+                        ?.filter(user => !motivosOcultos.includes(user.motivo)) 
+                        .map((user, idx) => (
+                          <tr key={idx}>
+                            <td style={s.td}><strong>{user.nombre}</strong></td>
+                            <td style={s.td}>{user.motivo}</td>
+                            <td style={s.td}>
+                              <span style={{...s.badgePorcentaje, background: '#f1f5f9', color: '#475569'}}>{user.fecha_inicio}</span>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+                      
+              {/* Filtro por Especialidad */}
+              <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)' }}>
+                <div style={s.grupo}>
+                  <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
+                  <select id="filtroEsp" style={s.select} value={filtroEspecialidad} onChange={(e) => setFiltroEspecialidad(e.target.value)}>
+                    <option value="">Mostrar todo (Perspectiva Global)</option>
+                    {reporte?.clase ? [...new Set(reporte.clase.map(c => c.tipo))].sort().map((op, i) => <option key={i} value={op}>{op}</option>) : null}
+                  </select>
+                </div>
+              </div>
+
+              {/* Tabla de Concurrencia */}
+              <div style={s.seccionReporte}>
+                <h2 style={s.subtitulo}>
+                  Control de Concurrencia y Cancelaciones
+                  {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
+                </h2>
+                
+                {tieneDatosConcurrencia ? (
+                  <div style={s.wrapperTabla}>
+                    <table style={s.tabla}>
+                      <thead>
+                        <tr>
+                          <th style={s.thOrdenable} onClick={() => cambiarOrden('tipo')}>Especialidad</th>
+                          <th style={s.thOrdenable}>Clases</th>
+                          <th style={s.thOrdenable}>Cupos Iniciales</th>
+                          <th style={s.thOrdenable}>Asistencias</th>
+                          <th style={s.thOrdenable}>Inasistencias</th>
+                          <th style={s.thOrdenable}>Cancelaciones</th>
+                          <th style={s.thOrdenable}>Lista de Espera</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {clasesFiltradas.map((c, i) => {
+                          if (!c.cant_clases || c.cant_clases === 0) return null;
+                          return (
+                            <tr key={i}>
+                              <td style={s.td}><strong>{c.nombre_clase || c.tipo}</strong></td>
+                              <td style={s.td}>{c.cant_clases}</td>
+                              <td style={s.td}>{c.cupos_iniciales}</td>
+                              <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{c.asistencias}</span></td>
+                              <td style={s.td}>{c.inasistencias}</td>
+                              <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{c.cancelaciones}</span></td>
+                              <td style={s.td}>{c.lista_espera}</td>
+                            </tr>
+                          );
+                        })}
+                        <tr style={{ fontWeight: 'bold', background: '#f8fafc', borderTop: '2px solid var(--color-borde)' }}>
+                          <td style={{...s.td, color: 'var(--color-primario-oscuro)'}}>TOTALES</td>
+                          <td style={s.td}>{totales.clases}</td>
+                          <td style={s.td}>{totales.cupos}</td>
+                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{totales.asistencias}</span></td>
+                          <td style={s.td}>{totales.inasistencias}</td>
+                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{totales.cancelaciones}</span></td>
+                          <td style={s.td}>{totales.espera}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <ReportesEmptyState entidad="clases programadas" filtroEspecialidad={filtroEspecialidad} />
+                )}
+              </div>
+
+              {/* Mapa de Calor */}
+              <div style={s.seccionReporte}>
+                <h2 style={s.subtitulo}>
+                  Mapa de Calor: Concurrencia de Alumnos (Grid)
+                  {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
+                </h2>
+                <p style={s.bajada}>Ocupación real basada en el flujo de asistencia sobre cupos ofertados (08:00 a 20:00 hs).</p>
+                
+                {tieneDatosMapa ? (
+                  <div style={s.wrapperTabla}>
+                    <div style={s.gridCalorDinamico(listaHorarios.length)}>
+                      <div style={s.celdaCalorCabecera}>Día / Módulo</div>
+                      {listaHorarios.map((h, i) => <div key={i} style={s.celdaCalorCabecera}>{h} hs</div>)}
+                      {reporte.mapa_calor.map((row, i) => (
+                        <React.Fragment key={i}>
+                          <div style={s.celdaCalorDia}><strong>{row.dia}</strong></div>
+                          {listaHorarios.map((h, idx) => {
+                            const cellData = row.horas[h];
+                            const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
+                            return <div key={idx} style={s.celdaBloque(valorPct)}>{valorPct}%</div>;
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <ReportesEmptyState entidad="flujos de asistencia" filtroEspecialidad={filtroEspecialidad} />
+                )}
+              </div>
+            </>
           )}
+
+          {/* Exportador de Datos */}
           <ReportesExportar tipoReporte="Clientes" onExport={handleExport} />
         </>
       )}

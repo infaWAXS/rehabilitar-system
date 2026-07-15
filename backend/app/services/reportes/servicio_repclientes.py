@@ -46,15 +46,17 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
     
     tasa_ausentismo = round((total_ausentes / total_asistencias * 100), 1) if total_asistencias > 0 else 0.0
 
-    # ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────
     # 2. RENDIMIENTO POR ESPECIALIDAD Y DESGLOSE DE CLASES INDIVIDUALES
     # ──────────────────────────────────────────────────────────────────────────
     especialidades_db = db.query(Activity.specialization).distinct().filter(Activity.specialization.isnot(None)).all()
     lista_especialidades = [esp[0] for esp in especialidades_db if esp[0]]
 
+    # 🚨 FILTRO GLOBAL: Solo clases que ya ocurrieron (fecha <= hoy) dentro del rango
     hoy = date.today()
     actividades_filtradas = db.query(Activity).filter(
         Activity.status == "active",
+        Activity.specific_date.between(fecha_inicio, fecha_fin),
         Activity.specific_date <= hoy
     ).all()
 
@@ -112,12 +114,13 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
             "lista_espera": lista_espera
         })
 
-        # --- B. CÁLCULO DETALLADO CLASE POR CLASE (PARA CUANDO SE FILTRA) ---
-        # Buscamos las 10 clases más cercanas a la fecha fin dentro del rango
+        # --- B. CÁLCULO DETALLADO CLASE POR CLASE (CON FILTRO APLICADO) ---
+        # 🚨 FILTRO DETALLADO: Solo buscamos clases en el rango que ya hayan pasado (fecha <= hoy)
         clases_recientes = db.query(Activity).filter(
             Activity.specialization == esp,
             Activity.status == "active",
-            Activity.specific_date.between(fecha_inicio, fecha_fin)
+            Activity.specific_date.between(fecha_inicio, fecha_fin),
+            Activity.specific_date <= hoy  # 👈 AGREGADO ACÁ TAMBIÉN para bloquear la tabla con filtro
         ).order_by(Activity.specific_date.desc()).limit(10).all()
 
         for cl in clases_recientes:
@@ -132,7 +135,7 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
 
             fecha_legible = cl.specific_date.strftime("%d/%m")
             desglose_clases_lista.append({
-                "tipo": esp, # Mantenemos la especialidad para el filtro reactivo del front
+                "tipo": esp,
                 "is_clase_individual": True,
                 "nombre_clase": f"{cl.name} ({fecha_legible})",
                 "cant_clases": 1,
