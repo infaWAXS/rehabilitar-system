@@ -44,7 +44,11 @@ export default function ClientesReportes() {
     setSortConcurrencia({ llave, direccion });
   };
 
-  const clasesFiltradas = reporte ? (filtroEspecialidad ? reporte.clase.filter(c => c.tipo === filtroEspecialidad) : reporte.clase) : [];
+  const clasesFiltradas = reporte 
+    ? (filtroEspecialidad 
+        ? reporte.clase.filter(c => c.tipo === filtroEspecialidad && c.is_clase_individual === true) 
+        : reporte.clase.filter(c => c.is_clase_individual === false)) 
+    : [];
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
   
   // Nuevo cálculo de totales basado en la nueva estructura de datos
@@ -409,7 +413,7 @@ export default function ClientesReportes() {
                       if (!c.cant_clases || c.cant_clases === 0) return null;
                       return (
                         <tr key={i}>
-                          <td style={s.td}><strong>{c.tipo}</strong></td>
+                          <td style={s.td}><strong>{c.nombre_clase || c.tipo}</strong></td>
                           <td style={s.td}>{c.cant_clases}</td>
                           <td style={s.td}>{c.cupos_iniciales}</td>
                           <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{c.asistencias}</span></td>
