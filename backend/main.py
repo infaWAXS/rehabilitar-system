@@ -82,6 +82,9 @@ def _migrate(engine):
         if "deleted_by" not in cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN deleted_by INTEGER"))
             conn.commit()
+        if "suspension_reason" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN suspension_reason TEXT"))
+            conn.commit()
 
 _migrate(engine)
 

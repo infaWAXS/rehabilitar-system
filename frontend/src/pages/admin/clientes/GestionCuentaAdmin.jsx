@@ -77,6 +77,8 @@ function GestionCuentaAdmin() {
 
   // Modal rechazar
   const [modalRechazar, setModalRechazar] = useState(false);
+  const [motivoRechazo, setMotivoRechazo] = useState('');
+  const [errMotivoRechazo, setErrMotivoRechazo] = useState('');
   const [rechazando, setRechazando] = useState(false);
 
   useEffect(() => {
@@ -123,15 +125,18 @@ function GestionCuentaAdmin() {
     }
   };
 
-  // HU Reintegrar — E3: rechazar solicitud → suspended
+  // HU Reintegrar — E3: rechazar solicitud con motivo obligatorio → suspended
   const confirmarRechazar = async () => {
+    if (!motivoRechazo.trim()) { setErrMotivoRechazo('El motivo del rechazo es obligatorio.'); return; }
     setRechazando(true);
     setError('');
     try {
-      const updated = await rejectReintegration(Number(id));
+      const updated = await rejectReintegration(Number(id), motivoRechazo.trim());
       setCliente((prev) => ({ ...prev, account_status: updated.account_status || 'suspended' }));
       setExito('La solicitud de reintegro fue rechazada.');
       setModalRechazar(false);
+      setMotivoRechazo('');
+      setErrMotivoRechazo('');
     } catch (err) {
       setError(err.message || 'No se pudo rechazar el reintegro.');
     } finally {
@@ -257,8 +262,17 @@ function GestionCuentaAdmin() {
           <div style={s.modal}>
             <p style={s.modalTitulo}>Rechazar solicitud de reintegro</p>
             <p style={s.modalTexto}>
-              La solicitud será rechazada y la cuenta permanecerá suspendida. ¿Confirmás?
+              La solicitud será rechazada y la cuenta permanecerá suspendida.
+              Ingresá el motivo del rechazo: el cliente será notificado.
             </p>
+            <label style={s.modalLabel}>Motivo del rechazo *</label>
+            <textarea
+              style={s.modalInput}
+              value={motivoRechazo}
+              onChange={(e) => { setMotivoRechazo(e.target.value); setErrMotivoRechazo(''); }}
+              placeholder="Escribí el motivo del rechazo..."
+            />
+            {errMotivoRechazo && <div style={{ ...s.error, marginBottom: '12px' }}>{errMotivoRechazo}</div>}
             <div style={s.modalBotones}>
               <button style={s.modalCancelar} onClick={() => setModalRechazar(false)} disabled={rechazando}>Cancelar</button>
               <button style={s.modalConfirmar(true)} onClick={confirmarRechazar} disabled={rechazando}>

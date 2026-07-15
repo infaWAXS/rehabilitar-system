@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.services import servicio_clientes
-from app.schemas.esquema_clientes import SuspendRequest, ReinstateRequest, ReintegrationRequest
+from app.schemas.esquema_clientes import SuspendRequest, ReinstateRequest, ReintegrationRequest, RejectReintegrationRequest
 from database.connection import get_db
 from app.models.user import User
 from app.utils.dependencies import get_current_user, require_role
@@ -64,6 +64,14 @@ def post_reintegration_request(id: int, token: str, body: ReintegrationRequest, 
     return servicio_clientes.registrar_reintegro(id, body.motivo, db)
 
 
+# HU Reintegrar cuenta - el admin consulta el motivo que escribió el cliente al solicitar
+@router.get("/{id}/reintegration-request")
+def get_reintegration_request(id: int, token: str, db: Session = Depends(get_db)):
+    current_user = get_current_user(token, db)
+    require_role(["admin", "receptionist"])(current_user)
+    return servicio_clientes.obtener_solicitud_reintegro(id, db)
+
+
 # HU Suspender cuenta (Nahuel)
 # E1: motivo ingresado → cuenta pasa a "suspended", notificación mail (TODO)
 # E2: cancelar → manejado en frontend, no llega al backend
@@ -87,9 +95,10 @@ def put_reinstate_client(id: int, token: str, body: ReinstateRequest, db: Sessio
 
 
 # HU Reintegrar cuenta - Escenario 3: admin rechaza la solicitud de reintegro
-# E3: cuenta vuelve a "suspended", notificación mail al cliente (TODO)
+# E3: cuenta vuelve a "suspended", se notifica al cliente con el motivo del rechazo
+# Motivo vacío → validación automática por RejectReintegrationRequest (Field min_length=1)
 @router.put("/{id}/reject-reintegration")
-def put_reject_reintegration(id: int, token: str, db: Session = Depends(get_db)):
+def put_reject_reintegration(id: int, token: str, body: RejectReintegrationRequest, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     require_role(["admin"])(current_user)
-    return servicio_clientes.rechazar_reintegro(id, db, current_user)
+    return servicio_clientes.rechazar_reintegro(id, body.motivo, db, current_user)

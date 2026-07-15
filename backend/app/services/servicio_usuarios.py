@@ -276,6 +276,7 @@ def login_user(request: UserLogin, db: Session):
         "name": existing_user.name,
         "lastname": existing_user.lastname,
         "account_status": existing_user.account_status,
+        "suspension_reason": existing_user.suspension_reason,
         "id": existing_user.id,
     }
     
