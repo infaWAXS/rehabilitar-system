@@ -14,6 +14,7 @@ const menus = {
     { label: 'Actividades',   ruta: '/admin/actividades' },
     { label: 'Sugerencias',   ruta: '/admin/sugerencias' },
     { label: 'Auditoría',     ruta: '/admin/auditoria' },
+    { label: 'Mi Perfil',     ruta: '/perfil' },
   ],
   profesor: [
     { label: 'Actividades', ruta: '/profesor/actividades' },

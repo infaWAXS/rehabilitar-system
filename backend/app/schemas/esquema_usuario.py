@@ -8,7 +8,7 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, field_validator
 
-from datetime import date
+from datetime import date, datetime
 
 #Registro de usuario
 class UserCreate(BaseModel):
@@ -131,6 +131,8 @@ class UserResponse(BaseModel):
     plan_specialization: Optional[str] = None  # especialidad del plan del usuario (si tiene plan activo)
 
     notifications_enabled: Optional[bool] = None
+
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

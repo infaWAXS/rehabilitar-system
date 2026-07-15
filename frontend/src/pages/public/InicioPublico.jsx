@@ -35,6 +35,7 @@ const MENU_ADMIN = [
   { label: 'Actividades',   ruta: '/admin/actividades' },
   { label: 'Sugerencias',    ruta: '/admin/sugerencias' },
   { label: 'Auditoría',     ruta: '/admin/auditoria' },
+  { label: 'Mi Perfil',   ruta: '/perfil' },
 ];
 
 const s = {
