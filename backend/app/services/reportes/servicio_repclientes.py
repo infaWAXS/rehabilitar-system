@@ -28,7 +28,11 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
 
     clientes_suspendidos_rango = db.query(func.count(UserSuspension.id)).join(User).filter(
         User.role == "client",
-        UserSuspension.suspension_date.between(datetime_inicio, datetime_fin) 
+            UserSuspension.suspension_date.between(datetime_inicio, datetime_fin),
+            or_(
+                UserSuspension.is_active == True,
+                UserSuspension.reinstatement_date > datetime_fin
+            )
     ).scalar() or 0
 
     total_asistencias = db.query(func.count(Attendance.id)).filter(
@@ -172,7 +176,11 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
     # ──────────────────────────────────────────────────────────────────────────
     sanciones_query = db.query(UserSuspension).join(User).filter(
         User.role == "client",
-        UserSuspension.suspension_date.between(datetime_inicio, datetime_fin)
+        UserSuspension.suspension_date.between(datetime_inicio, datetime_fin),
+        or_(
+            UserSuspension.is_active == True,
+            UserSuspension.reinstatement_date > datetime_fin
+        )
     ).all()
 
     sancionados_lista = []
