@@ -51,14 +51,20 @@ export default function FinanzasReportes() {
   const opcionesEspecialidades = reporte?.especialidades?.sort() || [];
 
   // Tarjetas Superiores y Desglose
-  const ingresosPlanesRender = filtroEspecialidad ? 0 : (reporte?.finanzas?.desglose?.planes || 0);
-  const ingresosSenasRender = filtroEspecialidad ? 0 : (reporte?.finanzas?.desglose?.senas || 0);
+  const ingresosPlanesRender = filtroEspecialidad 
+    ? (reporte?.finanzas?.desglose?.suscripciones_por_especialidad?.[filtroEspecialidad] || 0) * (reporte?.finanzas?.desglose?.planes / (reporte?.finanzas?.suscripciones_activas || 1)) // Proporción estimada por precio del plan o el desglose real si existiera
+    : (reporte?.finanzas?.desglose?.planes || 0);
+  const ingresosSenasRender = filtroEspecialidad 
+    ? (reporte?.finanzas?.desglose?.senas_por_especialidad?.[filtroEspecialidad] || 0) 
+    : (reporte?.finanzas?.desglose?.senas || 0);
   const ingresosIndivRender = filtroEspecialidad 
     ? (reporte?.finanzas?.desglose?.individuales_por_especialidad?.[filtroEspecialidad] || 0) 
     : (reporte?.finanzas?.desglose?.individuales || 0);
   
   const ingresosTotalesRender = ingresosPlanesRender + ingresosIndivRender + ingresosSenasRender;
-  const suscripcionesRender = filtroEspecialidad ? '-' : (reporte?.finanzas?.suscripciones_activas || 0);
+  const suscripcionesRender = filtroEspecialidad 
+    ? (reporte?.finanzas?.desglose?.suscripciones_por_especialidad?.[filtroEspecialidad] || 0) 
+    : (reporte?.finanzas?.suscripciones_activas || 0);
   const ingresoPromedioRender = filtroEspecialidad ? '-' : `$${Number(reporte?.finanzas?.ingreso_promedio || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
 
   // Top Clases (Agrupadas si es global, filtradas si es especialidad)
@@ -358,23 +364,25 @@ export default function FinanzasReportes() {
                 </div>
               </div>
 
-              {/* Cruce de Ingresos: Planes vs Individuales vs Señas */}
+            {/* Cruce de Ingresos: Planes vs Individuales vs Señas */}
               <div style={s.seccionReporte}>
                 <h2 style={s.subtitulo}>
                   Cruce de Ingresos y Facturación
                   {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
                 </h2>
-                <p style={s.bajada}>Comparativa del origen de las ganancias. Al aplicar filtros específicos, los ingresos globales (como planes) no se contabilizan.</p>
+                <p style={s.bajada}>Comparativa del origen de las ganancias. Al aplicar filtros específicos, los ingresos correspondientes a la especialidad seleccionada se contabilizan detalladamente.</p>
                 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginTop: '24px' }}>
                   
-                  <div style={{ padding: '24px', background: filtroEspecialidad ? '#f1f5f9' : '#f8fafc', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '8px' }}>POR PLANES (GLOBAL)</span>
-                    <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: filtroEspecialidad ? '#94a3b8' : '#1e293b' }}>
+                  {/* CARD PLANES: Color constante e ingresos reactivos */}
+                  <div style={{ padding: '24px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '8px' }}>POR PLANES (Suscripciones)</span>
+                    <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#1e293b' }}>
                       ${Number(ingresosPlanesRender).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                   </div>
 
+                  {/* CARD INDIVIDUALES: Color constante */}
                   <div style={{ padding: '24px', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: '#15803d', display: 'block', marginBottom: '8px' }}>POR CLASES INDIVIDUALES</span>
                     <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#166534' }}>
@@ -382,9 +390,10 @@ export default function FinanzasReportes() {
                     </p>
                   </div>
 
-                  <div style={{ padding: '24px', background: filtroEspecialidad ? '#f1f5f9' : '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                  {/* CARD SEÑAS: Color constante e ingresos reactivos */}
+                  <div style={{ padding: '24px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: '#1d4ed8', display: 'block', marginBottom: '8px' }}>POR SEÑAS / RESERVAS</span>
-                    <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: filtroEspecialidad ? '#94a3b8' : '#1e3a8a' }}>
+                    <p style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#1e3a8a' }}>
                        ${Number(ingresosSenasRender).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                   </div>
