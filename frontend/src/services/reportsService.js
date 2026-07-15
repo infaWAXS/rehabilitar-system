@@ -16,3 +16,35 @@ export async function getStatisticsReport(fechaInicio, fechaFin) {
   // apiClient devuelve { data: payload }, extraemos la data
   return response.data;
 }
+
+
+export async function getFinancialReport(fechaInicio, fechaFin) {
+  // apiClient ya debería tener interceptores para inyectar el token automáticamente
+  // Cambiamos a la URL relativa y usamos el apiClient configurado
+  const response = await apiClient.get(`/api/reports/finances?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  
+  return response.data;
+}
+
+export async function getClientsReport(fechaInicio, fechaFin) {
+  const response = await apiClient.get(`/api/reports/clients?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  return response.data;
+}
+
+export async function getStaffReport(fechaInicio, fechaFin) {
+  const response = await apiClient.get(`/api/reports/staff?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  return response.data;
+}
+
+export async function getRoomsReport(fechaInicio, fechaFin) {
+  const response = await apiClient.get(`/api/reports/rooms?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  return response.data;
+}
+
+export async function getHubReport(fechaInicio, fechaFin) {
+  // Usamos el apiClient que ya tiene todo configurado (tokens, interceptores, etc.)
+  const response = await apiClient.get(`/api/reports/hub?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`);
+  
+  // apiClient devuelve un objeto donde la información está en la propiedad 'data'
+  return response.data;
+}

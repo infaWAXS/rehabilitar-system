@@ -20,7 +20,7 @@ Credenciales de acceso:
 from datetime import date
 import sys
 import os
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 # Asegura que el directorio raíz del backend esté en el path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,6 +33,7 @@ from app.models.user_plan import UserPlan
 from app.models.notification import Notification
 from app.models.activity import Activity
 from app.models.activity_suggestion import ActivitySuggestion
+from app.models.reservation import Reservation
 from app.utils.security import hash_password
 
 # Importar todos los modelos para que Base cree las tablas si no existen
@@ -125,7 +126,7 @@ USUARIOS_MOCK = [
         "password": "Profesor123",
         "role": "professor",
         "dni": "66666666",
-        "specialization": "Fisioterapia",
+        "specialization": "Kinesiologia deportiva",
         "birth_date": date(1978, 3, 22),
     },
     {
@@ -138,6 +139,18 @@ USUARIOS_MOCK = [
         "dni": "46201004",
         "specialization": "Kinesiologia deportiva",
         "birth_date": date(1982, 6, 15),
+    },
+    {
+        # Profesor de especialidad "Yoga" para HU "Asumir actividad" (E1).
+        # Su especialidad coincide con la actividad "Yoga" sin profesor.
+        "name": "Alex",
+        "lastname": "Rivas",
+        "email": "alex@rehabilitar.com",
+        "password": "Profesor123",
+        "role": "professor",
+        "dni": "47000001",
+        "specialization": "Yoga",
+        "birth_date": date(1991, 9, 3),
     },
 ]
 
@@ -163,16 +176,36 @@ def seed():
         db.close()
     creados = []
     omitidos = []
+    reactivados = []
 
     try:
         for datos in USUARIOS_MOCK:
             existe = db.query(User).filter(User.email == datos["email"]).first()
             if existe:
-                # Corregir account_status si está en formato incorrecto (ej: "Active" → "active")
+                cambio = False
+                # Revertir la baja lógica y restaurar la identidad canónica del usuario
+                # mock (nombre, apellido, rol, especialidad) SOLO al reactivar una cuenta
+                # borrada. No se tocan las cuentas activas para no pisar ediciones hechas
+                # a propósito (ej. cambiar el apellido desde el perfil). El DNI no se toca
+                # para evitar choques de unicidad.
+                if existe.is_deleted:
+                    existe.is_deleted = False
+                    existe.deleted_at = None
+                    existe.deleted_by = None
+                    existe.name = datos["name"]
+                    existe.lastname = datos["lastname"]
+                    existe.role = datos["role"]
+                    existe.specialization = datos.get("specialization")
+                    cambio = True
+                # Reactivar si quedó deshabilitada (no altera nombre ni datos).
                 if existe.account_status != "active":
                     existe.account_status = "active"
+                    cambio = True
+                if cambio:
                     db.commit()
-                omitidos.append(datos["email"])
+                    reactivados.append(datos["email"])
+                else:
+                    omitidos.append(datos["email"])
                 continue
 
             usuario = User(
@@ -195,9 +228,11 @@ def seed():
 
     if creados:
         print(f"[seed_mock] Usuarios creados: {', '.join(creados)}")
+    if reactivados:
+        print(f"[seed_mock] Usuarios reactivados (baja lógica revertida): {', '.join(reactivados)}")
     if omitidos:
         print(f"[seed_mock] Ya existían (omitidos): {', '.join(omitidos)}")
-    if not creados and not omitidos:
+    if not creados and not omitidos and not reactivados:
         print("[seed_mock] Sin cambios.")
 
     # ── Seed de las 7 salas físicas ────────────────────────────────────────────
@@ -228,19 +263,23 @@ def seed():
         db.close()
 
     # ── Seed de planes ────────────────────────────────────────────────────────
+    # Único plan del sistema: mensual (30 días), hasta 4 clases fijas de la
+    # especialidad elegida al suscribirse. Un cliente puede tener varios planes
+    # (suscripciones) a la vez, por ejemplo uno por cada especialidad.
     PLANES = [
         {
             "name": "Plan Mensual",
-            "description": "Acceso a todas las clases fijas semanales de una especialidad.",
+            "description": "Hasta 4 clases fijas por mes de la especialidad elegida.",
             "price": 20000,
             "duration_days": 30,
-            "coverage_type": "Todas las clases de la especialidad elegida",
+            "coverage_type": "Hasta 4 clases fijas por mes",
         },
     ]
 
     db = SessionLocal()
     try:
         planes_creados = []
+        planes_actualizados = []
         for datos in PLANES:
             existe = db.query(Plan).filter(Plan.name == datos["name"]).first()
             if not existe:
@@ -253,10 +292,33 @@ def seed():
                     status="active",
                 ))
                 planes_creados.append(datos["name"])
+            else:
+                cambio = False
+                for campo in ("description", "price", "duration_days", "coverage_type"):
+                    if str(getattr(existe, campo)) != str(datos[campo]):
+                        setattr(existe, campo, datos[campo])
+                        cambio = True
+                if existe.status != "active":
+                    existe.status = "active"
+                    cambio = True
+                if cambio:
+                    planes_actualizados.append(datos["name"])
+
+        # Solo debe existir un plan disponible (el mensual): cualquier otro plan
+        # que haya quedado de versiones anteriores del sistema se desactiva.
+        nombres_vigentes = [datos["name"] for datos in PLANES]
+        obsoletos = db.query(Plan).filter(Plan.name.notin_(nombres_vigentes), Plan.status == "active").all()
+        for plan_obsoleto in obsoletos:
+            plan_obsoleto.status = "inactive"
+
         db.commit()
         if planes_creados:
             print(f"[seed_mock] Planes creados: {', '.join(planes_creados)}")
-        else:
+        if planes_actualizados:
+            print(f"[seed_mock] Planes actualizados: {', '.join(planes_actualizados)}")
+        if obsoletos:
+            print(f"[seed_mock] Planes desactivados (obsoletos): {', '.join(p.name for p in obsoletos)}")
+        if not planes_creados and not planes_actualizados and not obsoletos:
             print("[seed_mock] Planes: ya existían, sin cambios.")
     finally:
         db.close()
@@ -345,6 +407,26 @@ def seed():
                 print(f"[seed_mock] Notificaciones demo creadas: {len(notifs_a_crear)}")
             else:
                 print("[seed_mock] Notificaciones demo: ya existían 4 unread, sin cambios.")
+
+        # Una única notificación unread para abonado@ (Ana) — HU "Marcar como leído" E2:
+        # al leer la única, el badge debe desaparecer por completo.
+        ana_demo = db.query(User).filter(User.email == "abonado@rehabilitar.com").first()
+        if ana_demo:
+            unread_ana = db.query(Notification).filter(
+                Notification.user_id == ana_demo.id,
+                Notification.read == False,
+            ).count()
+            if unread_ana == 0:
+                db.add(Notification(
+                    user_id=ana_demo.id,
+                    title="Recordatorio de pago",
+                    body="Tu abono mensual vence en 3 días. Renovalo para no perder tu lugar.",
+                    read=False,
+                ))
+                db.commit()
+                print("[seed_mock] Notificación única para abonado@ creada (demo marcar la única).")
+            else:
+                print("[seed_mock] Notificación única para abonado@: ya tenía unread, sin cambios.")
     finally:
         db.close()
 
@@ -429,6 +511,119 @@ def seed():
         else:
             print("[seed_mock] Actividad individual 'Rehabilitar Codo': ya existe una futura, sin cambios.")
 
+        # "Yoga" sin profesor — para HU "Asumir actividad" (E1).
+        # Se programa el próximo martes estricto para que:
+        #   - la clase siga siendo futura/asumible cualquier día que se demuestre, y
+        #   - el inbox diga exactamente "Martes YYYY-MM-DD · 10:00–11:00".
+        # El profesor Alex (especialidad "Yoga") puede asumirla. Se inscribe a
+        # cliente@ para poder mostrar también el aviso a los clientes inscriptos.
+        sala4 = db.query(Room).filter(Room.name == "Sala 4").first()
+        cliente_yoga = db.query(User).filter(User.email == "cliente@rehabilitar.com").first()
+        dias_hasta_martes = (1 - hoy.weekday()) % 7 or 7   # Martes = 1; próximo martes estricto
+        martes_yoga = hoy + timedelta(days=dias_hasta_martes)
+        yoga = db.query(Activity).filter(
+            Activity.name == "Yoga",
+            Activity.specialization == "Yoga",
+            Activity.activity_type == "fixed",
+            Activity.professor.is_(None),
+            Activity.status == "active",
+            Activity.specific_date >= hoy,
+        ).first()
+        if sala4 and not yoga:
+            yoga = Activity(
+                room_id=sala4.id,
+                name="Yoga",
+                specialization="Yoga",
+                activity_type="fixed",
+                schedule="Martes · 10:00–11:00",
+                specific_date=martes_yoga,
+                time_slot="10:00",
+                professor=None,
+                price=5000,
+                capacity=5,
+                status="active",
+                description="Clase de Yoga sin profesor asignado (demo Asumir actividad).",
+            )
+            db.add(yoga)
+            db.commit()
+            db.refresh(yoga)
+            print(f"[seed_mock] Actividad 'Yoga' sin profesor creada para {martes_yoga}.")
+            if cliente_yoga:
+                ya_reservado = db.query(Reservation).filter(
+                    Reservation.user_id == cliente_yoga.id,
+                    Reservation.activity_id == yoga.id,
+                ).first()
+                if not ya_reservado:
+                    db.add(Reservation(
+                        user_id=cliente_yoga.id,
+                        activity_id=yoga.id,
+                        reservation_type="fixed",
+                        status="confirmed",
+                        payment_status="completed",
+                        reservation_date=datetime(martes_yoga.year, martes_yoga.month, martes_yoga.day, 10, 0),
+                    ))
+                    db.commit()
+                    print("[seed_mock] Reserva de cliente@ en 'Yoga' creada (demo aviso a inscriptos).")
+        else:
+            print("[seed_mock] Actividad 'Yoga' sin profesor: ya existe una futura, sin cambios.")
+
+        # ── HU "Aceptar actividad" E3: aceptación fallida por sala no disponible ──
+        # Sugerencia individual "Yoga" (Sala 4, 22/07/2026 · 14:00, 4 cupos) + una
+        # actividad ya programada en la MISMA sala/fecha/hora. Al aceptar la sugerencia,
+        # crear_actividad valida la sala y rechaza con "La sala no está disponible…".
+        # La fecha es fija: la colisión se evalúa sobre actividades 'active' sin importar
+        # si la fecha ya pasó, así que el escenario funciona cualquier día que se demuestre.
+        alex_prof = db.query(User).filter(User.email == "alex@rehabilitar.com").first()
+        fecha_colision = date(2026, 7, 22)
+        hora_colision = "14:00"
+        if sala4:
+            bloqueante = db.query(Activity).filter(
+                Activity.room_id == sala4.id,
+                Activity.specific_date == fecha_colision,
+                Activity.time_slot == hora_colision,
+                Activity.status == "active",
+            ).first()
+            if not bloqueante:
+                db.add(Activity(
+                    room_id=sala4.id,
+                    name="Turno reservado Sala 4",
+                    specialization="Fisioterapia",
+                    activity_type="individual",
+                    specific_date=fecha_colision,
+                    time_slot=hora_colision,
+                    professor=None,
+                    price=5000,
+                    capacity=5,
+                    status="active",
+                    description="Ocupa la Sala 4 el 22/07/2026 14:00 (demo aceptar sugerencia fallida).",
+                ))
+                db.commit()
+                print("[seed_mock] Actividad bloqueante en Sala 4 (22/07 14:00) creada.")
+            else:
+                print("[seed_mock] Actividad bloqueante Sala 4: ya existía, sin cambios.")
+
+            sug_yoga_ind = db.query(ActivitySuggestion).filter(
+                ActivitySuggestion.name == "Yoga",
+                ActivitySuggestion.activity_type == "individual",
+                ActivitySuggestion.status == "pending",
+            ).first()
+            if alex_prof and not sug_yoga_ind:
+                db.add(ActivitySuggestion(
+                    professor_id=alex_prof.id,
+                    room_id=sala4.id,
+                    name="Yoga",
+                    specialization="Yoga",
+                    activity_type="individual",
+                    specific_date=fecha_colision,
+                    time_slot=hora_colision,
+                    capacity=4,
+                    status="pending",
+                ))
+                db.commit()
+                print("[seed_mock] Sugerencia individual 'Yoga' (Sala 4, 22/07 14:00) creada.")
+            else:
+                print("[seed_mock] Sugerencia individual 'Yoga': ya existía, sin cambios.")
+
         # Sugerencias pendientes — para HU Aceptar Actividad
         # Necesitan time_slot y dates para que aceptar_sugerencia pueda llamar a crear_actividad.
         def _proximas_fechas(dia_semana: int, cantidad: int = 4) -> str:
@@ -450,7 +645,7 @@ def seed():
                 "capacity": 5,
             },
             {
-                "name": "Pilates avanzado",
+                "name": "Pilates",
                 "profesor": carlos_pilates,
                 "sala": sala2,
                 "specialization": "Pilates terapeutico",

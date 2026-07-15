@@ -28,5 +28,8 @@ class Reservation(Base):
     # Resultado de la política de cancelación aplicada (credit, discount_20, discount_30,
     # no_benefit, deposit_returned, no_refund, center_credit, center_refund). None si no se canceló.
     cancellation_result = Column(String, nullable=True)
+    # Suscripción puntual usada para pagar esta reserva (payment_method == "subscription").
+    # Permite contar cuántas de las 4 clases fijas incluidas en ESE plan ya se usaron.
+    user_plan_id = Column(Integer, ForeignKey("user_plans.id"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

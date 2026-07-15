@@ -90,6 +90,13 @@ export function getUserName() {
   return `${name} ${lastname}`.trim();
 }
 
+// Actualiza el nombre guardado en sesión tras editar el perfil, para que la
+// cabecera muestre el nombre nuevo sin necesidad de volver a iniciar sesión.
+export function updateStoredName(name, lastname) {
+  if (name != null) localStorage.setItem('user_name', name);
+  if (lastname != null) localStorage.setItem('user_lastname', lastname || '');
+}
+
 // ── Redirección por rol ───────────────────────────────────
 
 export function getRoleRedirect(role) {

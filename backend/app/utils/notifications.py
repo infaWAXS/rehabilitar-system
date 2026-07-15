@@ -596,8 +596,8 @@ def notify_account_created_with_temp_password(user_id: int, temp_password: str, 
     )
 
 
-def notify_reintegration_rejected(cliente_id: int, db: Session) -> None:
-    """Notifica al cliente (email + in-app) que su solicitud de reintegro fue rechazada."""
+def notify_reintegration_rejected(cliente_id: int, motivo: str, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que su solicitud de reintegro fue rechazada y por qué."""
     cliente = db.query(User).filter(User.id == cliente_id).first()
     if not cliente:
         return
@@ -606,12 +606,18 @@ def notify_reintegration_rejected(cliente_id: int, db: Session) -> None:
         f"Hola {cliente.name} {cliente.lastname},\n\n"
         "Lamentamos informarte que tu solicitud de reintegro fue rechazada por la administración. "
         "Tu cuenta permanece suspendida.\n\n"
+        f"Motivo del rechazo: {motivo}\n\n"
         "Si tenés dudas, podés comunicarte con nosotros para obtener más información.\n\n"
         "Saludos cordiales."
     )
     if getattr(cliente, "email", None):
         _send_email(cliente.email, subject, body_email)
-    crear_notificacion(cliente_id, "Solicitud de reintegro rechazada", "Tu solicitud de reintegro fue rechazada. Tu cuenta permanece suspendida.", db)
+    crear_notificacion(
+        cliente_id,
+        "Solicitud de reintegro rechazada",
+        f"Tu solicitud de reintegro fue rechazada. Motivo: {motivo}. Tu cuenta permanece suspendida.",
+        db,
+    )
 
 
 def notify_reservation_created(user_id: int, activity_id: int, db: Session) -> None:
@@ -636,6 +642,41 @@ def notify_reservation_created(user_id: int, activity_id: int, db: Session) -> N
         f"Inscripción confirmada: {actividad.name or 'Actividad'}",
         f"Tu inscripción a '{actividad.name}' programada para {when} fue confirmada.",
         db,
+    )
+
+
+def notify_subscription_confirmed(user_id: int, plan_name: str, specialization: str,
+                                   end_date, price_paid: float, discount_percent: int,
+                                   db: Session, discount_reason: str = "por cancelación previa") -> None:
+    """Notifica al cliente (email + in-app) que su suscripción a un plan fue confirmada."""
+    usuario = db.query(User).filter(User.id == user_id).first()
+    if not usuario:
+        return
+
+    fin = end_date.strftime("%d/%m/%Y") if hasattr(end_date, "strftime") else str(end_date)
+    linea_descuento = (
+        f"Se aplicó un {discount_percent}% de descuento {discount_reason}.\n"
+        if discount_percent else ""
+    )
+    resumen_descuento = f" (con {discount_percent}% de descuento)" if discount_percent else ""
+
+    subject = f"Suscripción confirmada: {plan_name} en {specialization}"
+    body_email = (
+        f"Hola {usuario.name} {usuario.lastname},\n\n"
+        f"Tu suscripción al plan '{plan_name}' en {specialization} fue confirmada con éxito.\n"
+        f"Pagaste ${price_paid:.2f} y tu suscripción está activa hasta el {fin}.\n"
+        f"{linea_descuento}\n"
+        "Podés ver el detalle en la sección Suscripciones de la plataforma.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(usuario, "email", None):
+        _send_email(usuario.email, subject, body_email)
+    crear_notificacion(
+        user_id,
+        f"Suscripción confirmada: {plan_name}",
+        f"Tu suscripción al plan '{plan_name}' en {specialization} fue confirmada y está activa hasta el {fin}{resumen_descuento}.",
+        db,
+        link="/cliente/suscripciones",
     )
 
 

@@ -67,6 +67,26 @@ def obtener_condiciones_cliente(cliente_id: int, db: Session):
     }
 
 
+# HU Reintegrar cuenta - el admin necesita ver el motivo que escribió el cliente al solicitar
+def obtener_solicitud_reintegro(cliente_id: int, db: Session):
+    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    solicitud = db.query(ReintegrationRequest).filter(
+        ReintegrationRequest.user_id == cliente_id
+    ).order_by(ReintegrationRequest.created_at.desc()).first()
+
+    if not solicitud:
+        return None
+
+    return {
+        "id": solicitud.id,
+        "motivo": solicitud.motivo,
+        "created_at": solicitud.created_at,
+    }
+
+
 # HU Solicitar reintegro - flujo JWT: verifica estado y restricción de 24hs (Nahuel)
 def verificar_estado_y_tiempo_reintegro(cliente: User, db: Session):
     if cliente.role != "client":
@@ -178,26 +198,28 @@ def registrar_reintegro(cliente_id: int, motivo: str, db: Session):
     }
 
 
-def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: User):
-    """HU: Suspender cuenta. Motivo obligatorio."""
+def _ejecutar_suspension(cliente: User, motivo: str, db: Session, audit_user_id: int, audit_detail: str):
+    """Núcleo de la suspensión de cuenta, compartido por la suspensión manual (admin)
+    y la automática (sistema, por inasistencias).
+
+    Marca la cuenta como suspendida, libera al cliente de sus actividades (cancela
+    reservas activas y posiciones en lista de espera), registra la auditoría, promueve
+    la lista de espera de los cupos liberados y notifica al cliente el motivo.
+    El llamador ya validó que el cliente existe y que no estaba suspendido.
+    """
     from app.models.waitlist import Waitlist
     from app.services.servicio_lista_espera import promote_next_waitlist_entry
 
-    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
-    if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado")
-
-    if cliente.account_status == "suspended":
-        raise HTTPException(status_code=400, detail="El cliente ya esta suspendido")
-
     cliente.account_status = "suspended"
+    # Se guarda para poder mostrarle el motivo al cliente en pantalla, no solo en el mail
+    cliente.suspension_reason = motivo
 
     # Al suspender se libera al cliente de sus actividades: se cancelan sus reservas
     # activas y sus posiciones en lista de espera para no seguir ocupando cupos que no
     # puede usar mientras está suspendido. Los cupos liberados se ofrecen a la lista de
     # espera (misma lógica que la baja de cuenta en delete_user).
     reservas_activas = db.query(Reservation).filter(
-        Reservation.user_id == cliente_id,
+        Reservation.user_id == cliente.id,
         Reservation.status.in_(["pending", "confirmed"]),
     ).all()
     activity_ids_liberados = [r.activity_id for r in reservas_activas]
@@ -205,7 +227,7 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: U
         reserva.status = "cancelled"
 
     entradas_espera = db.query(Waitlist).filter(
-        Waitlist.user_id == cliente_id,
+        Waitlist.user_id == cliente.id,
         Waitlist.status == "waiting",
     ).all()
     for entrada in entradas_espera:
@@ -221,11 +243,11 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: U
 
     register_audit(
         db=db,
-        user_id=current_user.id,
+        user_id=audit_user_id,
         type=AuditType.ACCOUNT,
         action=AuditAction.SUSPEND_ACCOUNT,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} suspendió la cuenta del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). Motivo: {motivo}",
+        detail=audit_detail,
     )
     db.commit()
     db.refresh(cliente)
@@ -262,10 +284,52 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: U
 
     Thread(target=_notif_async, args=(cliente_id_copia, motivo), daemon=True).start()
 
+
+def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: User):
+    """HU: Suspender cuenta. Motivo obligatorio."""
+    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    if cliente.account_status == "suspended":
+        raise HTTPException(status_code=400, detail="El cliente ya esta suspendido")
+
+    # 🚨 ESTA LLAMADA YA HACE EL CAMBIO DE ESTADO Y REGISTRA LA SUSPENSIÓN
+    _ejecutar_suspension(
+        cliente,
+        motivo,
+        db,
+        audit_user_id=current_user.id,
+        audit_detail=f"Admin {current_user.name} {current_user.lastname} suspendió la cuenta del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). Motivo: {motivo}",
+    )
+
     return {
         "status": "success",
         "mensaje": f"Cliente {cliente.name} suspendido. Motivo: {motivo}",
     }
+
+
+def suspender_cliente_por_sistema(cliente: User, motivo: str, db: Session):
+    """Suspensión automática iniciada por el sistema (por inasistencias / baja asistencia).
+
+    A diferencia de la manual, no hay administrador que la ejecute: la auditoría se
+    registra a nombre del propio cliente afectado y el detalle aclara que fue el sistema.
+    Es idempotente: si el cliente ya está suspendido (o no es un cliente activo) no hace nada.
+    Devuelve True si efectivamente suspendió la cuenta.
+    """
+    if cliente is None or cliente.role != "client" or cliente.is_deleted:
+        return False
+    if cliente.account_status != "active":
+        return False
+
+    _ejecutar_suspension(
+        cliente,
+        motivo,
+        db,
+        audit_user_id=cliente.id,
+        audit_detail=f"El sistema suspendió automáticamente la cuenta del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). Motivo: {motivo}",
+    )
+    return True
 
 
 def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session, current_user: User):
@@ -278,6 +342,7 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session, cu
         raise HTTPException(status_code=400, detail="El cliente no esta suspendido")
 
     cliente.account_status = "active"
+    cliente.suspension_reason = None
     register_audit(
         db=db,
         user_id=current_user.id,
@@ -310,9 +375,9 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session, cu
     }
 
 
-def rechazar_reintegro(cliente_id: int, db: Session, current_user: User):
+def rechazar_reintegro(cliente_id: int, motivo: str, db: Session, current_user: User):
     """HU: Reintegrar cuenta - Escenario 3. El admin rechaza la solicitud de reintegro.
-    La cuenta vuelve a estado 'suspended' y se notifica al cliente.
+    La cuenta vuelve a estado 'suspended' y se notifica al cliente con el motivo del rechazo.
     """
     cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
     if not cliente:
@@ -332,24 +397,24 @@ def rechazar_reintegro(cliente_id: int, db: Session, current_user: User):
         type=AuditType.ACCOUNT,
         action=AuditAction.DENY_REINTEGRATION,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} rechazó la solicitud de reintegro del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). La cuenta permanece suspendida.",
+        detail=f"Admin {current_user.name} {current_user.lastname} rechazó la solicitud de reintegro del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). Motivo: {motivo}. La cuenta permanece suspendida.",
     )
     db.commit()
     db.refresh(cliente)
 
     cliente_id_copia = cliente.id
 
-    def _notif_async(cid: int) -> None:
+    def _notif_async(cid: int, mot: str) -> None:
         from app.utils.notifications import notify_reintegration_rejected
         db_n = SessionLocal()
         try:
-            notify_reintegration_rejected(cid, db_n)
+            notify_reintegration_rejected(cid, mot, db_n)
         except Exception:
             pass
         finally:
             db_n.close()
 
-    Thread(target=_notif_async, args=(cliente_id_copia,), daemon=True).start()
+    Thread(target=_notif_async, args=(cliente_id_copia, motivo), daemon=True).start()
 
     return {
         "status": "success",

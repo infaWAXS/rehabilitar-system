@@ -17,6 +17,18 @@ const ROLES_LABEL = {
   professor: 'Profesor',
 };
 
+// Calcula la edad en años a partir de la fecha de nacimiento (ISO o Date).
+function calcularEdad(birthDate) {
+  if (!birthDate) return null;
+  const nacimiento = new Date(birthDate);
+  if (Number.isNaN(nacimiento.getTime())) return null;
+  const hoy = new Date();
+  let edad = hoy.getFullYear() - nacimiento.getFullYear();
+  const m = hoy.getMonth() - nacimiento.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) edad--;
+  return edad;
+}
+
 const s = {
   cabecera: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' },
   titulo: { fontSize: '22px', fontWeight: '700', color: 'var(--color-texto)', margin: 0 },
@@ -78,6 +90,10 @@ const s = {
   modalBotones: { display: 'flex', gap: '10px', justifyContent: 'flex-end' },
   modalCancelar: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)' },
   modalConfirmar: { padding: '9px 18px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '700' },
+  detalleFila: { display: 'flex', gap: '12px', padding: '8px 0', borderBottom: '1px solid var(--color-borde)' },
+  detalleLabel: { fontSize: '13px', fontWeight: '600', color: 'var(--color-texto-suave)', minWidth: '150px' },
+  detalleValor: { fontSize: '14px', color: 'var(--color-texto)' },
+  modalCerrar: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)' },
 };
 
 function ListaUsuarios() {
@@ -89,6 +105,7 @@ function ListaUsuarios() {
   const [modalVisible, setModalVisible] = useState(false);
   const [usuarioAEliminar, setUsuarioAEliminar] = useState(null);
   const [eliminando, setEliminando] = useState(false);
+  const [usuarioDetalle, setUsuarioDetalle] = useState(null);
 
   const cargarUsuarios = useCallback(async (busq, rolFiltro) => {
     setCargando(true);
@@ -188,6 +205,7 @@ function ListaUsuarios() {
                     <div style={s.acciones}>
                       <Link to={`/admin/usuarios/${u.id}`} style={s.botonVer}>Editar</Link>
                       <button style={s.botonEliminar} onClick={() => abrirModal(u)}>Eliminar</button>
+                      <button style={s.botonVer} onClick={() => setUsuarioDetalle(u)}>Ver detalle</button>
                     </div>
                   </td>
                 </tr>
@@ -195,6 +213,45 @@ function ListaUsuarios() {
             )}
           </tbody>
         </table>
+      )}
+
+      {usuarioDetalle && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <p style={s.modalTitulo}>Detalle del usuario</p>
+            <div style={s.detalleFila}>
+              <span style={s.detalleLabel}>Nombre</span>
+              <span style={s.detalleValor}>{usuarioDetalle.name} {usuarioDetalle.lastname}</span>
+            </div>
+            <div style={s.detalleFila}>
+              <span style={s.detalleLabel}>Email</span>
+              <span style={s.detalleValor}>{usuarioDetalle.email}</span>
+            </div>
+            <div style={s.detalleFila}>
+              <span style={s.detalleLabel}>DNI</span>
+              <span style={s.detalleValor}>{usuarioDetalle.dni || '—'}</span>
+            </div>
+            <div style={s.detalleFila}>
+              <span style={s.detalleLabel}>Rol</span>
+              <span style={s.detalleValor}>{ROLES_LABEL[usuarioDetalle.role] || usuarioDetalle.role}</span>
+            </div>
+            <div style={s.detalleFila}>
+              <span style={s.detalleLabel}>Estado</span>
+              <span style={s.detalleValor}>{usuarioDetalle.account_status === 'active' ? 'Activo' : 'Deshabilitado'}</span>
+            </div>
+            <div style={s.detalleFila}>
+              <span style={s.detalleLabel}>Edad</span>
+              <span style={s.detalleValor}>
+                {calcularEdad(usuarioDetalle.birth_date) != null
+                  ? `${calcularEdad(usuarioDetalle.birth_date)} años`
+                  : '—'}
+              </span>
+            </div>
+            <div style={{ ...s.modalBotones, marginTop: '20px' }}>
+              <button style={s.modalCerrar} onClick={() => setUsuarioDetalle(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {modalVisible && usuarioAEliminar && (

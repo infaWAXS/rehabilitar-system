@@ -125,7 +125,7 @@ function Registro() {
       if (msg.toLowerCase().includes('dni')) {
         setError('Ya existe una cuenta con ese DNI.');
       } else if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('correo') || msg.toLowerCase().includes('ya existe') || msg.toLowerCase().includes('already') || msg.toLowerCase().includes('conflict')) {
-        setError('El correo ya se encuentra registrado en el sistema.');
+        setError('El email ya está registrado');
       } else {
         setError(msg || 'No se pudo crear la cuenta. Intentá de nuevo.');
       }

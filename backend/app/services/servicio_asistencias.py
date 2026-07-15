@@ -149,6 +149,29 @@ def pregenerar_ausentes(activity_id: int, db: Session):
     return {"creados": creados, "actividad_id": activity_id}
 
 
+def finalizar_asistencias(activity_id: int, db: Session):
+    """Finaliza la toma de asistencia de una actividad:
+      1. Marca como 'absent' a todos los inscriptos que no registraron asistencia
+         (sus inasistencias quedan definitivas).
+      2. Evalúa las reglas de suspensión por asistencia para cada cliente involucrado
+         (más de 3 inasistencias o menos del 50% de asistencia mensual) y suspende
+         las cuentas que correspondan, informando el motivo al cliente.
+
+    Debe llamarse cuando la clase terminó. Es idempotente respecto de las ausencias.
+    """
+    from app.services.servicio_suspension import evaluar_suspension_actividad
+
+    resultado_ausentes = pregenerar_ausentes(activity_id, db)
+    suspensiones = evaluar_suspension_actividad(activity_id, db)
+
+    return {
+        "actividad_id": activity_id,
+        "ausentes_registrados": resultado_ausentes.get("creados", 0),
+        "clientes_suspendidos": len(suspensiones),
+        "suspensiones": suspensiones,
+    }
+
+
 def _registrar_presente(user_id: int, activity_id: int, db: Session, comment: str | None = None):
     activity = db.query(Activity).filter(Activity.id == activity_id).first()
     if not activity:

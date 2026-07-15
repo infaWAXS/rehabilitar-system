@@ -75,7 +75,7 @@ function ListaEspera() {
       await removeWaitlistItem(id);
       setListaEspera(prev => prev.filter(item => item.id !== id));
       setConfirmandoId(null);
-      setMensajeExito(`Baja registrada con éxito de "${nombreActividad}". Se envió un correo de confirmación a tu casilla. (simulado — Sprint 2)`);
+      setMensajeExito(`Te diste de baja de la lista de espera de "${nombreActividad}". Te enviamos un correo de confirmación.`);
       setTimeout(() => setMensajeExito(''), 8000);
     } catch (err) {
       setError(err.message || 'No se pudo procesar la baja. Intentá de nuevo.');

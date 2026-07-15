@@ -5,7 +5,6 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getCurrentUser, uploadMedicalCertificate } from '../../../services/usersService';
-import { getMyPlan } from '../../../services/paymentsService';
 
 const s = {
   seccion: {
@@ -38,18 +37,11 @@ const s = {
     marginTop: '10px', padding: '8px 18px', borderRadius: '8px', border: 'none',
     background: 'var(--color-primario)', color: '#fff', fontWeight: '600', fontSize: '13px', cursor: 'pointer',
   },
-  planCTA: {
-    display: 'inline-block', padding: '9px 20px', borderRadius: '8px',
-    background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))',
-    color: '#fff', fontWeight: '700', fontSize: '14px', textDecoration: 'none',
-  },
 };
 
 export default function VerPerfil() {
   const [usuario, setUsuario] = useState(null);
-  const [planInfo, setPlanInfo] = useState(null);
   const [cargando, setCargando] = useState(true);
-  const [planCargando, setPlanCargando] = useState(true);
   const [error, setError] = useState('');
   const [aptoFile, setAptoFile] = useState(null);
   const [aptoSubiendo, setAptoSubiendo] = useState(false);
@@ -61,13 +53,6 @@ export default function VerPerfil() {
       .then((datos) => { setUsuario(datos); setError(''); })
       .catch(() => setError('No se pudo cargar los datos del perfil.'))
       .finally(() => setCargando(false));
-  }, []);
-
-  useEffect(() => {
-    getMyPlan()
-      .then((data) => setPlanInfo(data))
-      .catch(() => setPlanInfo({ es_abonado: false, plan: null, credits: 0 }))
-      .finally(() => setPlanCargando(false));
   }, []);
 
   const subirApto = async (e) => {
@@ -174,66 +159,6 @@ export default function VerPerfil() {
             </div>
           )}
 
-          {/* ── Mi Suscripción ───────────────────────────── */}
-          {usuario.role === 'client' && (
-            <div style={s.seccion}>
-              <p style={s.titulo}>Mi Suscripción</p>
-              {planCargando ? (
-                <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)' }}>Cargando suscripción...</p>
-              ) : planInfo?.es_abonado ? (
-                <>
-                  <div style={{ marginBottom: '12px' }}>
-                    <span style={{ ...s.badge, ...s.badgeActivo }}>Abonado activo</span>
-                  </div>
-                  <div style={s.fila}>
-                    <div style={s.campo}>
-                      <label style={s.label}>Plan</label>
-                      <p style={s.valor}>{planInfo.plan.name}</p>
-                    </div>
-                    <div style={s.campo}>
-                      <label style={s.label}>Especialidad</label>
-                      <p style={s.valor}>{planInfo.plan.specialization || '—'}</p>
-                    </div>
-                  </div>
-                  <div style={s.fila}>
-                    <div style={s.campo}>
-                      <label style={s.label}>Cobertura</label>
-                      <p style={s.valor}>{planInfo.plan.coverage_type}</p>
-                    </div>
-                    <div style={s.campo}>
-                      <label style={s.label}>Vencimiento</label>
-                      <p style={s.valor}>{formatearFecha(planInfo.plan.end_date)}</p>
-                    </div>
-                  </div>
-                  {(planInfo.pending_discount_percent ?? 0) > 0 && (
-                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#15803d', marginTop: '4px' }}>
-                      Tenés un <strong>{planInfo.pending_discount_percent}% de descuento</strong> pendiente por cancelación. Se aplicará automáticamente en el pago de tu próxima renovación de suscripción.
-                    </div>
-                  )}
-                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', color: '#1d4ed8', marginTop: '8px' }}>
-                    🎫 Créditos disponibles este mes: <strong>{planInfo.credits ?? 0} / {planInfo.credits_cap ?? 3}</strong>
-                    <div style={{ fontSize: '12px', color: '#1d4ed8', opacity: 0.85, marginTop: '4px' }}>
-                      Se ganan cancelando una clase con más de 48 hs de anticipación. El límite se renueva el día 1 de cada mes.
-                    </div>
-                    {planInfo.credits_by_type && Object.keys(planInfo.credits_by_type).length > 0 && (
-                      <div style={{ fontSize: '12px', color: '#1d4ed8', marginTop: '6px' }}>
-                        {Object.entries(planInfo.credits_by_type).map(([tipo, cantidad]) => (
-                          <span key={tipo} style={{ marginRight: '10px' }}>{tipo}: {cantidad}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)', margin: 0 }}>
-                    No tenés un plan activo. Adquirí uno para acceder a beneficios de abonado, descuentos y reservas prioritarias.
-                  </p>
-                  <Link to="/cliente/suscripciones" style={s.planCTA}>Ver planes disponibles</Link>
-                </div>
-              )}
-            </div>
-          )}
           {/* ── Apto físico ──────────────────────────────── */}
           <div style={s.seccion}>
             <p style={s.titulo}>Apto Físico</p>
