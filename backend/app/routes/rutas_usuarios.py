@@ -16,6 +16,11 @@ from app.services.servicio_usuarios import change_medical_clearance_status, chan
 from app.models.audit_log import AuditAction, AuditResult, AuditType
 from app.services.servicio_auditoria import register_audit
 
+from datetime import datetime
+from app.models.user_suspension import UserSuspension
+
+
+
 
 
 oauth2_scheme = OAuth2PasswordBearer(
