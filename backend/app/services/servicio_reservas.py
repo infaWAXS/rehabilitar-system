@@ -8,7 +8,7 @@ from datetime import datetime
 from app.models.reservation import Reservation
 from app.models.user import User
 from app.models.activity import Activity
-from app.exceptions.http_exceptions import user_not_found_exception
+from app.exceptions.http_exceptions import user_not_found_exception, medical_certificate_not_approved_exception
 from app.utils.credits import get_monthly_balance, spend_credit, grant_credit, was_paid_with_credit
 from database.connection import SessionLocal
 
@@ -33,6 +33,11 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
 
     if not activity:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    # Regla de negocio: sin apto físico aprobado el cliente no puede inscribirse a
+    # ninguna actividad.
+    if user.medical_certificate_status != "approved":
+        raise medical_certificate_not_approved_exception()
 
     if reservation_type not in ("fixed", "individual"):
         raise HTTPException(status_code=400,

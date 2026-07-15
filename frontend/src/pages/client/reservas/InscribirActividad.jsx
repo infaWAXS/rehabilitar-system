@@ -6,6 +6,7 @@ import { reserveFixed, reserveIndividual, getMyReservations, getInscriptionOptio
 import { addToWaitlist, getMyWaitlist } from '../../../services/waitlistService';
 import { getActivities, getActivityAvailability } from '../../../services/activitiesService';
 import { getMyPlan } from '../../../services/paymentsService';
+import { getCurrentUser } from '../../../services/usersService';
 import { abrirVentanaPago } from '../../../services/mercadoPagoPopup';
 import OverlayEsperandoPago from '../../../components/OverlayEsperandoPago';
 
@@ -236,7 +237,16 @@ function InscribirActividad() {
   const [filtro, setFiltro] = useState('');
   const [inscriptionOptions, setInscriptionOptions] = useState(null);
   const [esperandoPago, setEsperandoPago] = useState(false);
+  const [aptoAprobado, setAptoAprobado] = useState(null); // null = cargando, true/false = resuelto
   const pagoHandleRef = useRef(null);
+
+  // Verificar el estado del apto físico: sin apto aprobado el cliente no puede
+  // inscribirse a ninguna actividad (regla validada también en el backend).
+  useEffect(() => {
+    getCurrentUser()
+      .then((data) => setAptoAprobado(data?.medical_certificate_status === 'approved'))
+      .catch(() => setAptoAprobado(false));
+  }, []);
 
   // Detectar si el cliente es abonado desde el backend
   useEffect(() => {
@@ -465,7 +475,21 @@ function InscribirActividad() {
         <div style={s.card}>
           {error && <div style={s.error}>{error}</div>}
 
-          {paso === 0 && (
+          {paso === 0 && aptoAprobado === false && (
+            <>
+              <p style={s.titulo}>Apto físico requerido</p>
+              <div style={s.infoBox('yellow')}>
+                No podés inscribirte a ninguna actividad hasta que tu apto físico esté aprobado.
+                Subilo desde tu perfil y esperá la aprobación del administrador.
+              </div>
+              <div style={s.botones}>
+                <button style={s.btnPrimario} onClick={() => navigate('/perfil')}>Ir a mi perfil</button>
+                <button style={s.btnSecundario} onClick={handleCancelar}>Volver al inicio</button>
+              </div>
+            </>
+          )}
+
+          {paso === 0 && aptoAprobado !== false && (
             <>
               <p style={s.titulo}>Selecciona una actividad</p>
 

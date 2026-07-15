@@ -69,12 +69,18 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
       - "insufficient_funds" → E2: conexión OK, saldo insuficiente → pago rechazado
       - "connection_error"   → E3: falla de conexión con el banco → error de conexión
     """
-    from app.utils.subscriptions import find_active_plan_for_specialization
+    from app.utils.subscriptions import find_active_plan_for_specialization, get_age_discount_percent
+    from app.exceptions.http_exceptions import medical_certificate_not_approved_exception
 
     plan = db.query(Plan).filter(Plan.id == plan_id, Plan.status == "active").first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado o inactivo.")
     user = db.query(User).filter(User.id == user_id).first()
+
+    # Regla de negocio: sin apto físico aprobado el cliente no puede suscribirse a
+    # ningún plan (misma restricción que para inscribirse a actividades).
+    if not user or user.medical_certificate_status != "approved":
+        raise medical_certificate_not_approved_exception()
 
     # No permitir adquirir un plan en una especialidad en la que ya se tiene una suscripción activa.
     if find_active_plan_for_specialization(user_id, specialization, db):
@@ -84,13 +90,20 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
         )
 
     if test_scenario == "success":
-        # Consumir el descuento acumulado por cancelación (beneficio del abonado para
-        # su próximo pago de suscripción)
-        descuento = (user.pending_discount_percent or 0) if user else 0
+        hoy = date.today()
+
+        # Descuentos disponibles (no acumulativos: se aplica el mayor):
+        #  - por cancelación previa: beneficio pendiente del abonado (pending_discount_percent)
+        #  - por edad: 20% para clientes de 65 años o más
+        descuento_cancelacion = (user.pending_discount_percent or 0) if user else 0
+        descuento_edad = get_age_discount_percent(user, hoy)
+        descuento = max(descuento_cancelacion, descuento_edad)
+        # El descuento por edad es la razón aplicada solo si es estrictamente el mayor;
+        # si el de cancelación empata o supera, ese es el que se consume.
+        descuento_por_edad_aplicado = descuento_edad > descuento_cancelacion
         precio_final = float(plan.price) * (1 - descuento / 100) if descuento else float(plan.price)
 
         # Crear (o renovar) el UserPlan del usuario
-        hoy = date.today()
         user_plan = UserPlan(
             user_id=user_id,
             plan_id=plan.id,
@@ -100,7 +113,9 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
             status="active",
         )
         db.add(user_plan)
-        if descuento and user:
+        # El beneficio pendiente por cancelación se consume solo si fue el descuento
+        # aplicado; si se aplicó el de edad (mayor), el cliente lo conserva.
+        if descuento and user and not descuento_por_edad_aplicado:
             user.pending_discount_percent = 0
         register_audit(
             db=db,
@@ -112,6 +127,8 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
         )
         db.commit()
 
+        motivo_descuento = "por ser adulto mayor (65 años o más)" if descuento_por_edad_aplicado else "por cancelación previa"
+
         # Notificar al cliente (sistema + mail) que su suscripción quedó confirmada
         try:
             from app.utils.notifications import notify_subscription_confirmed
@@ -122,6 +139,7 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
                 end_date=user_plan.end_date,
                 price_paid=precio_final,
                 discount_percent=descuento,
+                discount_reason=motivo_descuento,
                 db=db,
             )
         except Exception:
@@ -130,7 +148,7 @@ def simulate_mercadopago_payment(plan_id: int, specialization: str, test_scenari
 
         mensaje = f"Pago aprobado. Te suscribiste al plan '{plan.name}' en {specialization}."
         if descuento:
-            mensaje += f" Se aplicó un {descuento}% de descuento por cancelación previa (pagaste ${precio_final:.2f} en lugar de ${float(plan.price):.2f})."
+            mensaje += f" Se aplicó un {descuento}% de descuento {motivo_descuento} (pagaste ${precio_final:.2f} en lugar de ${float(plan.price):.2f})."
 
         return {
             "success": True,

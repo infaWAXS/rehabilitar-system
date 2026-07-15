@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getPlans, getMyPlan, getMyPlans, mercadoPagoCheckout } from '../../../services/paymentsService';
+import { getCurrentUser } from '../../../services/usersService';
 import { abrirVentanaPago } from '../../../services/mercadoPagoPopup';
 import OverlayEsperandoPago from '../../../components/OverlayEsperandoPago';
 
@@ -132,7 +133,9 @@ export default function MisSuscripciones() {
   const [errorCarga, setErrorCarga] = useState('');
   const [misPlanes, setMisPlanes]   = useState([]);
   const [pendingDiscount, setPendingDiscount] = useState(0);
+  const [ageDiscount, setAgeDiscount] = useState(0);
   const [planInfo, setPlanInfo]     = useState(null);
+  const [aptoAprobado, setAptoAprobado] = useState(null); // null = cargando, true/false = resuelto
 
   // Especialidades
   const [especialidadSeleccionada, setEspecialidadSeleccionada] = useState(ESPECIALIZACIONES[0]);
@@ -149,7 +152,11 @@ export default function MisSuscripciones() {
       .then((data) => setMisPlanes(Array.isArray(data) ? data : []))
       .catch(() => setMisPlanes([]));
     getMyPlan()
-      .then((data) => { setPendingDiscount(data.pending_discount_percent ?? 0); setPlanInfo(data); })
+      .then((data) => {
+        setPendingDiscount(data.pending_discount_percent ?? 0);
+        setAgeDiscount(data.age_discount_percent ?? 0);
+        setPlanInfo(data);
+      })
       .catch(() => {});
   }, []);
 
@@ -158,11 +165,20 @@ export default function MisSuscripciones() {
       .then(([planesData, miPlanData, misPlanesData]) => {
         setPlanes(planesData);
         setPendingDiscount(miPlanData.pending_discount_percent ?? 0);
+        setAgeDiscount(miPlanData.age_discount_percent ?? 0);
         setPlanInfo(miPlanData);
         setMisPlanes(Array.isArray(misPlanesData) ? misPlanesData : []);
       })
       .catch(() => setErrorCarga('No se pudieron cargar los planes.'))
       .finally(() => setCargando(false));
+  }, []);
+
+  // Sin apto físico aprobado el cliente no puede suscribirse a ningún plan
+  // (regla validada también en el backend).
+  useEffect(() => {
+    getCurrentUser()
+      .then((data) => setAptoAprobado(data?.medical_certificate_status === 'approved'))
+      .catch(() => setAptoAprobado(false));
   }, []);
 
   // Especialidades en las que el cliente ya tiene una suscripción activa: no se ofrecen de nuevo.
@@ -172,6 +188,11 @@ export default function MisSuscripciones() {
   const especialidadesDisponibles = ESPECIALIZACIONES.filter(
     (esp) => !especialidadesConSuscripcionActiva.has(esp)
   );
+
+  // Descuentos no acumulativos: se aplica el mayor entre el de cancelación previa
+  // y el de edad (20% para clientes de 65 años o más).
+  const descuentoEfectivo = Math.max(pendingDiscount, ageDiscount);
+  const descuentoEsPorEdad = ageDiscount > 0 && ageDiscount >= pendingDiscount;
 
   function abrirModal(plan) {
     setResultado(null);
@@ -212,8 +233,8 @@ export default function MisSuscripciones() {
 
   function handleAbrirPago() {
     if (!planSeleccionado || !especialidadSeleccionada) return;
-    const precioFinal = pendingDiscount > 0
-      ? Math.round(Number(planSeleccionado.price) * (1 - pendingDiscount / 100))
+    const precioFinal = descuentoEfectivo > 0
+      ? Math.round(Number(planSeleccionado.price) * (1 - descuentoEfectivo / 100))
       : Number(planSeleccionado.price);
 
     setEsperandoPago(true);
@@ -249,6 +270,23 @@ export default function MisSuscripciones() {
 
       {/* ── Planes disponibles (adquirir) ────────────────── */}
       <p style={s.seccionTitulo}>Adquirir un plan</p>
+      {aptoAprobado === false && (
+        <div style={s.alerta('warn')}>
+          No podés suscribirte a ningún plan hasta que tu apto físico esté aprobado.{' '}
+          <button
+            style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer' }}
+            onClick={() => navigate('/perfil')}
+          >
+            Subilo desde tu perfil
+          </button>{' '}
+          y esperá la aprobación del administrador.
+        </div>
+      )}
+      {ageDiscount > 0 && (
+        <div style={{ ...s.alerta('success'), marginTop: 0 }}>
+          🎉 Por tener 65 años o más, tenés un <strong>{ageDiscount}% de descuento</strong> en la adquisición de cualquier plan. Se aplica automáticamente al pagar.
+        </div>
+      )}
       {cargando ? (
         <div style={s.vacio}>Cargando planes...</div>
       ) : planes.length === 0 ? (
@@ -268,7 +306,12 @@ export default function MisSuscripciones() {
               <div style={s.cardPrecio}>${Number(plan.price).toLocaleString('es-AR')}</div>
               <div style={s.cardDetalle}>Duración: {DURACION(plan.duration_days)}</div>
               <div style={s.cardDetalle}>Cobertura: {plan.coverage_type}</div>
-              <button style={s.botonPagar} onClick={() => abrirModal(plan)}>
+              <button
+                style={{ ...s.botonPagar, ...(aptoAprobado === false ? { opacity: 0.5, cursor: 'not-allowed' } : {}) }}
+                onClick={() => abrirModal(plan)}
+                disabled={aptoAprobado === false}
+                title={aptoAprobado === false ? 'Necesitás tu apto físico aprobado para suscribirte' : undefined}
+              >
                 Suscribirse
               </button>
             </div>
@@ -337,19 +380,20 @@ export default function MisSuscripciones() {
             <div style={s.mpLogo}>💳</div>
             <div style={s.modalTitulo}>Pagar con Mercado Pago</div>
             <div style={s.modalSubtitulo}>
-              {planSeleccionado.name} · {pendingDiscount > 0 ? (
+              {planSeleccionado.name} · {descuentoEfectivo > 0 ? (
                 <>
                   <span style={{ textDecoration: 'line-through' }}>${Number(planSeleccionado.price).toLocaleString('es-AR')}</span>{' '}
-                  ${Math.round(Number(planSeleccionado.price) * (1 - pendingDiscount / 100)).toLocaleString('es-AR')}
+                  ${Math.round(Number(planSeleccionado.price) * (1 - descuentoEfectivo / 100)).toLocaleString('es-AR')}
                 </>
               ) : (
                 <>${Number(planSeleccionado.price).toLocaleString('es-AR')}</>
               )}
             </div>
 
-            {pendingDiscount > 0 && !resultado && (
+            {descuentoEfectivo > 0 && !resultado && (
               <div style={s.alerta('success')}>
-                Tenés un <strong>{pendingDiscount}% de descuento</strong> acumulado por cancelación. Se aplicará automáticamente a este pago.
+                Tenés un <strong>{descuentoEfectivo}% de descuento</strong>{' '}
+                {descuentoEsPorEdad ? 'por ser adulto mayor (65 años o más)' : 'acumulado por cancelación'}. Se aplicará automáticamente a este pago.
               </div>
             )}
 

@@ -16,6 +16,12 @@ export function initializeAttendances(activityId) {
   return apiRequest(`/attendances/initialize/${activityId}`, { method: 'POST' });
 }
 
+// Finaliza la clase: registra inasistencias definitivas y evalúa la suspensión
+// automática por asistencia (más de 3 faltas o menos del 50% mensual).
+export function finalizeAttendances(activityId) {
+  return apiRequest(`/attendances/finalize/${activityId}`, { method: 'POST' });
+}
+
 export function updateAttendanceComment(attendanceId, comment) {
   return apiRequest(`/attendances/${attendanceId}/comment`, {
     method: 'PATCH',

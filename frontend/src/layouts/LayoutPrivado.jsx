@@ -309,6 +309,12 @@ function LayoutPrivado({ children, titulo = '' }) {
     }
   }, []);
 
+  // Re-leer el nombre en cada navegación para reflejar ediciones del perfil
+  // (ej. tras "Editar perfil" → volver a /perfil) sin tener que recargar la página.
+  useEffect(() => {
+    setNombreUsuario(getUserName());
+  }, [ubicacion.pathname]);
+
   useEffect(() => {
     let mounted = true;
     (async () => {

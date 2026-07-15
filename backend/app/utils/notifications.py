@@ -641,7 +641,7 @@ def notify_reservation_created(user_id: int, activity_id: int, db: Session) -> N
 
 def notify_subscription_confirmed(user_id: int, plan_name: str, specialization: str,
                                    end_date, price_paid: float, discount_percent: int,
-                                   db: Session) -> None:
+                                   db: Session, discount_reason: str = "por cancelación previa") -> None:
     """Notifica al cliente (email + in-app) que su suscripción a un plan fue confirmada."""
     usuario = db.query(User).filter(User.id == user_id).first()
     if not usuario:
@@ -649,7 +649,7 @@ def notify_subscription_confirmed(user_id: int, plan_name: str, specialization: 
 
     fin = end_date.strftime("%d/%m/%Y") if hasattr(end_date, "strftime") else str(end_date)
     linea_descuento = (
-        f"Se aplicó un {discount_percent}% de descuento por cancelación previa.\n"
+        f"Se aplicó un {discount_percent}% de descuento {discount_reason}.\n"
         if discount_percent else ""
     )
     resumen_descuento = f" (con {discount_percent}% de descuento)" if discount_percent else ""

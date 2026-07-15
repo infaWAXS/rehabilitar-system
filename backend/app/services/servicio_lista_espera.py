@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from app.models.waitlist import Waitlist
 from app.models.user import User
-from app.exceptions.http_exceptions import user_not_found_exception
+from app.exceptions.http_exceptions import user_not_found_exception, medical_certificate_not_approved_exception
 from app.utils.subscriptions import is_abonado
 from database.connection import SessionLocal
 
@@ -28,6 +28,11 @@ def add_to_waitlist(user_id: int, activity_id: int, db: Session):
 
     if not user:
         raise user_not_found_exception()
+
+    # Regla de negocio: sin apto físico aprobado el cliente no puede anotarse a
+    # ninguna actividad (tampoco a la lista de espera).
+    if user.medical_certificate_status != "approved":
+        raise medical_certificate_not_approved_exception()
 
     # Obtener la actividad para verificar su tipo
     activity = db.query(Activity).filter(Activity.id == activity_id).first()

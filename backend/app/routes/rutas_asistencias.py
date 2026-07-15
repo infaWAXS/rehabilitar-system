@@ -19,6 +19,7 @@ from app.services.servicio_asistencias import (
     eliminar_comentario,
     listar_asistencias_por_actividad,
     pregenerar_ausentes,
+    finalizar_asistencias,
     generar_qr_asistencia,
     registrar_asistencia_por_qr,
     obtener_estado_sesion_asistencia,
@@ -36,6 +37,16 @@ def inicializar_asistencias(activity_id: int, token: str, db: Session = Depends(
     if current_user.role != "professor":
         raise forbidden_exception()
     return pregenerar_ausentes(activity_id, db)
+
+
+# Finaliza la clase: registra las inasistencias definitivas y evalúa la suspensión
+# automática por asistencia (más de 3 faltas o menos del 50% mensual).
+@router.post("/finalize/{activity_id}")
+def finalizar_clase_asistencias(activity_id: int, token: str, db: Session = Depends(get_db)):
+    current_user = get_current_user(token, db)
+    if current_user.role != "professor":
+        raise forbidden_exception()
+    return finalizar_asistencias(activity_id, db)
 
 
 @router.post("/by-dni", response_model=AsistenciaRespuesta, status_code=201)
