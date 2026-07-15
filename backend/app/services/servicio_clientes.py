@@ -272,6 +272,7 @@ def suspender_cliente(cliente_id: int, motivo: str, db: Session, current_user: U
     if cliente.account_status == "suspended":
         raise HTTPException(status_code=400, detail="El cliente ya esta suspendido")
 
+    # 🚨 ESTA LLAMADA YA HACE EL CAMBIO DE ESTADO Y REGISTRA LA SUSPENSIÓN
     _ejecutar_suspension(
         cliente,
         motivo,

@@ -280,8 +280,6 @@ def login_user(request: UserLogin, db: Session):
     }
     
 
-
-
 # HU Cambiar contraseña (Agustin)
 # E1: nueva contraseña válida + coinciden → hashea y guarda, responde 200
 # E2: < 6 chars → validado por ChangePasswordRequest schema (field_validator)
@@ -312,9 +310,6 @@ def change_password(current_user: User, new_password: str, confirm_password: str
     return {
         "message": "Contraseña cambiada correctamente"
     }
-    
-    
-    
     
     
 # Actualiza datos personales del usuario actual - Agustin
@@ -390,6 +385,22 @@ def change_user_status(user_id: int, status: str, db: Session, current_user: Use
     if not user:
         raise user_not_found_exception()
     user.account_status = status
+
+    # Lógica Automática de Historial
+    if status == "disabled":
+        nueva_suspension = UserSuspension(
+            user_id=user.id,
+            suspension_date=datetime.now(),
+            suspension_reason="Suspensión Manual por Administrador",
+            is_active=True
+        )
+        db.add(nueva_suspension)
+        
+    elif status == "active":
+        db.query(UserSuspension).filter(
+            UserSuspension.user_id == user.id,
+            UserSuspension.is_active == True
+        ).update({"is_active": False}, synchronize_session=False)
 
     register_audit(
         db=db,
