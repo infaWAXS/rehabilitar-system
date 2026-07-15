@@ -15,3 +15,8 @@ class ReinstateRequest(BaseModel):
 class ReintegrationRequest(BaseModel):
     # Escenario 2 HU Solicitar reintegro: motivo vacio -> error de validacion automatico
     motivo: str = Field(min_length=1, description="Motivo de la solicitud de reintegro. Obligatorio.")
+
+
+class RejectReintegrationRequest(BaseModel):
+    # El admin debe justificar el rechazo: motivo vacio -> error de validacion automatico
+    motivo: str = Field(min_length=1, description="Motivo del rechazo de la solicitud. Obligatorio.")

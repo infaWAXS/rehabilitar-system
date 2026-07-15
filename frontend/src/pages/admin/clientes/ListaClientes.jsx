@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getClients } from '../../../services/usersService';
-import { suspendClient, reinstateClient, getReintegrationRequest } from '../../../services/clientsService';
+import { suspendClient, reinstateClient, getReintegrationRequest, rejectReintegration } from '../../../services/clientsService';
 import { getRole } from '../../../services/authService';
 
 const STATUS_LABEL = { active: 'Activo', disabled: 'Deshabilitado', suspended: 'Suspendido', pending_reintegration: 'Reintegro pend.' };
@@ -60,6 +60,10 @@ const s = {
     display: 'inline-block', padding: '6px 14px', borderRadius: '6px', border: '1px solid #15803d',
     background: 'transparent', color: '#15803d', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
   },
+  botonRechazar: {
+    display: 'inline-block', padding: '6px 14px', borderRadius: '6px', border: '1px solid #dc2626',
+    background: 'transparent', color: '#dc2626', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginLeft: '8px',
+  },
   botonVerMotivo: {
     display: 'inline-block', padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--color-borde)',
     background: 'transparent', color: 'var(--color-texto)', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginLeft: '8px',
@@ -100,9 +104,42 @@ function ListaClientes() {
 
   // Modal de habilitación (reintegro) directa desde la lista
   const [clienteAHabilitar, setClienteAHabilitar] = useState(null);
-  const [motivoHabilitar, setMotivoHabilitar] = useState('');
   const [errHabilitar, setErrHabilitar] = useState('');
   const [habilitando, setHabilitando] = useState(false);
+
+  // Modal para rechazar la solicitud de reintegro → la cuenta sigue suspendida
+  const [clienteARechazar, setClienteARechazar] = useState(null);
+  const [motivoRechazo, setMotivoRechazo] = useState('');
+  const [errRechazar, setErrRechazar] = useState('');
+  const [rechazando, setRechazando] = useState(false);
+
+  const abrirModalRechazar = (cliente) => {
+    setClienteARechazar(cliente);
+    setMotivoRechazo('');
+    setErrRechazar('');
+    setExito('');
+  };
+  const cerrarModalRechazar = () => {
+    setClienteARechazar(null);
+    setMotivoRechazo('');
+    setErrRechazar('');
+  };
+
+  const confirmarRechazar = async () => {
+    if (!motivoRechazo.trim()) { setErrRechazar('El motivo del rechazo es obligatorio.'); return; }
+    setRechazando(true);
+    try {
+      const updated = await rejectReintegration(clienteARechazar.id, motivoRechazo.trim());
+      const nuevoEstado = updated?.account_status || 'suspended';
+      setClientes((prev) => prev.map((c) => (c.id === clienteARechazar.id ? { ...c, account_status: nuevoEstado } : c)));
+      setExito(`La solicitud de reintegro de ${clienteARechazar.name} ${clienteARechazar.lastname} fue rechazada. La cuenta sigue suspendida.`);
+      cerrarModalRechazar();
+    } catch (err) {
+      setErrRechazar(err.message || 'No se pudo rechazar la solicitud.');
+    } finally {
+      setRechazando(false);
+    }
+  };
 
   // Modal para ver el motivo que escribió el cliente al solicitar el reintegro
   const [clienteMotivo, setClienteMotivo] = useState(null);
@@ -153,20 +190,18 @@ function ListaClientes() {
 
   const abrirModalHabilitar = (cliente) => {
     setClienteAHabilitar(cliente);
-    setMotivoHabilitar('');
     setErrHabilitar('');
     setExito('');
   };
   const cerrarModalHabilitar = () => {
     setClienteAHabilitar(null);
-    setMotivoHabilitar('');
     setErrHabilitar('');
   };
 
   const confirmarHabilitar = async () => {
     setHabilitando(true);
     try {
-      const updated = await reinstateClient(clienteAHabilitar.id, motivoHabilitar.trim() || null);
+      const updated = await reinstateClient(clienteAHabilitar.id);
       const nuevoEstado = updated?.account_status || 'active';
       setClientes((prev) => prev.map((c) => (c.id === clienteAHabilitar.id ? { ...c, account_status: nuevoEstado } : c)));
       setExito(`La cuenta de ${clienteAHabilitar.name} ${clienteAHabilitar.lastname} fue habilitada correctamente.`);
@@ -290,17 +325,27 @@ function ListaClientes() {
                           Suspender cuenta
                         </button>
                     )}
+                    {/* Suspendido sin solicitud → el admin habilita por decisión propia */}
                     {(rol === 'admin' || rol === 'recepcionista') &&
-                      (c.account_status === 'suspended' || c.account_status === 'pending_reintegration') && (
+                      c.account_status === 'suspended' && (
                         <button style={s.botonHabilitar} onClick={() => abrirModalHabilitar(c)}>
                           Habilitar cuenta
                         </button>
                     )}
+                    {/* Con solicitud pendiente → el admin la resuelve aceptando o rechazando */}
                     {(rol === 'admin' || rol === 'recepcionista') &&
                       c.account_status === 'pending_reintegration' && (
-                        <button style={s.botonVerMotivo} onClick={() => abrirModalMotivo(c)}>
-                          Ver motivo
-                        </button>
+                        <>
+                          <button style={s.botonHabilitar} onClick={() => abrirModalHabilitar(c)}>
+                            Aceptar
+                          </button>
+                          <button style={s.botonRechazar} onClick={() => abrirModalRechazar(c)}>
+                            Rechazar
+                          </button>
+                          <button style={s.botonVerMotivo} onClick={() => abrirModalMotivo(c)}>
+                            Ver motivo
+                          </button>
+                        </>
                     )}
                   </td>
                 </tr>
@@ -341,23 +386,46 @@ function ListaClientes() {
       {clienteAHabilitar && (
         <div style={s.overlay}>
           <div style={s.modal}>
-            <p style={s.modalTitulo}>Habilitar cuenta</p>
-            <p style={s.modalTexto}>
-              Vas a habilitar la cuenta de <strong>{clienteAHabilitar.name} {clienteAHabilitar.lastname}</strong>.
-              La cuenta pasará a estado activo. Podés agregar un motivo opcional.
+            <p style={s.modalTitulo}>
+              {clienteAHabilitar.account_status === 'pending_reintegration' ? 'Aceptar solicitud de reintegro' : 'Habilitar cuenta'}
             </p>
-            <label style={s.modalLabel}>Motivo (opcional)</label>
-            <textarea
-              style={s.modalInput}
-              value={motivoHabilitar}
-              onChange={(e) => { setMotivoHabilitar(e.target.value); setErrHabilitar(''); }}
-              placeholder="Motivo de habilitación..."
-            />
+            <p style={s.modalTexto}>
+              {clienteAHabilitar.account_status === 'pending_reintegration'
+                ? <>Vas a aceptar la solicitud de reintegro de <strong>{clienteAHabilitar.name} {clienteAHabilitar.lastname}</strong>. La cuenta pasará a estado activo. ¿Confirmás?</>
+                : <>Vas a habilitar la cuenta de <strong>{clienteAHabilitar.name} {clienteAHabilitar.lastname}</strong>. La cuenta pasará a estado activo. ¿Confirmás?</>}
+            </p>
             {errHabilitar && <div style={{ ...s.error, marginBottom: '12px' }}>{errHabilitar}</div>}
             <div style={s.modalBotones}>
               <button style={s.modalCancelar} onClick={cerrarModalHabilitar} disabled={habilitando}>Cancelar</button>
               <button style={s.modalConfirmarHabilitar} onClick={confirmarHabilitar} disabled={habilitando}>
                 {habilitando ? 'Habilitando...' : 'Confirmar habilitación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal rechazar solicitud de reintegro — la cuenta permanece suspendida */}
+      {clienteARechazar && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <p style={s.modalTitulo}>Rechazar solicitud de reintegro</p>
+            <p style={s.modalTexto}>
+              Vas a rechazar la solicitud de <strong>{clienteARechazar.name} {clienteARechazar.lastname}</strong>.
+              La cuenta va a permanecer suspendida. Ingresá el motivo del rechazo: el cliente será notificado.
+            </p>
+            <label style={s.modalLabel}>Motivo del rechazo *</label>
+            <textarea
+              style={s.modalInput}
+              value={motivoRechazo}
+              onChange={(e) => { setMotivoRechazo(e.target.value); setErrRechazar(''); }}
+              placeholder="Escribí el motivo del rechazo..."
+            />
+            {errRechazar && <div style={{ ...s.error, marginBottom: '12px' }}>{errRechazar}</div>}
+            <div style={s.modalBotones}>
+              <button style={s.modalCancelar} onClick={cerrarModalRechazar} disabled={rechazando}>Cancelar</button>
+              <button style={s.modalConfirmar} onClick={confirmarRechazar} disabled={rechazando}>
+                {rechazando ? 'Rechazando...' : 'Rechazar'}
               </button>
             </div>
           </div>

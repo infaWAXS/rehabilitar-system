@@ -20,6 +20,7 @@ class User(Base):
     role = Column(String, nullable=False, default="client")
     specialization = Column(String, nullable=True)
     account_status = Column(String, nullable=False, default="active")
+    suspension_reason = Column(String, nullable=True)  # Motivo de la suspensión vigente; se limpia al reintegrar
     dni_verified = Column(Boolean, default=False)
     medical_certificate_path = Column(String, nullable=True)
     medical_certificate_status = Column(String, default="none")

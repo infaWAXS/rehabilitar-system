@@ -41,9 +41,10 @@ export function reinstateClient(clientId, motivo = null) {
   });
 }
 
-// HU Reintegrar cuenta — E3: admin rechaza solicitud → cuenta vuelve a "suspended"
-export function rejectReintegration(clientId) {
+// HU Reintegrar cuenta — E3: admin rechaza solicitud con motivo obligatorio → cuenta vuelve a "suspended"
+export function rejectReintegration(clientId, motivo) {
   return apiRequest(`/clients/${clientId}/reject-reintegration`, {
     method: 'PUT',
+    body: JSON.stringify({ motivo }),
   });
 }

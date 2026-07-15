@@ -596,8 +596,8 @@ def notify_account_created_with_temp_password(user_id: int, temp_password: str, 
     )
 
 
-def notify_reintegration_rejected(cliente_id: int, db: Session) -> None:
-    """Notifica al cliente (email + in-app) que su solicitud de reintegro fue rechazada."""
+def notify_reintegration_rejected(cliente_id: int, motivo: str, db: Session) -> None:
+    """Notifica al cliente (email + in-app) que su solicitud de reintegro fue rechazada y por qué."""
     cliente = db.query(User).filter(User.id == cliente_id).first()
     if not cliente:
         return
@@ -606,12 +606,18 @@ def notify_reintegration_rejected(cliente_id: int, db: Session) -> None:
         f"Hola {cliente.name} {cliente.lastname},\n\n"
         "Lamentamos informarte que tu solicitud de reintegro fue rechazada por la administración. "
         "Tu cuenta permanece suspendida.\n\n"
+        f"Motivo del rechazo: {motivo}\n\n"
         "Si tenés dudas, podés comunicarte con nosotros para obtener más información.\n\n"
         "Saludos cordiales."
     )
     if getattr(cliente, "email", None):
         _send_email(cliente.email, subject, body_email)
-    crear_notificacion(cliente_id, "Solicitud de reintegro rechazada", "Tu solicitud de reintegro fue rechazada. Tu cuenta permanece suspendida.", db)
+    crear_notificacion(
+        cliente_id,
+        "Solicitud de reintegro rechazada",
+        f"Tu solicitud de reintegro fue rechazada. Motivo: {motivo}. Tu cuenta permanece suspendida.",
+        db,
+    )
 
 
 def notify_reservation_created(user_id: int, activity_id: int, db: Session) -> None:

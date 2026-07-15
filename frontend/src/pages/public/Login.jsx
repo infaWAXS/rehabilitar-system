@@ -42,6 +42,9 @@ const s = {
   suspTexto: { fontSize: '14px', color: 'var(--color-texto)', lineHeight: '1.6', margin: 0 },
   suspBtnPrimario: { width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: 'var(--color-primario)', color: '#fff', fontWeight: '700', fontSize: '14px', cursor: 'pointer', marginTop: '4px' },
   suspBtnVolver: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: 'transparent', color: 'var(--color-texto-suave)', fontWeight: '600', fontSize: '14px', cursor: 'pointer' },
+  suspMotivoCaja: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px 14px' },
+  suspMotivoLabel: { fontSize: '12px', fontWeight: '700', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px 0' },
+  suspMotivoTexto: { fontSize: '14px', color: 'var(--color-texto)', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
 };
 
 function Login() {
@@ -53,7 +56,7 @@ function Login() {
   const [fieldErrors, setFieldErrors] = useState({ email: '', contrasena: '' });
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
-  const [suspendida, setSuspendida] = useState(null); // null | { pendiente: bool }
+  const [suspendida, setSuspendida] = useState(null); // null | { pendiente: bool, motivo: string|null }
 
   const cambio = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -79,12 +82,12 @@ function Login() {
       // E5-suspendida: cuenta suspendida → no puede ingresar, mostrar vista con opción de reintegro
       if (data.account_status === 'suspended') {
         localStorage.setItem('access_token', data.access_token); // solo para SolicitarReintegro
-        setSuspendida({ pendiente: false });
+        setSuspendida({ pendiente: false, motivo: data.suspension_reason });
         return;
       }
       // cuenta con solicitud pendiente → no puede ingresar, mostrar mensaje de espera
       if (data.account_status === 'pending_reintegration') {
-        setSuspendida({ pendiente: true });
+        setSuspendida({ pendiente: true, motivo: data.suspension_reason });
         return;
       }
 
@@ -117,6 +120,12 @@ function Login() {
                 Tu cuenta está <strong>suspendida</strong>. No podés acceder al sistema
                 hasta que un administrador la reactive.
               </p>
+              {suspendida.motivo && (
+                <div style={s.suspMotivoCaja}>
+                  <p style={s.suspMotivoLabel}>Motivo de la suspensión</p>
+                  <p style={s.suspMotivoTexto}>{suspendida.motivo}</p>
+                </div>
+              )}
               <p style={s.suspTexto}>
                 Podés solicitar el reintegro completando el formulario de solicitud.
               </p>
@@ -131,6 +140,12 @@ function Login() {
                 Tu solicitud de reintegro está <strong>pendiente de revisión</strong> por un
                 administrador. No podés acceder hasta que sea procesada.
               </p>
+              {suspendida.motivo && (
+                <div style={s.suspMotivoCaja}>
+                  <p style={s.suspMotivoLabel}>Motivo de la suspensión</p>
+                  <p style={s.suspMotivoTexto}>{suspendida.motivo}</p>
+                </div>
+              )}
             </>
           )}
           <button style={s.suspBtnVolver} onClick={() => { localStorage.removeItem('access_token'); setSuspendida(null); }}>
