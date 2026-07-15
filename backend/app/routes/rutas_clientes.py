@@ -64,6 +64,14 @@ def post_reintegration_request(id: int, token: str, body: ReintegrationRequest, 
     return servicio_clientes.registrar_reintegro(id, body.motivo, db)
 
 
+# HU Reintegrar cuenta - el admin consulta el motivo que escribió el cliente al solicitar
+@router.get("/{id}/reintegration-request")
+def get_reintegration_request(id: int, token: str, db: Session = Depends(get_db)):
+    current_user = get_current_user(token, db)
+    require_role(["admin", "receptionist"])(current_user)
+    return servicio_clientes.obtener_solicitud_reintegro(id, db)
+
+
 # HU Suspender cuenta (Nahuel)
 # E1: motivo ingresado → cuenta pasa a "suspended", notificación mail (TODO)
 # E2: cancelar → manejado en frontend, no llega al backend

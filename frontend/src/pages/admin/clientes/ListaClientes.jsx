@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getClients } from '../../../services/usersService';
-import { suspendClient, reinstateClient } from '../../../services/clientsService';
+import { suspendClient, reinstateClient, getReintegrationRequest } from '../../../services/clientsService';
 import { getRole } from '../../../services/authService';
 
 const STATUS_LABEL = { active: 'Activo', disabled: 'Deshabilitado', suspended: 'Suspendido', pending_reintegration: 'Reintegro pend.' };
@@ -60,6 +60,14 @@ const s = {
     display: 'inline-block', padding: '6px 14px', borderRadius: '6px', border: '1px solid #15803d',
     background: 'transparent', color: '#15803d', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
   },
+  botonVerMotivo: {
+    display: 'inline-block', padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--color-borde)',
+    background: 'transparent', color: 'var(--color-texto)', fontSize: '13px', fontWeight: '600', cursor: 'pointer', marginLeft: '8px',
+  },
+  motivoTexto: {
+    background: '#f9fafb', border: '1px solid var(--color-borde)', borderRadius: '8px', padding: '12px 14px',
+    fontSize: '14px', color: 'var(--color-texto)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginBottom: '16px',
+  },
   error: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '16px' },
   exito: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '10px 14px', color: '#15803d', fontSize: '13px', marginBottom: '16px' },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
@@ -95,6 +103,25 @@ function ListaClientes() {
   const [motivoHabilitar, setMotivoHabilitar] = useState('');
   const [errHabilitar, setErrHabilitar] = useState('');
   const [habilitando, setHabilitando] = useState(false);
+
+  // Modal para ver el motivo que escribió el cliente al solicitar el reintegro
+  const [clienteMotivo, setClienteMotivo] = useState(null);
+  const [motivoSolicitud, setMotivoSolicitud] = useState(null);
+  const [cargandoMotivo, setCargandoMotivo] = useState(false);
+
+  const abrirModalMotivo = async (cliente) => {
+    setClienteMotivo(cliente);
+    setMotivoSolicitud(null);
+    setCargandoMotivo(true);
+    try {
+      const solicitud = await getReintegrationRequest(cliente.id);
+      setMotivoSolicitud(solicitud?.motivo || '');
+    } catch {
+      setMotivoSolicitud('');
+    } finally {
+      setCargandoMotivo(false);
+    }
+  };
 
   const abrirModalSuspender = (cliente) => {
     setClienteASuspender(cliente);
@@ -269,6 +296,12 @@ function ListaClientes() {
                           Habilitar cuenta
                         </button>
                     )}
+                    {(rol === 'admin' || rol === 'recepcionista') &&
+                      c.account_status === 'pending_reintegration' && (
+                        <button style={s.botonVerMotivo} onClick={() => abrirModalMotivo(c)}>
+                          Ver motivo
+                        </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -326,6 +359,28 @@ function ListaClientes() {
               <button style={s.modalConfirmarHabilitar} onClick={confirmarHabilitar} disabled={habilitando}>
                 {habilitando ? 'Habilitando...' : 'Confirmar habilitación'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal con el motivo que escribió el cliente al solicitar el reintegro */}
+      {clienteMotivo && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <p style={s.modalTitulo}>Motivo de la solicitud</p>
+            <p style={s.modalTexto}>
+              Solicitud de reintegro de <strong>{clienteMotivo.name} {clienteMotivo.lastname}</strong>.
+            </p>
+            {cargandoMotivo ? (
+              <p style={s.modalTexto}>Cargando motivo...</p>
+            ) : motivoSolicitud ? (
+              <p style={s.motivoTexto}>{motivoSolicitud}</p>
+            ) : (
+              <p style={s.modalTexto}>El cliente no dejó un motivo.</p>
+            )}
+            <div style={s.modalBotones}>
+              <button style={s.modalCancelar} onClick={() => setClienteMotivo(null)}>Cerrar</button>
             </div>
           </div>
         </div>

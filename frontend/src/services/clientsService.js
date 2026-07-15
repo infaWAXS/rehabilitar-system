@@ -20,6 +20,11 @@ export function requestReintegration(clientId, motivo) {
   });
 }
 
+// HU Reintegrar cuenta (admin) — devuelve la última solicitud del cliente (con su motivo) o null
+export function getReintegrationRequest(clientId) {
+  return apiRequest(`/clients/${clientId}/reintegration-request`);
+}
+
 // HU Suspender cuenta (admin) — E1: motivo obligatorio → cuenta pasa a "suspended"
 export function suspendClient(clientId, motivo) {
   return apiRequest(`/clients/${clientId}/suspend`, {

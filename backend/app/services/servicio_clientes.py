@@ -67,6 +67,26 @@ def obtener_condiciones_cliente(cliente_id: int, db: Session):
     }
 
 
+# HU Reintegrar cuenta - el admin necesita ver el motivo que escribió el cliente al solicitar
+def obtener_solicitud_reintegro(cliente_id: int, db: Session):
+    cliente = db.query(User).filter(User.id == cliente_id, User.role == "client", User.is_deleted == False).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    solicitud = db.query(ReintegrationRequest).filter(
+        ReintegrationRequest.user_id == cliente_id
+    ).order_by(ReintegrationRequest.created_at.desc()).first()
+
+    if not solicitud:
+        return None
+
+    return {
+        "id": solicitud.id,
+        "motivo": solicitud.motivo,
+        "created_at": solicitud.created_at,
+    }
+
+
 # HU Solicitar reintegro - flujo JWT: verifica estado y restricción de 24hs (Nahuel)
 def verificar_estado_y_tiempo_reintegro(cliente: User, db: Session):
     if cliente.role != "client":
