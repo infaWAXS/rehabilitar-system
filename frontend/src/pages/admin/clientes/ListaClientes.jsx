@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getClients } from '../../../services/usersService';
-import { suspendClient } from '../../../services/clientsService';
+import { suspendClient, reinstateClient } from '../../../services/clientsService';
 import { getRole } from '../../../services/authService';
 
 const STATUS_LABEL = { active: 'Activo', disabled: 'Deshabilitado', suspended: 'Suspendido', pending_reintegration: 'Reintegro pend.' };
@@ -56,6 +56,10 @@ const s = {
     display: 'inline-block', padding: '6px 14px', borderRadius: '6px', border: '1px solid #dc2626',
     background: 'transparent', color: '#dc2626', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
   },
+  botonHabilitar: {
+    display: 'inline-block', padding: '6px 14px', borderRadius: '6px', border: '1px solid #15803d',
+    background: 'transparent', color: '#15803d', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+  },
   error: { background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', color: '#dc2626', fontSize: '13px', marginBottom: '16px' },
   exito: { background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', padding: '10px 14px', color: '#15803d', fontSize: '13px', marginBottom: '16px' },
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
@@ -67,6 +71,7 @@ const s = {
   modalBotones: { display: 'flex', gap: '10px', justifyContent: 'flex-end' },
   modalCancelar: { padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--color-borde)', background: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '600', color: 'var(--color-texto)' },
   modalConfirmar: { padding: '9px 18px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '700' },
+  modalConfirmarHabilitar: { padding: '9px 18px', borderRadius: '8px', border: 'none', background: 'linear-gradient(90deg, var(--color-primario), var(--color-secundario))', color: '#fff', fontSize: '14px', cursor: 'pointer', fontWeight: '700' },
 };
 
 const FILTROS_VACIOS = { busqueda: '', estado: '' };
@@ -84,6 +89,12 @@ function ListaClientes() {
   const [motivoSuspender, setMotivoSuspender] = useState('');
   const [errMotivo, setErrMotivo] = useState('');
   const [suspendiendo, setSuspendiendo] = useState(false);
+
+  // Modal de habilitación (reintegro) directa desde la lista
+  const [clienteAHabilitar, setClienteAHabilitar] = useState(null);
+  const [motivoHabilitar, setMotivoHabilitar] = useState('');
+  const [errHabilitar, setErrHabilitar] = useState('');
+  const [habilitando, setHabilitando] = useState(false);
 
   const abrirModalSuspender = (cliente) => {
     setClienteASuspender(cliente);
@@ -110,6 +121,33 @@ function ListaClientes() {
       setErrMotivo(err.message || 'No se pudo suspender la cuenta.');
     } finally {
       setSuspendiendo(false);
+    }
+  };
+
+  const abrirModalHabilitar = (cliente) => {
+    setClienteAHabilitar(cliente);
+    setMotivoHabilitar('');
+    setErrHabilitar('');
+    setExito('');
+  };
+  const cerrarModalHabilitar = () => {
+    setClienteAHabilitar(null);
+    setMotivoHabilitar('');
+    setErrHabilitar('');
+  };
+
+  const confirmarHabilitar = async () => {
+    setHabilitando(true);
+    try {
+      const updated = await reinstateClient(clienteAHabilitar.id, motivoHabilitar.trim() || null);
+      const nuevoEstado = updated?.account_status || 'active';
+      setClientes((prev) => prev.map((c) => (c.id === clienteAHabilitar.id ? { ...c, account_status: nuevoEstado } : c)));
+      setExito(`La cuenta de ${clienteAHabilitar.name} ${clienteAHabilitar.lastname} fue habilitada correctamente.`);
+      cerrarModalHabilitar();
+    } catch (err) {
+      setErrHabilitar(err.message || 'No se pudo habilitar la cuenta.');
+    } finally {
+      setHabilitando(false);
     }
   };
 
@@ -225,6 +263,12 @@ function ListaClientes() {
                           Suspender cuenta
                         </button>
                     )}
+                    {(rol === 'admin' || rol === 'recepcionista') &&
+                      (c.account_status === 'suspended' || c.account_status === 'pending_reintegration') && (
+                        <button style={s.botonHabilitar} onClick={() => abrirModalHabilitar(c)}>
+                          Habilitar cuenta
+                        </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -254,6 +298,33 @@ function ListaClientes() {
               <button style={s.modalCancelar} onClick={cerrarModalSuspender} disabled={suspendiendo}>Cancelar</button>
               <button style={s.modalConfirmar} onClick={confirmarSuspender} disabled={suspendiendo}>
                 {suspendiendo ? 'Suspendiendo...' : 'Confirmar suspensión'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal habilitar cuenta — directo desde la lista */}
+      {clienteAHabilitar && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <p style={s.modalTitulo}>Habilitar cuenta</p>
+            <p style={s.modalTexto}>
+              Vas a habilitar la cuenta de <strong>{clienteAHabilitar.name} {clienteAHabilitar.lastname}</strong>.
+              La cuenta pasará a estado activo. Podés agregar un motivo opcional.
+            </p>
+            <label style={s.modalLabel}>Motivo (opcional)</label>
+            <textarea
+              style={s.modalInput}
+              value={motivoHabilitar}
+              onChange={(e) => { setMotivoHabilitar(e.target.value); setErrHabilitar(''); }}
+              placeholder="Motivo de habilitación..."
+            />
+            {errHabilitar && <div style={{ ...s.error, marginBottom: '12px' }}>{errHabilitar}</div>}
+            <div style={s.modalBotones}>
+              <button style={s.modalCancelar} onClick={cerrarModalHabilitar} disabled={habilitando}>Cancelar</button>
+              <button style={s.modalConfirmarHabilitar} onClick={confirmarHabilitar} disabled={habilitando}>
+                {habilitando ? 'Habilitando...' : 'Confirmar habilitación'}
               </button>
             </div>
           </div>
