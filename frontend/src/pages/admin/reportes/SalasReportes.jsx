@@ -61,27 +61,45 @@ export default function SalasReportes() {
   // ─────────────────────────────────────────────────────────
   // LÓGICA DE EXPORTACIÓN DETALLADA (PDF / EXCEL)
   // ─────────────────────────────────────────────────────────
+// 🚨 REEMPLAZAR LA FUNCIÓN COMPLETA EN SALASREPORTES.JSX:
   const handleExport = (formato) => {
     if (!reporte) return;
     const anioActual = new Date().getFullYear();
     const tituloFiltro = filtroEspecialidad ? `_${filtroEspecialidad}` : '_Global';
     const filename = `Reporte_Salas${tituloFiltro}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
 
+    // Extraemos el rango de fechas formateado del backend (o fallback local)
+    const fechaInicioLegible = reporte.rango_fechas?.inicio || fechaInicio.split('-').reverse().join('/');
+    const fechaFinLegible = reporte.rango_fechas?.fin || fechaFin.split('-').reverse().join('/');
+    const subTextoRango = `Período auditado: del ${fechaInicioLegible} al ${fechaFinLegible}`;
+
     if (formato === 'excel') {
       const wb = XLSX.utils.book_new();
 
+      // Prefacio de metadatos para la cabecera del Excel
+      const prefacioMetadatos = [
+        ["REPORTE DE LOGÍSTICA DE SALAS Y ACTIVIDADES"],
+        [subTextoRango.toUpperCase()],
+        [] // Fila de separación vacía
+      ];
+
       // Pestaña 1: Resumen General
-      const wsResumen = XLSX.utils.json_to_sheet([
+      const dataResumenRaw = [
         { "Métrica": "Ocupación Promedio", "Valor": `${reporte.resumen?.ocupacion_promedio || 0}%` },
         { "Métrica": "Salas Reservadas", "Valor": reporte.resumen?.salas_reservadas || 0 },
         { "Métrica": "Lista de Espera", "Valor": reporte.resumen?.lista_espera || 0 },
+      ];
+      const wsResumen = XLSX.utils.aoa_to_sheet([
+        ...prefacioMetadatos,
+        Object.keys(dataResumenRaw[0]),
+        ...dataResumenRaw.map(obj => Object.values(obj))
       ]);
       wsResumen['!cols'] = [{ wch: 30 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
       // Pestaña 2: Mapa de Calor (Ocupación de Infraestructura)
       if (reporte.mapa_infraestructura && listaHorarios.length > 0) {
-        const dataMapaInfra = reporte.mapa_infraestructura.map(row => {
+        const dataMapaInfraRaw = reporte.mapa_infraestructura.map(row => {
           const fila = { "Día / Módulo": row.dia };
           listaHorarios.forEach(h => {
             fila[`${h} hs`] = row.horas[h] || "0/0";
@@ -89,7 +107,11 @@ export default function SalasReportes() {
           return fila;
         });
 
-        const wsMapa = XLSX.utils.json_to_sheet(dataMapaInfra);
+        const wsMapa = XLSX.utils.aoa_to_sheet([
+          ...prefacioMetadatos,
+          Object.keys(dataMapaInfraRaw[0]),
+          ...dataMapaInfraRaw.map(obj => Object.values(obj))
+        ]);
         const colWidths = [{ wch: 15 }];
         listaHorarios.forEach(() => colWidths.push({ wch: 12 }));
         wsMapa['!cols'] = colWidths;
@@ -99,20 +121,24 @@ export default function SalasReportes() {
 
       // Pestaña 3: Top Clases
       if (topClasesFiltradas.length > 0) {
-        const dataTopClases = topClasesFiltradas.slice(0, 5).map(c => ({
+        const dataTopClasesRaw = topClasesFiltradas.slice(0, 5).map(c => ({
           "Nombre de la Clase": c.nombre_clase,
           "Especialidad": c.especialidad,
           "Aula": c.aula,
           "Profesor": c.profesor,
           "Ocupación %": `${c.ocupacion}%`
         }));
-        const wsTopClases = XLSX.utils.json_to_sheet(dataTopClases);
+        const wsTopClases = XLSX.utils.aoa_to_sheet([
+          ...prefacioMetadatos,
+          Object.keys(dataTopClasesRaw[0]),
+          ...dataTopClasesRaw.map(obj => Object.values(obj))
+        ]);
         wsTopClases['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 15 }];
         XLSX.utils.book_append_sheet(wb, wsTopClases, "Top 5 Clases");
       }
 
       // Pestaña 4: Ocupación Fija por Sala
-      const dataOcupacionFija = reporte.ocupacion_aulas
+      const dataOcupacionFijaRaw = reporte.ocupacion_aulas
         .filter(a => {
           const pct = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
           return !filtroEspecialidad || pct > 0;
@@ -131,8 +157,12 @@ export default function SalasReportes() {
           };
         });
 
-      if (dataOcupacionFija.length > 0) {
-        const wsOcupacion = XLSX.utils.json_to_sheet(dataOcupacionFija);
+      if (dataOcupacionFijaRaw.length > 0) {
+        const wsOcupacion = XLSX.utils.aoa_to_sheet([
+          ...prefacioMetadatos,
+          Object.keys(dataOcupacionFijaRaw[0]),
+          ...dataOcupacionFijaRaw.map(obj => Object.values(obj))
+        ]);
         wsOcupacion['!cols'] = [
           { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 25 }, { wch: 18 }
         ];
@@ -152,17 +182,24 @@ export default function SalasReportes() {
 
       // Título
       doc.setFontSize(18);
+      doc.setTextColor(0, 0, 0);
       doc.text(`Reporte de Logística de Salas ${anioActual}`, 14, currentY);
+      currentY += 7;
+
+      // Línea de metadatos con el período
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // Gris suave (#64748b)
+      doc.text(subTextoRango, 14, currentY);
       currentY += 8;
 
       if (filtroEspecialidad) {
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setTextColor(15, 118, 110);
         doc.text(`Filtro aplicado: ${filtroEspecialidad}`, 14, currentY);
         doc.setTextColor(0, 0, 0);
         currentY += 8;
       } else {
-        currentY += 4;
+        currentY += 2;
       }
 
       // Resumen Global
@@ -280,7 +317,7 @@ export default function SalasReportes() {
               <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>{reporte.resumen?.salas_reservadas || 0}</p>
             </div>
             <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Gente en Lista de Espera</span>
+              <span style={s.labelMini}>Clientes en Lista de Espera</span>
               <p style={{ ...s.valorMini, color: '#e11d48' }}>{reporte.resumen?.lista_espera || 0}</p>
             </div>
           </div>

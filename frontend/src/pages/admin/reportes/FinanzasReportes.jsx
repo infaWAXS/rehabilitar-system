@@ -108,11 +108,23 @@ export default function FinanzasReportes() {
     const tituloFiltro = filtroEspecialidad ? `_${filtroEspecialidad}` : '_Global';
     const filename = `Reporte_Financiero${tituloFiltro}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
 
+    // Extraemos el rango de fechas formateado del backend (o fallback local)
+    const fechaInicioLegible = reporte.rango_fechas?.inicio || fechaInicio.split('-').reverse().join('/');
+    const fechaFinLegible = reporte.rango_fechas?.fin || fechaFin.split('-').reverse().join('/');
+    const subTextoRango = `Período auditado: del ${fechaInicioLegible} al ${fechaFinLegible}`;
+
     if (formato === 'excel') {
       const wb = XLSX.utils.book_new();
 
-      // Pestaña 1: Resumen General e Ingresos
-      const dataResumen = [
+      // Prefacio de metadatos para la cabecera del Excel
+      const prefacioMetadatos = [
+        ["REPORTE FINANCIERO Y CONTROL DE PAGOS"],
+        [subTextoRango.toUpperCase()],
+        [] // Fila de separación vacía
+      ];
+
+      // Pestaña 1: Resumen General
+      const dataResumenRaw = [
         { "Métrica": "Ingresos Totales (Rango)", "Valor": `$${ingresosTotalesRender.toLocaleString('es-AR')}` },
         { "Métrica": "Suscripciones Activas", "Valor": filtroEspecialidad ? "N/A" : suscripcionesRender },
         { "Métrica": "Ingreso Promedio por Cliente", "Valor": ingresoPromedioRender },
@@ -120,29 +132,39 @@ export default function FinanzasReportes() {
         { "Métrica": "Ingresos por Clases Individuales", "Valor": `$${ingresosIndivRender.toLocaleString('es-AR')}` },
         { "Métrica": "Ingresos por Señas / Reservas", "Valor": `$${ingresosSenasRender.toLocaleString('es-AR')}` }
       ];
-      const wsResumen = XLSX.utils.json_to_sheet(dataResumen);
+
+      const wsResumen = XLSX.utils.aoa_to_sheet([
+        ...prefacioMetadatos,
+        Object.keys(dataResumenRaw[0]),
+        ...dataResumenRaw.map(obj => Object.values(obj))
+      ]);
       wsResumen['!cols'] = [{ wch: 40 }, { wch: 25 }];
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
 
       // Pestaña 2: Evolución Financiera
       if (reporte.evolucion_temporal?.datos) {
-        const dataEvolucion = reporte.evolucion_temporal.datos.map(d => {
+        const dataEvolucionRaw = reporte.evolucion_temporal.datos.map(d => {
           const valorFiltro = filtroEspecialidad ? (d.por_especialidad?.[filtroEspecialidad] || 0) : d.ingresos_brutos;
           return {
             "Período": d.mes_corto,
             "Ingresos Brutos": `$${valorFiltro.toLocaleString('es-AR')}`
           };
         });
-        const wsEvolucion = XLSX.utils.json_to_sheet(dataEvolucion);
+
+        const wsEvolucion = XLSX.utils.aoa_to_sheet([
+          ...prefacioMetadatos,
+          Object.keys(dataEvolucionRaw[0]),
+          ...dataEvolucionRaw.map(obj => Object.values(obj))
+        ]);
         wsEvolucion['!cols'] = [{ wch: 20 }, { wch: 25 }];
         XLSX.utils.book_append_sheet(wb, wsEvolucion, "Evolución Financiera");
       }
 
       // Pestaña 3: Rankings (Top 5)
-      const dataRankings = [];
+      const dataRankingsRaw = [];
       const maxFilas = Math.max(clasesParaMostrar.length, profesParaMostrar.length);
       for (let i = 0; i < maxFilas; i++) {
-        dataRankings.push({
+        dataRankingsRaw.push({
           "Posición": `#${i + 1}`,
           "Clase Más Rentable": clasesParaMostrar[i]?.nombre || "-",
           "Recaudación (Clase)": clasesParaMostrar[i] ? `$${clasesParaMostrar[i].recaudacion.toLocaleString('es-AR')}` : "-",
@@ -150,8 +172,12 @@ export default function FinanzasReportes() {
           "Recaudación (Profesor)": profesParaMostrar[i] ? `$${profesParaMostrar[i].recaudacion.toLocaleString('es-AR')}` : "-"
         });
       }
-      if (dataRankings.length > 0) {
-        const wsRankings = XLSX.utils.json_to_sheet(dataRankings);
+      if (dataRankingsRaw.length > 0) {
+        const wsRankings = XLSX.utils.aoa_to_sheet([
+          ...prefacioMetadatos,
+          Object.keys(dataRankingsRaw[0]),
+          ...dataRankingsRaw.map(obj => Object.values(obj))
+        ]);
         wsRankings['!cols'] = [{ wch: 10 }, { wch: 30 }, { wch: 25 }, { wch: 30 }, { wch: 25 }];
         XLSX.utils.book_append_sheet(wb, wsRankings, "Rankings Top 5");
       }
@@ -169,21 +195,29 @@ export default function FinanzasReportes() {
 
       // Título
       doc.setFontSize(18);
+      doc.setTextColor(0, 0, 0);
       doc.text(`Reporte Financiero y Pagos ${anioActual}`, 14, currentY);
+      currentY += 7;
+
+      // Línea de metadatos con el período
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // Gris suave (#64748b)
+      doc.text(subTextoRango, 14, currentY);
       currentY += 8;
 
       if (filtroEspecialidad) {
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setTextColor(15, 118, 110);
         doc.text(`Filtro aplicado: ${filtroEspecialidad} (Excluye ingresos por planes globales)`, 14, currentY);
         doc.setTextColor(0, 0, 0);
         currentY += 8;
       } else {
-        currentY += 4;
+        currentY += 2;
       }
 
       // Resumen Global
       doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
       doc.text(`Ingresos Totales (Rango): $${ingresosTotalesRender.toLocaleString('es-AR')}`, 14, currentY); currentY += 6;
       doc.text(`Suscripciones Activas: ${filtroEspecialidad ? 'N/A' : suscripcionesRender}`, 14, currentY); currentY += 6;
       doc.text(`Ingreso Promedio por Cliente: ${ingresoPromedioRender}`, 14, currentY); currentY += 14;
@@ -234,7 +268,7 @@ export default function FinanzasReportes() {
         currentY = doc.lastAutoTable.finalY + 14;
       }
 
-      // Tablas: Rankings (Se imprimen en paralelo si hay espacio, o secuencial)
+      // Tablas: Rankings
       if (clasesParaMostrar.length > 0 || profesParaMostrar.length > 0) {
         checkPageBreak(60);
         doc.setFontSize(14);

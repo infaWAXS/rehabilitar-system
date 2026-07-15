@@ -98,22 +98,36 @@ export default function ClientesReportes() {
     const tituloFiltro = filtroEspecialidad ? `_${filtroEspecialidad}` : '_Global';
     const filename = `Reporte_Clientes_Avanzado${tituloFiltro}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
 
+    // Extraemos el rango de fechas proporcionado por el backend (o caemos en el estado local)
+    const fechaInicioLegible = reporte.rango_fechas?.inicio || fechaInicio.split('-').reverse().join('/');
+    const fechaFinLegible = reporte.rango_fechas?.fin || fechaFin.split('-').reverse().join('/');
+    const subTextoRango = `Período auditado: del ${fechaInicioLegible} al ${fechaFinLegible}`;
+
     if (formato === 'excel') {
       const wb = XLSX.utils.book_new();
 
-      const wsResumen = XLSX.utils.json_to_sheet([{
-        "Métrica": "Ausentismo Promedio", "Valor": `${reporte.resumen.tasa_ausentismo}%`
-      }, {
-        "Métrica": "Nuevos Registros", "Valor": reporte.resumen.nuevos_registros || 0
-      }, {
-        "Métrica": "Clientes Suspendidos", "Valor": reporte.resumen.clientes_suspendidos_rango || 0
-      }]);
+      // 🚨 MEJORA EXCEL: Insertar cabecera con el rango de fechas en cada pestaña antes de las tablas
+      const prefacioMetadatos = [
+        ["REPORTE DE CLIENTES Y ASISTENCIAS"],
+        [subTextoRango.toUpperCase()],
+        [] // Fila vacía de separación
+      ];
+
+      // Pestaña 1: Resumen General
+      const dataResumen = [
+        ...prefacioMetadatos,
+        ["Métrica", "Valor"],
+        ["Ausentismo Promedio", `${reporte.resumen.tasa_ausentismo}%`],
+        ["Nuevos Registros", reporte.resumen.nuevos_registros || 0],
+        ["Clientes Suspendidos", reporte.resumen.clientes_suspendidos_rango || 0]
+      ];
+      const wsResumen = XLSX.utils.aoa_to_sheet(dataResumen);
       wsResumen['!cols'] = [{ wch: 35 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
 
-      // Actualización de la pestaña de Concurrencia a la nueva estructura
-      const dataConcurrencia = clasesFiltradas.map(c => ({
-        "Especialidad": c.tipo,
+      // Pestaña 2: Concurrencia
+      const dataConcurrenciaRaw = clasesFiltradas.map(c => ({
+        "Especialidad / Clase": c.nombre_clase || c.tipo,
         "Clases": c.cant_clases,
         "Cupos Iniciales": c.cupos_iniciales,
         "Asistencias": c.asistencias,
@@ -121,8 +135,8 @@ export default function ClientesReportes() {
         "Cancelaciones": c.cancelaciones,
         "Lista Espera": c.lista_espera
       }));
-      dataConcurrencia.push({
-        "Especialidad": "TOTALES",
+      dataConcurrenciaRaw.push({
+        "Especialidad / Clase": "TOTALES",
         "Clases": totales.clases,
         "Cupos Iniciales": totales.cupos,
         "Asistencias": totales.asistencias,
@@ -130,10 +144,16 @@ export default function ClientesReportes() {
         "Cancelaciones": totales.cancelaciones,
         "Lista Espera": totales.espera
       });
-      const wsConcurrencia = XLSX.utils.json_to_sheet(dataConcurrencia);
-      wsConcurrencia['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }];
+      // Convertimos la tabla de concurrencia a array de arrays (AOA) para anexarle la cabecera arriba
+      const wsConcurrencia = XLSX.utils.aoa_to_sheet([
+        ...prefacioMetadatos,
+        Object.keys(dataConcurrenciaRaw[0]),
+        ...dataConcurrenciaRaw.map(obj => Object.values(obj))
+      ]);
+      wsConcurrencia['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsConcurrencia, "Concurrencia");
 
+      // Pestaña 3: Mapa de Calor
       if (reporte.mapa_calor && listaHorarios.length > 0) {
         const dataMapaCalor = reporte.mapa_calor.map(row => {
           const fila = { "Día / Módulo": row.dia };
@@ -144,28 +164,41 @@ export default function ClientesReportes() {
           });
           return fila;
         });
-        const wsMapa = XLSX.utils.json_to_sheet(dataMapaCalor);
+        const wsMapa = XLSX.utils.aoa_to_sheet([
+          ...prefacioMetadatos,
+          Object.keys(dataMapaCalor[0]),
+          ...dataMapaCalor.map(obj => Object.values(obj))
+        ]);
         const colWidths = [{ wch: 15 }];
         listaHorarios.forEach(() => colWidths.push({ wch: 10 }));
         wsMapa['!cols'] = colWidths;
         XLSX.utils.book_append_sheet(wb, wsMapa, "Mapa de Calor");
       }
 
+      // Pestaña 4: Cuentas Suspendidas
       const sancionadosFiltrados = reporte.sancionados?.filter(user => !motivosOcultos.includes(user.motivo)) || [];
+      let wsSanciones;
       if (sancionadosFiltrados.length > 0) {
         const dataSanciones = sancionadosFiltrados.map(user => ({
           "Nombre del Alumno": user.nombre,
           "Motivo de Suspensión": user.motivo,
           "Inicio de Suspensión": user.fecha_inicio
         }));
-        const wsSanciones = XLSX.utils.json_to_sheet(dataSanciones);
+        wsSanciones = XLSX.utils.aoa_to_sheet([
+          ...prefacioMetadatos,
+          Object.keys(dataSanciones[0]),
+          ...dataSanciones.map(obj => Object.values(obj))
+        ]);
         wsSanciones['!cols'] = [{ wch: 30 }, { wch: 45 }, { wch: 25 }];
-        XLSX.utils.book_append_sheet(wb, wsSanciones, "Cuentas Suspendidas");
       } else {
-        const wsSancionesVacia = XLSX.utils.json_to_sheet([{ "Estado": "No se registraron suspensiones en este período." }]);
-        wsSancionesVacia['!cols'] = [{ wch: 50 }];
-        XLSX.utils.book_append_sheet(wb, wsSancionesVacia, "Cuentas Suspendidas");
+        wsSanciones = XLSX.utils.aoa_to_sheet([
+          ...prefacioMetadatos,
+          ["Estado"],
+          ["No se registraron suspensiones en este período."]
+        ]);
+        wsSanciones['!cols'] = [{ wch: 50 }];
       }
+      XLSX.utils.book_append_sheet(wb, wsSanciones, "Cuentas Suspendidas");
 
       XLSX.writeFile(wb, filename);
 
@@ -178,21 +211,29 @@ export default function ClientesReportes() {
         if (currentY + espacioNecesario >= pageHeight - 10) { doc.addPage(); currentY = 14; }
       };
 
+      // TÍTULO Y SUBTÍTULO CON RANGO DE FECHAS
       doc.setFontSize(18);
+      doc.setTextColor(0, 0, 0);
       doc.text(`Reporte de Clientes y Asistencias ${anioActual}`, 14, currentY);
+      currentY += 7;
+
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // Gris suave (#64748b)
+      doc.text(subTextoRango, 14, currentY);
       currentY += 8;
       
       if (filtroEspecialidad) {
-        doc.setFontSize(11);
+        doc.setFontSize(10);
         doc.setTextColor(15, 118, 110);
         doc.text(`Filtro aplicado: ${filtroEspecialidad}`, 14, currentY);
         doc.setTextColor(0, 0, 0);
         currentY += 8;
       } else {
-        currentY += 4;
+        currentY += 2;
       }
 
       doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
       doc.text(`Ausentismo Promedio: ${reporte.resumen.tasa_ausentismo}%`, 14, currentY); currentY += 6;
       doc.text(`Nuevos Registros: ${reporte.resumen.nuevos_registros || 0}`, 14, currentY); currentY += 6;
       doc.text(`Clientes Suspendidos: ${reporte.resumen.clientes_suspendidos_rango || 0}`, 14, currentY); currentY += 14;
@@ -210,14 +251,14 @@ export default function ClientesReportes() {
       doc.text("Concurrencia y Cancelaciones", 14, currentY);
       
       const bodyConcurrencia = clasesFiltradas.map(c => [
-        c.tipo, c.cant_clases, c.cupos_iniciales, c.asistencias, c.inasistencias, c.cancelaciones, c.lista_espera
+        c.nombre_clase || c.tipo, c.cant_clases, c.cupos_iniciales, c.asistencias, c.inasistencias, c.cancelaciones, c.lista_espera
       ]);
       bodyConcurrencia.push([{ content: 'TOTALES', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, totales.clases, totales.cupos, totales.asistencias, totales.inasistencias, totales.cancelaciones, totales.espera]);
 
       autoTable(doc, {
         ...baseTableStyles,
         startY: currentY + 4,
-        head: [['Especialidad', 'Clases', 'Cupos', 'Asist.', 'Inasist.', 'Cancel.', 'Espera']],
+        head: [['Especialidad / Clase', 'Clases', 'Cupos', 'Asist.', 'Inasist.', 'Cancel.', 'Espera']],
         body: bodyConcurrencia,
         styles: { ...baseTableStyles.styles, fontSize: 9, cellPadding: 3 },
         columnStyles: { 0: { cellWidth: 35 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' } }
