@@ -6,9 +6,9 @@ import ReportesExportar from './components/ReportesExportar';
 import ReportesEmptyState from './components/ReportesEmptyState';
 
 // IMPORTACIONES PARA EXPORTACIÓN
-import { jsPDF } from 'jspdf';
+import { baseTableStyles, inicializarPDF, generarPrefacioExcel, exportarAExcel } from './utils/reportesUtils';
+import ReportesAlertaModal from './components/ReportesAlertaModal';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 
 export default function StaffReportes() {
   const [fechaInicio, setFechaInicio] = useState('');
@@ -18,6 +18,7 @@ export default function StaffReportes() {
   const [errorValidacion, setErrorValidacion] = useState('');
   const [filtroEspecialidad, setFiltroEspecialidad] = useState('');
   const [sortProfesores, setSortProfesores] = useState({ llave: null, direccion: 'asc' });
+  const [alertaCustom, setAlertaCustom] = useState({ visible: false, mensaje: "" });
 
   const consultarFechas = async (inicio, fin) => {
     setErrorValidacion(''); setReporte(null); setFiltroEspecialidad('');
@@ -104,202 +105,164 @@ export default function StaffReportes() {
   }) || [];
 
 
-  // ────────────────────────────────────────────────────────────────────────
-  // LÓGICA DE EXPORTACIÓN ADAPTADA A LA ESTRUCTURA REAL DE STAFF
-  // ────────────────────────────────────────────────────────────────────────
   const handleExport = (formato) => {
     if (!reporte) return;
+
+    // 🚨 NUEVO: Declarar la constante para que no tire ReferenceError
+    const tieneDatosParaExportar = totalClasesDictadasGlobal > 0;
+
+    // Bloqueo preventivo si no hay datos de asistencia o clases dadas
+    if (!tieneDatosParaExportar) {
+      setAlertaCustom({
+        visible: true,
+        mensaje: "No se puede exportar el reporte porque no hay datos de clases dadas o asistencia registrados para el período o la especialidad seleccionada."
+      });
+      return;
+    }
+
     const anioActual = new Date().getFullYear();
     const tituloFiltro = filtroEspecialidad ? `_${filtroEspecialidad}` : '_Global';
     const filename = `Reporte_Staff${tituloFiltro}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
 
-    // Extraemos el rango de fechas proporcionado por el backend o fallback local
     const fechaInicioLegible = reporte.rango_fechas?.inicio || fechaInicio.split('-').reverse().join('/');
     const fechaFinLegible = reporte.rango_fechas?.fin || fechaFin.split('-').reverse().join('/');
     const subTextoRango = `Período auditado: del ${fechaInicioLegible} al ${fechaFinLegible}`;
 
     if (formato === 'excel') {
-      const wb = XLSX.utils.book_new();
+      const prefacio = generarPrefacioExcel("REPORTE DE DESEMPEÑO DE STAFF Y PROFESIONALES", subTextoRango);
 
-      // Prefacio de metadatos para la cabecera de cada pestaña en Excel
-      const prefacioMetadatos = [
-        ["REPORTE DE DESEMPEÑO DE STAFF Y PROFESIONALES"],
-        [subTextoRango.toUpperCase()],
-        [] // Fila vacía de separación
-      ];
-
-      // Pestaña 1: Resumen General del Periodo (Tarjetas Superiores)
+      // Pestaña 1: Resumen General
       const dataResumenRaw = [
         { "Métrica": "Profesionales Activos (Tren Superior)", "Valor": reporte.resumen?.tren_superior || 0 },
         { "Métrica": "Profesionales Activos (Tren Inferior)", "Valor": reporte.resumen?.tren_inferior || 0 },
         { "Métrica": "Profesionales Activos (Tren Medio)", "Valor": reporte.resumen?.tren_medio || 0 }
       ];
 
-      const wsResumen = XLSX.utils.aoa_to_sheet([
-        ...prefacioMetadatos,
-        Object.keys(dataResumenRaw[0]),
-        ...dataResumenRaw.map(obj => Object.values(obj))
-      ]);
-      wsResumen['!cols'] = [{ wch: 40 }, { wch: 15 }];
-      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
-
       // Pestaña 2: Concurrencia de Profesores
-      if (profesoresOrdenados.length > 0) {
-        const dataConcurrenciaRaw = profesoresOrdenados
-          .map((p) => {
-            const atendidos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.atendidos ?? 0) : p.total_alumnos_atendidos;
-            const cancelados = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cancelados ?? 0) : p.total_cancelaciones_recibidas;
-            const cupos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.uso_cupos ?? 0.0) : p.porcentaje_ocupacion_clases;
-            const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
+      const dataConcurrenciaRaw = profesoresOrdenados
+        .map((p) => {
+          const atendidos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.atendidos ?? 0) : p.total_alumnos_atendidos;
+          const cancelados = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cancelados ?? 0) : p.total_cancelaciones_recibidas;
+          const cupos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.uso_cupos ?? 0.0) : p.porcentaje_ocupacion_clases;
+          const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
 
-            return {
-              "Kinesiólogo": p.nombre,
-              "Alumnos Atendidos": atendidos,
-              "Ausencias": cancelados,
-              "Clases Dadas": clasesDictadas,
-              "Uso de Cupos": `${cupos}%`
-            };
-          })
-          .filter(p => !filtroEspecialidad || p["Clases Dadas"] > 0); // Ocultar si no tiene clases en la especialidad filtrada
+          return {
+            "Kinesiólogo": p.nombre,
+            "Alumnos Atendidos": atendidos,
+            "Ausencias": cancelados,
+            "Clases Dadas": clasesDictadas,
+            "Uso de Cupos": `${cupos}%`
+          };
+        })
+        .filter(p => p["Clases Dadas"] > 0);
 
-        // Agregar fila de Totales / Promedios al final
-        dataConcurrenciaRaw.push({
-          "Kinesiólogo": "TOTALES / PROMEDIOS",
-          "Alumnos Atendidos": totalAtendidosGlobal,
-          "Ausencias": totalCanceladosGlobal,
-          "Clases Dadas": totalClasesDictadasGlobal,
-          "Uso de Cupos": `${promedioCuposGlobal}%`
-        });
-
-        const wsConcurrencia = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataConcurrenciaRaw[0]),
-          ...dataConcurrenciaRaw.map(obj => Object.values(obj))
-        ]);
-        wsConcurrencia['!cols'] = [
-          { wch: 30 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 18 }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsConcurrencia, "Concurrencia Staff");
-      }
+      dataConcurrenciaRaw.push({
+        "Kinesiólogo": "TOTALES / PROMEDIOS",
+        "Alumnos Atendidos": totalAtendidosGlobal,
+        "Ausencias": totalCanceladosGlobal,
+        "Clases Dadas": totalClasesDictadasGlobal,
+        "Uso de Cupos": `${promedioCuposGlobal}%`
+      });
 
       // Pestaña 3: Absentismo de Profesores
-      if (absentismoFiltrado.length > 0) {
-        const dataAbsentismoRaw = absentismoFiltrado.map(a => ({
-          "Profesor": a.profesor,
-          "Clase Ausentada": a.clase,
-          "Fecha Actividad": a.fecha_actividad,
-          "Especialidad": a.especialidad,
-          "Última Acción (Baja)": a.fecha_baja ? String(a.fecha_baja).split('.')[0] : '-'
-        }));
-
-        const wsAbsentismo = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataAbsentismoRaw[0]),
-          ...dataAbsentismoRaw.map(obj => Object.values(obj))
-        ]);
-        wsAbsentismo['!cols'] = [
-          { wch: 30 }, { wch: 25 }, { wch: 18 }, { wch: 20 }, { wch: 25 }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsAbsentismo, "Absentismo");
-      }
+      const dataAbsentismoRaw = absentismoFiltrado.map(a => ({
+        "Profesor": a.profesor,
+        "Clase Ausentada": a.clase,
+        "Fecha Actividad": a.fecha_actividad,
+        "Especialidad": a.especialidad,
+        "Última Acción (Baja)": a.fecha_baja ? String(a.fecha_baja).split('.')[0] : '-'
+      }));
 
       // Pestaña 4: Retención por Profesor
-      if (profesoresRetencionFiltrados?.length > 0) {
-        const dataRetencionRaw = profesoresRetencionFiltrados.map(r => ({
-          "Profesor": r.profesor,
-          "Clase / Esp.": r.clase,
-          "Sesión 1": r.sesiones?.[0] ? `${r.sesiones[0].presentes} asist. (${r.sesiones[0].fecha})` : '-',
-          "Sesión 2": r.sesiones?.[1] ? `${r.sesiones[1].presentes} asist. (${r.sesiones[1].fecha})` : '-',
-          "Sesión 3": r.sesiones?.[2] ? `${r.sesiones[2].presentes} asist. (${r.sesiones[2].fecha})` : '-',
-          "Sesión 4": r.sesiones?.[3] ? `${r.sesiones[3].presentes} asist. (${r.sesiones[3].fecha})` : '-'
-        }));
-
-        const wsRetencion = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataRetencionRaw[0]),
-          ...dataRetencionRaw.map(obj => Object.values(obj))
-        ]);
-        wsRetencion['!cols'] = [
-          { wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 25 }, { wch: 25 }, { wch: 25 }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsRetencion, "Retención Alumnos");
-      }
+      const dataRetencionRaw = profesoresRetencionFiltrados?.map(r => ({
+        "Profesor": r.profesor,
+        "Clase / Esp.": r.clase,
+        "Sesión 1": r.sesiones?.[0] ? `${r.sesiones[0].presentes} asist. (${r.sesiones[0].fecha})` : '-',
+        "Sesión 2": r.sesiones?.[1] ? `${r.sesiones[1].presentes} asist. (${r.sesiones[1].fecha})` : '-',
+        "Sesión 3": r.sesiones?.[2] ? `${r.sesiones[2].presentes} asist. (${r.sesiones[2].fecha})` : '-',
+        "Sesión 4": r.sesiones?.[3] ? `${r.sesiones[3].presentes} asist. (${r.sesiones[3].fecha})` : '-'
+      })) || [];
 
       // Pestaña 5: Profesores de Baja (Histórico)
-      if (reporte.profesores_eliminados?.length > 0) {
-        const dataBajasRaw = reporte.profesores_eliminados.map(p => ({
-          "Nombre del Profesional": p.nombre,
-          "Fecha de Baja": new Date(p.fecha_baja).toLocaleDateString()
-        }));
+      const dataBajasRaw = reporte.profesores_eliminados?.map(p => ({
+        "Nombre del Profesional": p.nombre,
+        "Fecha de Baja": new Date(p.fecha_baja).toLocaleDateString()
+      })) || [];
 
-        const wsBajas = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataBajasRaw[0]),
-          ...dataBajasRaw.map(obj => Object.values(obj))
-        ]);
-        wsBajas['!cols'] = [{ wch: 30 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(wb, wsBajas, "Historial de Bajas");
-      }
+      const laminas = [
+        {
+          nombre: "Resumen General",
+          cols: [{ wch: 40 }, { wch: 15 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataResumenRaw[0]),
+            ...dataResumenRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Concurrencia Staff",
+          incluir: dataConcurrenciaRaw.length > 1, // Se incluye si hay profesores además de la fila final de Totales
+          cols: [{ wch: 30 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 18 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataConcurrenciaRaw[0] || {}),
+            ...dataConcurrenciaRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Absentismo",
+          incluir: dataAbsentismoRaw.length > 0,
+          cols: [{ wch: 30 }, { wch: 25 }, { wch: 18 }, { wch: 20 }, { wch: 25 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataAbsentismoRaw[0] || {}),
+            ...dataAbsentismoRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Retención Alumnos",
+          incluir: dataRetencionRaw.length > 0,
+          cols: [{ wch: 30 }, { wch: 25 }, { wch: 25 }, { wch: 25 }, { wch: 25 }, { wch: 25 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataRetencionRaw[0] || {}),
+            ...dataRetencionRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Historial de Bajas",
+          incluir: dataBajasRaw.length > 0 && !filtroEspecialidad, // Solo en global
+          cols: [{ wch: 30 }, { wch: 20 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataBajasRaw[0] || {}),
+            ...dataBajasRaw.map(obj => Object.values(obj))
+          ]
+        }
+      ];
 
-      XLSX.writeFile(wb, filename);
+      exportarAExcel(filename, laminas);
 
     } else if (formato === 'pdf') {
-      const doc = new jsPDF();
-      let currentY = 14;
+      const { doc, currentY: startY } = inicializarPDF("Reporte de Desempeño del Staff", subTextoRango, filtroEspecialidad);
+      let currentY = startY;
 
       const checkPageBreak = (espacioNecesario) => {
         const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
         if (currentY + espacioNecesario >= pageHeight - 10) { doc.addPage(); currentY = 14; }
       };
 
-      // TÍTULO DEL REPORTE
-      doc.setFontSize(18);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Reporte de Desempeño del Staff ${anioActual}`, 14, currentY);
-      currentY += 7;
-
-      // SUBTÍTULO CON EL RANGO DE FECHAS SELECCIONADO
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139); // Gris suave (#64748b)
-      doc.text(subTextoRango, 14, currentY);
-      currentY += 8;
-
-      if (filtroEspecialidad) {
-        doc.setFontSize(10);
-        doc.setTextColor(15, 118, 110);
-        doc.text(`Filtro aplicado: ${filtroEspecialidad}`, 14, currentY);
-        doc.setTextColor(0, 0, 0);
-        currentY += 8;
-      } else {
-        currentY += 2;
-      }
-
-      // Resumen del Periodo (Tarjetas del Rango)
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.text("Resumen Operativo del Staff", 14, currentY);
-      currentY += 6;
-      doc.setFont("helvetica", "normal");
+      // Resumen
       doc.setFontSize(11);
       doc.text(`Profesionales en Tren Superior: ${reporte.resumen?.tren_superior || 0}`, 14, currentY); currentY += 6;
       doc.text(`Profesionales en Tren Inferior: ${reporte.resumen?.tren_inferior || 0}`, 14, currentY); currentY += 6;
       doc.text(`Profesionales en Tren Medio: ${reporte.resumen?.tren_medio || 0}`, 14, currentY); currentY += 14;
 
-      const baseTableStyles = {
-        theme: 'striped',
-        headStyles: { fillColor: [15, 118, 110], fontSize: 10, halign: 'center' },
-        bodyStyles: { fontSize: 9, valign: 'middle' },
-        styles: { cellPadding: 4, overflow: 'linebreak' },
-        margin: { top: 12 }
-      };
-
-      // Tabla 1: Concurrencia de Profesores
-      if (profesoresOrdenados.length > 0 && hayDatos) {
+      // Tabla 1: Concurrencia[cite: 12]
+      if (profesoresOrdenados.length > 0) {
         checkPageBreak(50);
         doc.setFontSize(13);
-        doc.setFont("helvetica", "bold");
         doc.text("Concurrencia y Uso de Cupos por Profesional", 14, currentY);
-        doc.setFont("helvetica", "normal");
 
         const bodyConcurrencia = profesoresOrdenados
           .map((p) => {
@@ -309,7 +272,7 @@ export default function StaffReportes() {
             const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
             return [p.nombre, atendidos, cancelados, clasesDictadas, `${cupos}%`];
           })
-          .filter(p => !filtroEspecialidad || p[3] > 0);
+          .filter(p => p[3] > 0);
 
         bodyConcurrencia.push([{ content: 'Totales / Promedios', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, totalAtendidosGlobal, totalCanceladosGlobal, totalClasesDictadasGlobal, `${promedioCuposGlobal}%`]);
 
@@ -329,13 +292,11 @@ export default function StaffReportes() {
         currentY = doc.lastAutoTable.finalY + 14;
       }
 
-      // Tabla 2: Absentismo del Staff
+      // Tabla 2: Absentismo[cite: 12]
       if (absentismoFiltrado.length > 0) {
         checkPageBreak(50);
         doc.setFontSize(13);
-        doc.setFont("helvetica", "bold");
         doc.text("Absentismo del Staff (Registro de Faltas)", 14, currentY);
-        doc.setFont("helvetica", "normal");
 
         const bodyAbsentismo = absentismoFiltrado.map(a => [
           a.profesor,
@@ -361,13 +322,11 @@ export default function StaffReportes() {
         currentY = doc.lastAutoTable.finalY + 14;
       }
 
-      // Tabla 3: Retención por Profesor
+      // Tabla 3: Retención[cite: 12]
       if (profesoresRetencionFiltrados?.length > 0) {
         checkPageBreak(60);
         doc.setFontSize(13);
-        doc.setFont("helvetica", "bold");
         doc.text("Retención de Alumno por Profesor", 14, currentY);
-        doc.setFont("helvetica", "normal");
 
         const bodyRetencion = profesoresRetencionFiltrados.map(r => [
           r.profesor,
@@ -628,9 +587,16 @@ export default function StaffReportes() {
             )}
           </div>
 
-          <ReportesExportar tipoReporte="Staff" onExport={handleExport} />
+      <ReportesExportar tipoReporte="Staff" onExport={handleExport} />
         </>
       )}
+
+      {/* 🚨 NUEVO: MODAL DE ALERTA PROPIO DEL SISTEMA MODULARIZADO */}
+      <ReportesAlertaModal 
+        visible={alertaCustom.visible}
+        mensaje={alertaCustom.mensaje}
+        onClose={() => setAlertaCustom({ visible: false, mensaje: "" })}
+      />
     </div>
   );
 }

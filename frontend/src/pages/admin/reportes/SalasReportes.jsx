@@ -6,9 +6,9 @@ import ReportesExportar from './components/ReportesExportar';
 import ReportesEmptyState from './components/ReportesEmptyState';
 
 // IMPORTACIONES PARA EXPORTACIÓN
-import { jsPDF } from 'jspdf';
+import { baseTableStyles, inicializarPDF, generarPrefacioExcel, exportarAExcel } from './utils/reportesUtils';
+import ReportesAlertaModal from './components/ReportesAlertaModal';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 
 export default function SalasReportes() {
   const [fechaInicio, setFechaInicio] = useState('');
@@ -17,6 +17,7 @@ export default function SalasReportes() {
   const [cargando, setCargando] = useState(false);
   const [errorValidacion, setErrorValidacion] = useState('');
   const [filtroEspecialidad, setFiltroEspecialidad] = useState('');
+  const [alertaCustom, setAlertaCustom] = useState({ visible: false, mensaje: "" });
 
   const consultarFechas = async (inicio, fin) => {
     setErrorValidacion(''); setReporte(null); setFiltroEspecialidad('');
@@ -58,30 +59,32 @@ export default function SalasReportes() {
     filtroEspecialidad ? c.especialidad === filtroEspecialidad : true
   ) || [];
 
-  // ─────────────────────────────────────────────────────────
-  // LÓGICA DE EXPORTACIÓN DETALLADA (PDF / EXCEL)
-  // ─────────────────────────────────────────────────────────
-// 🚨 REEMPLAZAR LA FUNCIÓN COMPLETA EN SALASREPORTES.JSX:
+  // 🚨 CONTROL DE DATOS: Permite exportar si hay usos de infraestructura globales o filtrados
+  const tieneDatosParaExportar = filtroEspecialidad ? (totalUsosFiltrados > 0) : (totalUsosGlobal > 0);
+
+  // 🚨 REEMPLAZAR LA FUNCIÓN COMPLETA EN SALASREPORTES.JSX:
   const handleExport = (formato) => {
     if (!reporte) return;
+
+    // 🚨 BLOQUEO PREVENTIVO: Si no hay datos de logística, salta el modal custom
+    if (!tieneDatosParaExportar) {
+      setAlertaCustom({
+        visible: true,
+        mensaje: "No se puede exportar el reporte porque no hay datos de ocupación o logística registrados para el período o la especialidad seleccionada."
+      });
+      return;
+    }
+
     const anioActual = new Date().getFullYear();
     const tituloFiltro = filtroEspecialidad ? `_${filtroEspecialidad}` : '_Global';
     const filename = `Reporte_Salas${tituloFiltro}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
 
-    // Extraemos el rango de fechas formateado del backend (o fallback local)
     const fechaInicioLegible = reporte.rango_fechas?.inicio || fechaInicio.split('-').reverse().join('/');
     const fechaFinLegible = reporte.rango_fechas?.fin || fechaFin.split('-').reverse().join('/');
     const subTextoRango = `Período auditado: del ${fechaInicioLegible} al ${fechaFinLegible}`;
 
     if (formato === 'excel') {
-      const wb = XLSX.utils.book_new();
-
-      // Prefacio de metadatos para la cabecera del Excel
-      const prefacioMetadatos = [
-        ["REPORTE DE LOGÍSTICA DE SALAS Y ACTIVIDADES"],
-        [subTextoRango.toUpperCase()],
-        [] // Fila de separación vacía
-      ];
+      const prefacio = generarPrefacioExcel("REPORTE DE LOGÍSTICA DE SALAS Y ACTIVIDADES", subTextoRango);
 
       // Pestaña 1: Resumen General
       const dataResumenRaw = [
@@ -89,140 +92,112 @@ export default function SalasReportes() {
         { "Métrica": "Salas Reservadas", "Valor": reporte.resumen?.salas_reservadas || 0 },
         { "Métrica": "Lista de Espera", "Valor": reporte.resumen?.lista_espera || 0 },
       ];
-      const wsResumen = XLSX.utils.aoa_to_sheet([
-        ...prefacioMetadatos,
-        Object.keys(dataResumenRaw[0]),
-        ...dataResumenRaw.map(obj => Object.values(obj))
-      ]);
-      wsResumen['!cols'] = [{ wch: 30 }, { wch: 15 }];
-      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
-      // Pestaña 2: Mapa de Calor (Ocupación de Infraestructura)
-      if (reporte.mapa_infraestructura && listaHorarios.length > 0) {
-        const dataMapaInfraRaw = reporte.mapa_infraestructura.map(row => {
-          const fila = { "Día / Módulo": row.dia };
-          listaHorarios.forEach(h => {
-            fila[`${h} hs`] = row.horas[h] || "0/0";
-          });
-          return fila;
-        });
-
-        const wsMapa = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataMapaInfraRaw[0]),
-          ...dataMapaInfraRaw.map(obj => Object.values(obj))
-        ]);
-        const colWidths = [{ wch: 15 }];
-        listaHorarios.forEach(() => colWidths.push({ wch: 12 }));
-        wsMapa['!cols'] = colWidths;
-        
-        XLSX.utils.book_append_sheet(wb, wsMapa, "Mapa Ocupación Aulas");
-      }
+      // Pestaña 2: Mapa de Calor (Solo global o si hay infraestructura activa)
+      const mapaCalorTieneDatos = reporte.mapa_infraestructura && listaHorarios.length > 0 && totalUsosGlobal > 0;
+      const dataMapaInfraRaw = mapaCalorTieneDatos 
+        ? reporte.mapa_infraestructura.map(row => {
+            const fila = { "Día / Módulo": row.dia };
+            listaHorarios.forEach(h => {
+              fila[`${h} hs`] = row.horas[h] || "0/0";
+            });
+            return fila;
+          })
+        : [];
 
       // Pestaña 3: Top Clases
-      if (topClasesFiltradas.length > 0) {
-        const dataTopClasesRaw = topClasesFiltradas.slice(0, 5).map(c => ({
-          "Nombre de la Clase": c.nombre_clase,
-          "Especialidad": c.especialidad,
-          "Aula": c.aula,
-          "Profesor": c.profesor,
-          "Ocupación %": `${c.ocupacion}%`
-        }));
-        const wsTopClases = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataTopClasesRaw[0]),
-          ...dataTopClasesRaw.map(obj => Object.values(obj))
-        ]);
-        wsTopClases['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 15 }];
-        XLSX.utils.book_append_sheet(wb, wsTopClases, "Top 5 Clases");
-      }
+      const dataTopClasesRaw = topClasesFiltradas.slice(0, 5).map(c => ({
+        "Nombre de la Clase": c.nombre_clase,
+        "Especialidad": c.especialidad,
+        "Aula": c.aula,
+        "Profesor": c.profesor,
+        "Ocupación %": `${c.ocupacion}%`
+      }));
 
       // Pestaña 4: Ocupación Fija por Sala
       const dataOcupacionFijaRaw = reporte.ocupacion_aulas
-        .filter(a => {
-          const pct = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
-          return !filtroEspecialidad || pct > 0;
-        })
-        .map(a => {
-          const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
-          const usosRender = filtroEspecialidad ? (a.por_especialidad?.[`${filtroEspecialidad}_cantidad_usos`] ?? 0) : a.cantidad_usos;
-          
-          return {
-            "Espacio Físico": a.aula,
-            "Capacidad": a.capacidad,
-            "Usos Totales": usosRender,
-            "Tasa Reserva %": `${a.porcentaje_reserva}%`,
-            "Ocupación (Anotados) %": `${pctRender}%`,
-            "Presentismo %": `${a.porcentaje_presentes}%`
-          };
-        });
+        ? reporte.ocupacion_aulas
+            .filter(a => {
+              const pct = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+              return !filtroEspecialidad || pct > 0;
+            })
+            .map(a => {
+              const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+              const usosRender = filtroEspecialidad ? (a.por_especialidad?.[`${filtroEspecialidad}_cantidad_usos`] ?? 0) : a.cantidad_usos;
+              return {
+                "Espacio Físico": a.aula,
+                "Capacidad": a.capacidad,
+                "Usos Totales": usosRender,
+                "Tasa Reserva %": `${a.porcentaje_reserva}%`,
+                "Ocupación (Anotados) %": `${pctRender}%`,
+                "Presentismo %": `${a.porcentaje_presentes}%`
+              };
+            })
+        : [];
 
-      if (dataOcupacionFijaRaw.length > 0) {
-        const wsOcupacion = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataOcupacionFijaRaw[0]),
-          ...dataOcupacionFijaRaw.map(obj => Object.values(obj))
-        ]);
-        wsOcupacion['!cols'] = [
-          { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 25 }, { wch: 18 }
-        ];
-        XLSX.utils.book_append_sheet(wb, wsOcupacion, "Ocupación por Sala");
-      }
+      // Estructuramos las láminas dinámicas para el utilitario
+      const laminas = [
+        {
+          nombre: "Resumen",
+          cols: [{ wch: 30 }, { wch: 15 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataResumenRaw[0]),
+            ...dataResumenRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Mapa Ocupación Aulas",
+          incluir: mapaCalorTieneDatos && !filtroEspecialidad, // Solo se incluye si es global y tiene datos
+          cols: [{ wch: 15 }, ...listaHorarios.map(() => ({ wch: 12 }))],
+          data: [
+            ...prefacio,
+            Object.keys(dataMapaInfraRaw[0] || {}),
+            ...dataMapaInfraRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Top 5 Clases",
+          incluir: dataTopClasesRaw.length > 0,
+          cols: [{ wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 15 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataTopClasesRaw[0] || {}),
+            ...dataTopClasesRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Ocupación por Sala",
+          incluir: dataOcupacionFijaRaw.length > 0,
+          cols: [{ wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 25 }, { wch: 18 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataOcupacionFijaRaw[0] || {}),
+            ...dataOcupacionFijaRaw.map(obj => Object.values(obj))
+          ]
+        }
+      ];
 
-      XLSX.writeFile(wb, filename);
+      exportarAExcel(filename, laminas);
 
     } else if (formato === 'pdf') {
-      const doc = new jsPDF();
-      let currentY = 14;
+      const { doc, currentY: startY } = inicializarPDF("Reporte de Logística de Salas", subTextoRango, filtroEspecialidad);
+      let currentY = startY;
 
       const checkPageBreak = (espacioNecesario) => {
         const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
         if (currentY + espacioNecesario >= pageHeight - 10) { doc.addPage(); currentY = 14; }
       };
 
-      // Título
-      doc.setFontSize(18);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Reporte de Logística de Salas ${anioActual}`, 14, currentY);
-      currentY += 7;
-
-      // Línea de metadatos con el período
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139); // Gris suave (#64748b)
-      doc.text(subTextoRango, 14, currentY);
-      currentY += 8;
-
-      if (filtroEspecialidad) {
-        doc.setFontSize(10);
-        doc.setTextColor(15, 118, 110);
-        doc.text(`Filtro aplicado: ${filtroEspecialidad}`, 14, currentY);
-        doc.setTextColor(0, 0, 0);
-        currentY += 8;
-      } else {
-        currentY += 2;
-      }
-
       // Resumen Global
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.text("Resumen de Logística", 14, currentY);
-      currentY += 6;
-      doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
       doc.text(`Ocupación Promedio de Salas: ${reporte.resumen?.ocupacion_promedio || 0}%`, 14, currentY); currentY += 6;
       doc.text(`Salas Reservadas: ${reporte.resumen?.salas_reservadas || 0}`, 14, currentY); currentY += 6;
-      doc.text(`Gente en Lista de Espera: ${reporte.resumen?.lista_espera || 0}`, 14, currentY); currentY += 10;
+      doc.text(`Gente en Lista de Espera: ${reporte.resumen?.lista_espera || 0}`, 14, currentY); currentY += 14;
 
-      const baseTableStyles = {
-        theme: 'striped',
-        headStyles: { fillColor: [15, 118, 110], fontSize: 10, halign: 'center' },
-        bodyStyles: { fontSize: 9, valign: 'middle' },
-        styles: { cellPadding: 3, overflow: 'linebreak' },
-        margin: { top: 10 }
-      };
-
-      // Mapa de Calor (Infraestructura)
-      if (reporte.mapa_infraestructura && listaHorarios.length > 0 && totalUsosGlobal > 0) {
+      // Mapa de Calor (Solo se incluye en el reporte global)
+      if (!filtroEspecialidad && reporte.mapa_infraestructura && listaHorarios.length > 0 && totalUsosGlobal > 0) {
         checkPageBreak(50);
         doc.setFontSize(14);
         doc.text("Mapa de Calor: Ocupación de Infraestructura", 14, currentY);
@@ -458,10 +433,17 @@ export default function SalasReportes() {
             )}
           </div>
 
-          {/* BOTÓN CON FUNCIÓN INYECTADA */}
+      {/* BOTÓN CON FUNCIÓN INYECTADA */}
           <ReportesExportar tipoReporte="Salas" onExport={handleExport} />
         </>
       )}
+
+      {/* 🚨 NUEVO: MODAL DE ALERTA PROPIO DEL SISTEMA MODULARIZADO */}
+      <ReportesAlertaModal 
+        visible={alertaCustom.visible}
+        mensaje={alertaCustom.mensaje}
+        onClose={() => setAlertaCustom({ visible: false, mensaje: "" })}
+      />
     </div>
   );
 }

@@ -6,9 +6,10 @@ import ReportesExportar from './components/ReportesExportar';
 import ReportesEmptyState from './components/ReportesEmptyState';
 
 // IMPORTACIONES PARA EXPORTACIÓN
-import { jsPDF } from 'jspdf';
+import { baseTableStyles, inicializarPDF, generarPrefacioExcel, exportarAExcel } from './utils/reportesUtils';
+import ReportesAlertaModal from './components/ReportesAlertaModal';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+
 
 export default function FinanzasReportes() {
   const [fechaInicio, setFechaInicio] = useState('');
@@ -17,6 +18,7 @@ export default function FinanzasReportes() {
   const [cargando, setCargando] = useState(false);
   const [errorValidacion, setErrorValidacion] = useState('');
   const [filtroEspecialidad, setFiltroEspecialidad] = useState('');
+  const [alertaCustom, setAlertaCustom] = useState({ visible: false, mensaje: "" });
 
   const consultarFechas = async (inicio, fin) => {
     setErrorValidacion(''); 
@@ -45,6 +47,7 @@ export default function FinanzasReportes() {
     (reporte.evolucion_temporal?.datos && reporte.evolucion_temporal.datos.some(d => d.ingresos_brutos > 0))
   );
 
+  
   // ────────────────────────────────────────────────────────────────────────
   // LÓGICA DE FILTRADO REACTIVO
   // ────────────────────────────────────────────────────────────────────────
@@ -99,29 +102,29 @@ export default function FinanzasReportes() {
     profesParaMostrar = profesParaMostrar.sort((a, b) => b.recaudacion - a.recaudacion).slice(0, 5);
   }
 
-  // ─────────────────────────────────────────────────────────
-  // LÓGICA DE EXPORTACIÓN DETALLADA (PDF / EXCEL)
-  // ─────────────────────────────────────────────────────────
-  const handleExport = (formato) => {
+  const tieneDatosParaExportar = ingresosTotalesRender > 0;
+const handleExport = (formato) => {
     if (!reporte) return;
+
+    // 🚨 BLOQUEO PREVENTIVO: Si no hay ingresos, se abre el modal del sistema
+    if (!tieneDatosParaExportar) {
+      setAlertaCustom({
+        visible: true,
+        mensaje: "No se puede exportar el reporte porque no se registran movimientos ni ingresos para el período o la especialidad seleccionada."
+      });
+      return;
+    }
+
     const anioActual = new Date().getFullYear();
     const tituloFiltro = filtroEspecialidad ? `_${filtroEspecialidad}` : '_Global';
     const filename = `Reporte_Financiero${tituloFiltro}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
 
-    // Extraemos el rango de fechas formateado del backend (o fallback local)
     const fechaInicioLegible = reporte.rango_fechas?.inicio || fechaInicio.split('-').reverse().join('/');
     const fechaFinLegible = reporte.rango_fechas?.fin || fechaFin.split('-').reverse().join('/');
     const subTextoRango = `Período auditado: del ${fechaInicioLegible} al ${fechaFinLegible}`;
 
     if (formato === 'excel') {
-      const wb = XLSX.utils.book_new();
-
-      // Prefacio de metadatos para la cabecera del Excel
-      const prefacioMetadatos = [
-        ["REPORTE FINANCIERO Y CONTROL DE PAGOS"],
-        [subTextoRango.toUpperCase()],
-        [] // Fila de separación vacía
-      ];
+      const prefacio = generarPrefacioExcel("REPORTE FINANCIERO Y CONTROL DE PAGOS", subTextoRango);
 
       // Pestaña 1: Resumen General
       const dataResumenRaw = [
@@ -133,34 +136,18 @@ export default function FinanzasReportes() {
         { "Métrica": "Ingresos por Señas / Reservas", "Valor": `$${ingresosSenasRender.toLocaleString('es-AR')}` }
       ];
 
-      const wsResumen = XLSX.utils.aoa_to_sheet([
-        ...prefacioMetadatos,
-        Object.keys(dataResumenRaw[0]),
-        ...dataResumenRaw.map(obj => Object.values(obj))
-      ]);
-      wsResumen['!cols'] = [{ wch: 40 }, { wch: 25 }];
-      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
+      // Pestaña 2: Evolución Temporal
+      const dataEvolucionRaw = reporte.evolucion_temporal?.datos 
+        ? reporte.evolucion_temporal.datos.map(d => {
+            const valorFiltro = filtroEspecialidad ? (d.por_especialidad?.[filtroEspecialidad] || 0) : d.ingresos_brutos;
+            return {
+              "Período": d.mes_corto,
+              "Ingresos Brutos": `$${valorFiltro.toLocaleString('es-AR')}`
+            };
+          }) 
+        : [];
 
-      // Pestaña 2: Evolución Financiera
-      if (reporte.evolucion_temporal?.datos) {
-        const dataEvolucionRaw = reporte.evolucion_temporal.datos.map(d => {
-          const valorFiltro = filtroEspecialidad ? (d.por_especialidad?.[filtroEspecialidad] || 0) : d.ingresos_brutos;
-          return {
-            "Período": d.mes_corto,
-            "Ingresos Brutos": `$${valorFiltro.toLocaleString('es-AR')}`
-          };
-        });
-
-        const wsEvolucion = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataEvolucionRaw[0]),
-          ...dataEvolucionRaw.map(obj => Object.values(obj))
-        ]);
-        wsEvolucion['!cols'] = [{ wch: 20 }, { wch: 25 }];
-        XLSX.utils.book_append_sheet(wb, wsEvolucion, "Evolución Financiera");
-      }
-
-      // Pestaña 3: Rankings (Top 5)
+      // Pestaña 3: Rankings
       const dataRankingsRaw = [];
       const maxFilas = Math.max(clasesParaMostrar.length, profesParaMostrar.length);
       for (let i = 0; i < maxFilas; i++) {
@@ -172,65 +159,59 @@ export default function FinanzasReportes() {
           "Recaudación (Profesor)": profesParaMostrar[i] ? `$${profesParaMostrar[i].recaudacion.toLocaleString('es-AR')}` : "-"
         });
       }
-      if (dataRankingsRaw.length > 0) {
-        const wsRankings = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataRankingsRaw[0]),
-          ...dataRankingsRaw.map(obj => Object.values(obj))
-        ]);
-        wsRankings['!cols'] = [{ wch: 10 }, { wch: 30 }, { wch: 25 }, { wch: 30 }, { wch: 25 }];
-        XLSX.utils.book_append_sheet(wb, wsRankings, "Rankings Top 5");
-      }
 
-      XLSX.writeFile(wb, filename);
+      // Empaquetamos las láminas correspondientes
+      const laminas = [
+        {
+          nombre: "Resumen General",
+          cols: [{ wch: 40 }, { wch: 25 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataResumenRaw[0]),
+            ...dataResumenRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Evolución Financiera",
+          incluir: dataEvolucionRaw.length > 0,
+          cols: [{ wch: 20 }, { wch: 25 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataEvolucionRaw[0] || {}),
+            ...dataEvolucionRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Rankings Top 5",
+          incluir: dataRankingsRaw.length > 0,
+          cols: [{ wch: 10 }, { wch: 30 }, { wch: 25 }, { wch: 30 }, { wch: 25 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataRankingsRaw[0] || {}),
+            ...dataRankingsRaw.map(obj => Object.values(obj))
+          ]
+        }
+      ];
+
+      exportarAExcel(filename, laminas);
 
     } else if (formato === 'pdf') {
-      const doc = new jsPDF();
-      let currentY = 14;
+      const { doc, currentY: startY } = inicializarPDF("Reporte Financiero y Pagos", subTextoRango, filtroEspecialidad);
+      let currentY = startY;
 
       const checkPageBreak = (espacioNecesario) => {
         const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
         if (currentY + espacioNecesario >= pageHeight - 10) { doc.addPage(); currentY = 14; }
       };
 
-      // Título
-      doc.setFontSize(18);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Reporte Financiero y Pagos ${anioActual}`, 14, currentY);
-      currentY += 7;
-
-      // Línea de metadatos con el período
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139); // Gris suave (#64748b)
-      doc.text(subTextoRango, 14, currentY);
-      currentY += 8;
-
-      if (filtroEspecialidad) {
-        doc.setFontSize(10);
-        doc.setTextColor(15, 118, 110);
-        doc.text(`Filtro aplicado: ${filtroEspecialidad} (Excluye ingresos por planes globales)`, 14, currentY);
-        doc.setTextColor(0, 0, 0);
-        currentY += 8;
-      } else {
-        currentY += 2;
-      }
-
-      // Resumen Global
+      // Resumen
       doc.setFontSize(11);
       doc.setTextColor(0, 0, 0);
       doc.text(`Ingresos Totales (Rango): $${ingresosTotalesRender.toLocaleString('es-AR')}`, 14, currentY); currentY += 6;
       doc.text(`Suscripciones Activas: ${filtroEspecialidad ? 'N/A' : suscripcionesRender}`, 14, currentY); currentY += 6;
       doc.text(`Ingreso Promedio por Cliente: ${ingresoPromedioRender}`, 14, currentY); currentY += 14;
 
-      const baseTableStyles = {
-        theme: 'striped',
-        headStyles: { fillColor: [15, 118, 110], fontSize: 11, halign: 'center' },
-        bodyStyles: { fontSize: 10, valign: 'middle' },
-        styles: { cellPadding: 5, overflow: 'linebreak' },
-        margin: { top: 14 }
-      };
-
-      // Tabla: Desglose de Ingresos
+      // Tabla 1: Desglose
       checkPageBreak(40);
       doc.setFontSize(14);
       doc.text("Cruce de Ingresos y Facturación", 14, currentY);
@@ -247,7 +228,7 @@ export default function FinanzasReportes() {
       });
       currentY = doc.lastAutoTable.finalY + 14;
 
-      // Tabla: Evolución Financiera
+      // Tabla 2: Evolución
       if (reporte.evolucion_temporal?.datos && reporte.evolucion_temporal.datos.length > 0) {
         checkPageBreak(40);
         doc.setFontSize(14);
@@ -268,7 +249,7 @@ export default function FinanzasReportes() {
         currentY = doc.lastAutoTable.finalY + 14;
       }
 
-      // Tablas: Rankings
+      // Tabla 3: Rankings
       if (clasesParaMostrar.length > 0 || profesParaMostrar.length > 0) {
         checkPageBreak(60);
         doc.setFontSize(14);
@@ -498,10 +479,17 @@ export default function FinanzasReportes() {
             </>
           )}
 
-          {/* 4. EXPORTACIÓN MODULAR */}
+          {/* EXPORTACIÓN MODULAR */}
           <ReportesExportar tipoReporte="Financieros" onExport={handleExport} />
         </>
       )}
+      
+      {/* 🚨 NUEVO: MODAL DE ALERTA PROPIO DEL SISTEMA MODULARIZADO */}
+      <ReportesAlertaModal 
+        visible={alertaCustom.visible}
+        mensaje={alertaCustom.mensaje}
+        onClose={() => setAlertaCustom({ visible: false, mensaje: "" })}
+      />
     </div>
   );
 }

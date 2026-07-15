@@ -4,10 +4,10 @@ import { s } from './reportesStyles';
 import ReportesHeader from './components/ReportesHeader';
 import ReportesExportar from './components/ReportesExportar';
 import ReportesEmptyState from './components/ReportesEmptyState';
+import ReportesAlertaModal from './components/ReportesAlertaModal';
 
-import { jsPDF } from 'jspdf';
+import { baseTableStyles, inicializarPDF, generarPrefacioExcel, exportarAExcel } from './utils/reportesUtils';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 
 export default function ClientesReportes() {
   const [fechaInicio, setFechaInicio] = useState('');
@@ -16,6 +16,7 @@ export default function ClientesReportes() {
   const [cargando, setCargando] = useState(false);
   const [errorValidacion, setErrorValidacion] = useState('');
   const [filtroEspecialidad, setFiltroEspecialidad] = useState('');
+  const [alertaCustom, setAlertaCustom] = useState({ visible: false, mensaje: "" });
 
   const [sortConcurrencia, setSortConcurrencia] = useState({ llave: null, direccion: 'asc' });
 
@@ -92,38 +93,55 @@ export default function ClientesReportes() {
     };
   }, [reporte]);
 
+
+// 🚨 CONTROL DE DATOS PARA LA VISTA ACTUAL (GLOBAL O FILTRADA)
+  const tieneDatosConcurrencia = clasesFiltradas.length > 0 && totales.clases > 0;
+
+  const tieneDatosMapa = React.useMemo(() => {
+    if (!reporte?.mapa_calor || listaHorarios.length === 0) return false;
+    return reporte.mapa_calor.some(row => 
+      listaHorarios.some(h => {
+        const cellData = row.horas[h];
+        const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
+        return valorPct > 0;
+      })
+    );
+  }, [reporte, listaHorarios, filtroEspecialidad]);
+
+  // Si al menos uno de los dos bloques tiene datos, se permite exportar
+  const tieneDatosParaExportar = tieneDatosConcurrencia || tieneDatosMapa;
+
   const handleExport = (formato) => {
     if (!reporte) return;
+
+    // Bloqueo si la planilla o el PDF van a salir vacíos
+    if (!tieneDatosParaExportar) {
+      setAlertaCustom({
+        visible: true,
+        mensaje: "No se puede exportar el reporte porque no hay datos registrados para el período o la especialidad seleccionada."
+      });
+      return;
+    }
+
     const anioActual = new Date().getFullYear();
     const tituloFiltro = filtroEspecialidad ? `_${filtroEspecialidad}` : '_Global';
     const filename = `Reporte_Clientes_Avanzado${tituloFiltro}_${anioActual}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
 
-    // Extraemos el rango de fechas proporcionado por el backend (o caemos en el estado local)
     const fechaInicioLegible = reporte.rango_fechas?.inicio || fechaInicio.split('-').reverse().join('/');
     const fechaFinLegible = reporte.rango_fechas?.fin || fechaFin.split('-').reverse().join('/');
     const subTextoRango = `Período auditado: del ${fechaInicioLegible} al ${fechaFinLegible}`;
 
     if (formato === 'excel') {
-      const wb = XLSX.utils.book_new();
+      const prefacio = generarPrefacioExcel("REPORTE DE CLIENTES Y ASISTENCIAS", subTextoRango);
 
-      // 🚨 MEJORA EXCEL: Insertar cabecera con el rango de fechas en cada pestaña antes de las tablas
-      const prefacioMetadatos = [
-        ["REPORTE DE CLIENTES Y ASISTENCIAS"],
-        [subTextoRango.toUpperCase()],
-        [] // Fila vacía de separación
-      ];
-
-      // Pestaña 1: Resumen General
+      // Pestaña 1: Resumen General (Siempre se incluye)
       const dataResumen = [
-        ...prefacioMetadatos,
+        ...prefacio,
         ["Métrica", "Valor"],
         ["Ausentismo Promedio", `${reporte.resumen.tasa_ausentismo}%`],
         ["Nuevos Registros", reporte.resumen.nuevos_registros || 0],
         ["Clientes Suspendidos", reporte.resumen.clientes_suspendidos_rango || 0]
       ];
-      const wsResumen = XLSX.utils.aoa_to_sheet(dataResumen);
-      wsResumen['!cols'] = [{ wch: 35 }, { wch: 20 }];
-      XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen General");
 
       // Pestaña 2: Concurrencia
       const dataConcurrenciaRaw = clasesFiltradas.map(c => ({
@@ -135,137 +153,119 @@ export default function ClientesReportes() {
         "Cancelaciones": c.cancelaciones,
         "Lista Espera": c.lista_espera
       }));
-      dataConcurrenciaRaw.push({
-        "Especialidad / Clase": "TOTALES",
-        "Clases": totales.clases,
-        "Cupos Iniciales": totales.cupos,
-        "Asistencias": totales.asistencias,
-        "Inasistencias": totales.inasistencias,
-        "Cancelaciones": totales.cancelaciones,
-        "Lista Espera": totales.espera
-      });
-      // Convertimos la tabla de concurrencia a array de arrays (AOA) para anexarle la cabecera arriba
-      const wsConcurrencia = XLSX.utils.aoa_to_sheet([
-        ...prefacioMetadatos,
-        Object.keys(dataConcurrenciaRaw[0]),
-        ...dataConcurrenciaRaw.map(obj => Object.values(obj))
-      ]);
-      wsConcurrencia['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }];
-      XLSX.utils.book_append_sheet(wb, wsConcurrencia, "Concurrencia");
+      if (tieneDatosConcurrencia) {
+        dataConcurrenciaRaw.push({
+          "Especialidad / Clase": "TOTALES",
+          "Clases": totales.clases,
+          "Cupos Iniciales": totales.cupos,
+          "Asistencias": totales.asistencias,
+          "Inasistencias": totales.inasistencias,
+          "Cancelaciones": totales.cancelaciones,
+          "Lista Espera": totales.espera
+        });
+      }
 
       // Pestaña 3: Mapa de Calor
-      if (reporte.mapa_calor && listaHorarios.length > 0) {
-        const dataMapaCalor = reporte.mapa_calor.map(row => {
-          const fila = { "Día / Módulo": row.dia };
-          listaHorarios.forEach(h => {
-            const cellData = row.horas[h];
-            const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
-            fila[`${h} hs`] = `${valorPct}%`;
-          });
-          return fila;
+      const dataMapaCalor = tieneDatosMapa ? reporte.mapa_calor.map(row => {
+        const fila = { "Día / Módulo": row.dia };
+        listaHorarios.forEach(h => {
+          const cellData = row.horas[h];
+          const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
+          fila[`${h} hs`] = `${valorPct}%`;
         });
-        const wsMapa = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataMapaCalor[0]),
-          ...dataMapaCalor.map(obj => Object.values(obj))
-        ]);
-        const colWidths = [{ wch: 15 }];
-        listaHorarios.forEach(() => colWidths.push({ wch: 10 }));
-        wsMapa['!cols'] = colWidths;
-        XLSX.utils.book_append_sheet(wb, wsMapa, "Mapa de Calor");
-      }
+        return fila;
+      }) : [];
 
       // Pestaña 4: Cuentas Suspendidas
       const sancionadosFiltrados = reporte.sancionados?.filter(user => !motivosOcultos.includes(user.motivo)) || [];
-      let wsSanciones;
-      if (sancionadosFiltrados.length > 0) {
-        const dataSanciones = sancionadosFiltrados.map(user => ({
-          "Nombre del Alumno": user.nombre,
-          "Motivo de Suspensión": user.motivo,
-          "Inicio de Suspensión": user.fecha_inicio
-        }));
-        wsSanciones = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          Object.keys(dataSanciones[0]),
-          ...dataSanciones.map(obj => Object.values(obj))
-        ]);
-        wsSanciones['!cols'] = [{ wch: 30 }, { wch: 45 }, { wch: 25 }];
-      } else {
-        wsSanciones = XLSX.utils.aoa_to_sheet([
-          ...prefacioMetadatos,
-          ["Estado"],
-          ["No se registraron suspensiones en este período."]
-        ]);
-        wsSanciones['!cols'] = [{ wch: 50 }];
-      }
-      XLSX.utils.book_append_sheet(wb, wsSanciones, "Cuentas Suspendidas");
+      const dataSanciones = sancionadosFiltrados.length > 0 
+        ? sancionadosFiltrados.map(user => ({
+            "Nombre del Alumno": user.nombre,
+            "Motivo de Suspensión": user.motivo,
+            "Inicio de Suspensión": user.fecha_inicio
+          }))
+        : [["Estado"], ["No se registraron suspensiones en este período."]];
 
-      XLSX.writeFile(wb, filename);
+      // Estructuramos las láminas dinámicas para el generador central
+      const laminas = [
+        {
+          nombre: "Resumen General",
+          cols: [{ wch: 35 }, { wch: 20 }],
+          data: dataResumen
+        },
+        {
+          nombre: "Concurrencia",
+          incluir: tieneDatosConcurrencia, // 🚨 Condicional dinámico
+          cols: [{ wch: 30 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }],
+          data: [
+            ...prefacio,
+            Object.keys(dataConcurrenciaRaw[0] || {}),
+            ...dataConcurrenciaRaw.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Mapa de Calor",
+          incluir: tieneDatosMapa, // 🚨 Condicional dinámico
+          cols: [{ wch: 15 }, ...listaHorarios.map(() => ({ wch: 10 }))],
+          data: [
+            ...prefacio,
+            Object.keys(dataMapaCalor[0] || {}),
+            ...dataMapaCalor.map(obj => Object.values(obj))
+          ]
+        },
+        {
+          nombre: "Cuentas Suspendidas",
+          cols: sancionadosFiltrados.length > 0 ? [{ wch: 30 }, { wch: 45 }, { wch: 25 }] : [{ wch: 50 }],
+          data: [
+            ...prefacio,
+            sancionadosFiltrados.length > 0 ? Object.keys(dataSanciones[0]) : ["Estado"],
+            ...dataSanciones.map(obj => Array.isArray(obj) ? obj : Object.values(obj))
+          ]
+        }
+      ];
+
+      exportarAExcel(filename, laminas);
 
     } else if (formato === 'pdf') {
-      const doc = new jsPDF();
-      let currentY = 14;
+      const { doc, currentY: startY } = inicializarPDF("Reporte de Clientes y Asistencias", subTextoRango, filtroEspecialidad);
+      let currentY = startY;
 
       const checkPageBreak = (espacioNecesario) => {
         const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
         if (currentY + espacioNecesario >= pageHeight - 10) { doc.addPage(); currentY = 14; }
       };
 
-      // TÍTULO Y SUBTÍTULO CON RANGO DE FECHAS
-      doc.setFontSize(18);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Reporte de Clientes y Asistencias ${anioActual}`, 14, currentY);
-      currentY += 7;
-
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139); // Gris suave (#64748b)
-      doc.text(subTextoRango, 14, currentY);
-      currentY += 8;
-      
-      if (filtroEspecialidad) {
-        doc.setFontSize(10);
-        doc.setTextColor(15, 118, 110);
-        doc.text(`Filtro aplicado: ${filtroEspecialidad}`, 14, currentY);
-        doc.setTextColor(0, 0, 0);
-        currentY += 8;
-      } else {
-        currentY += 2;
-      }
-
+      // Resumen
       doc.setFontSize(11);
       doc.setTextColor(0, 0, 0);
       doc.text(`Ausentismo Promedio: ${reporte.resumen.tasa_ausentismo}%`, 14, currentY); currentY += 6;
       doc.text(`Nuevos Registros: ${reporte.resumen.nuevos_registros || 0}`, 14, currentY); currentY += 6;
       doc.text(`Clientes Suspendidos: ${reporte.resumen.clientes_suspendidos_rango || 0}`, 14, currentY); currentY += 14;
 
-      const baseTableStyles = {
-        theme: 'striped',
-        headStyles: { fillColor: [15, 118, 110], fontSize: 11, halign: 'center' },
-        bodyStyles: { fontSize: 10, valign: 'middle' },
-        styles: { cellPadding: 5, overflow: 'linebreak' },
-        margin: { top: 14 }
-      };
+      // Concurrencia
+      if (tieneDatosConcurrencia) {
+        checkPageBreak(40);
+        doc.setFontSize(14);
+        doc.text("Concurrencia y Cancelaciones", 14, currentY);
+        
+        const bodyConcurrencia = clasesFiltradas.map(c => [
+          c.nombre_clase || c.tipo, c.cant_clases, c.cupos_iniciales, c.asistencias, c.inasistencias, c.cancelaciones, c.lista_espera
+        ]);
+        bodyConcurrencia.push([{ content: 'TOTALES', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, totales.clases, totales.cupos, totales.asistencias, totales.inasistencias, totales.cancelaciones, totales.espera]);
 
-      checkPageBreak(40);
-      doc.setFontSize(14);
-      doc.text("Concurrencia y Cancelaciones", 14, currentY);
-      
-      const bodyConcurrencia = clasesFiltradas.map(c => [
-        c.nombre_clase || c.tipo, c.cant_clases, c.cupos_iniciales, c.asistencias, c.inasistencias, c.cancelaciones, c.lista_espera
-      ]);
-      bodyConcurrencia.push([{ content: 'TOTALES', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, totales.clases, totales.cupos, totales.asistencias, totales.inasistencias, totales.cancelaciones, totales.espera]);
+        autoTable(doc, {
+          ...baseTableStyles,
+          startY: currentY + 4,
+          head: [['Especialidad / Clase', 'Clases', 'Cupos', 'Asist.', 'Inasist.', 'Cancel.', 'Espera']],
+          body: bodyConcurrencia,
+          styles: { ...baseTableStyles.styles, fontSize: 9, cellPadding: 3 },
+          columnStyles: { 0: { cellWidth: 35 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' } }
+        });
+        currentY = doc.lastAutoTable.finalY + 14;
+      }
 
-      autoTable(doc, {
-        ...baseTableStyles,
-        startY: currentY + 4,
-        head: [['Especialidad / Clase', 'Clases', 'Cupos', 'Asist.', 'Inasist.', 'Cancel.', 'Espera']],
-        body: bodyConcurrencia,
-        styles: { ...baseTableStyles.styles, fontSize: 9, cellPadding: 3 },
-        columnStyles: { 0: { cellWidth: 35 }, 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' } }
-      });
-      currentY = doc.lastAutoTable.finalY + 14;
-
-      if (reporte.mapa_calor && listaHorarios.length > 0) {
+      // Mapa de Calor
+      if (tieneDatosMapa && reporte.mapa_calor && listaHorarios.length > 0) {
         checkPageBreak(50);
         doc.setFontSize(14);
         doc.text("Mapa de Calor: Ocupación (%)", 14, currentY);
@@ -290,6 +290,7 @@ export default function ClientesReportes() {
         currentY = doc.lastAutoTable.finalY + 14;
       }
 
+      // Sanciones
       checkPageBreak(40);
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 0);
@@ -311,13 +312,11 @@ export default function ClientesReportes() {
           body: sancionadosFiltrados.map(user => [user.nombre, user.motivo, user.fecha_inicio]),
           columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 80 } }
         });
-        currentY = doc.lastAutoTable.finalY + 14;
       } else {
         doc.setFontSize(11);
         doc.setTextColor(100, 116, 139);
         doc.text("No se registraron suspensiones en este período para listar.", 14, currentY + 4);
         doc.setTextColor(0, 0, 0);
-        currentY += 14;
       }
 
       doc.save(filename);
@@ -510,9 +509,21 @@ export default function ClientesReportes() {
             )}
           </div>
 
+          {/* 🚨 REEMPLAZÁ ESTA LÍNEA (Cambiá sePuedeExportarConFiltro por tieneDatosParaExportar) */}
+          {!tieneDatosParaExportar && (
+            <p style={{ color: '#e11d48', fontSize: '14px', fontWeight: '600', textAlign: 'center', marginTop: '16px' }}>
+              ⚠️ La especialidad seleccionada no tiene datos registrados. Filtra otra especialidad para poder exportar.
+            </p>
+          )}
           <ReportesExportar tipoReporte="Clientes" onExport={handleExport} />
         </>
       )}
+      {/* MODAL DE ALERTA PROPIO DEL SISTEMA MODULARIZADO */}
+      <ReportesAlertaModal 
+        visible={alertaCustom.visible}
+        mensaje={alertaCustom.mensaje}
+        onClose={() => setAlertaCustom({ visible: false, mensaje: "" })}
+      />
     </div>
   );
 }
