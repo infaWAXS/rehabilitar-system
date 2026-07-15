@@ -54,19 +54,25 @@ export default function SalasReportes() {
     return acc + usos;
   }, 0) || 0;
 
-  // Filtrado Reactivo para el Top 5
   const topClasesFiltradas = reporte?.top_clases?.filter(c => 
     filtroEspecialidad ? c.especialidad === filtroEspecialidad : true
   ) || [];
 
-  // 🚨 CONTROL DE DATOS: Permite exportar si hay usos de infraestructura globales o filtrados
-  const tieneDatosParaExportar = filtroEspecialidad ? (totalUsosFiltrados > 0) : (totalUsosGlobal > 0);
+  const mapaCalorTieneDatos = reporte?.mapa_infraestructura && listaHorarios.length > 0 && totalUsosGlobal > 0;
 
-  // 🚨 REEMPLAZAR LA FUNCIÓN COMPLETA EN SALASREPORTES.JSX:
+  // 🚨 REGLA DE EXPORTACIÓN ESTRICTA Y MODULAR:
+  const tieneDatosParaExportar = filtroEspecialidad 
+    ? (topClasesFiltradas.length > 0 || totalUsosFiltrados > 0)
+    : (
+        totalUsosGlobal > 0 || 
+        topClasesFiltradas.length > 0 || 
+        (reporte?.resumen?.salas_reservadas > 0) || 
+        (reporte?.resumen?.ocupacion_promedio > 0)
+      );
+
   const handleExport = (formato) => {
     if (!reporte) return;
 
-    // 🚨 BLOQUEO PREVENTIVO: Si no hay datos de logística, salta el modal custom
     if (!tieneDatosParaExportar) {
       setAlertaCustom({
         visible: true,
@@ -86,15 +92,12 @@ export default function SalasReportes() {
     if (formato === 'excel') {
       const prefacio = generarPrefacioExcel("REPORTE DE LOGÍSTICA DE SALAS Y ACTIVIDADES", subTextoRango);
 
-      // Pestaña 1: Resumen General
       const dataResumenRaw = [
         { "Métrica": "Ocupación Promedio", "Valor": `${reporte.resumen?.ocupacion_promedio || 0}%` },
         { "Métrica": "Salas Reservadas", "Valor": reporte.resumen?.salas_reservadas || 0 },
         { "Métrica": "Lista de Espera", "Valor": reporte.resumen?.lista_espera || 0 },
       ];
 
-      // Pestaña 2: Mapa de Calor (Solo global o si hay infraestructura activa)
-      const mapaCalorTieneDatos = reporte.mapa_infraestructura && listaHorarios.length > 0 && totalUsosGlobal > 0;
       const dataMapaInfraRaw = mapaCalorTieneDatos 
         ? reporte.mapa_infraestructura.map(row => {
             const fila = { "Día / Módulo": row.dia };
@@ -105,7 +108,6 @@ export default function SalasReportes() {
           })
         : [];
 
-      // Pestaña 3: Top Clases
       const dataTopClasesRaw = topClasesFiltradas.slice(0, 5).map(c => ({
         "Nombre de la Clase": c.nombre_clase,
         "Especialidad": c.especialidad,
@@ -114,7 +116,6 @@ export default function SalasReportes() {
         "Ocupación %": `${c.ocupacion}%`
       }));
 
-      // Pestaña 4: Ocupación Fija por Sala
       const dataOcupacionFijaRaw = reporte.ocupacion_aulas
         ? reporte.ocupacion_aulas
             .filter(a => {
@@ -135,7 +136,7 @@ export default function SalasReportes() {
             })
         : [];
 
-      // Estructuramos las láminas dinámicas para el utilitario
+      // Estructuramos las láminas dinámicas filtrando hojas vacías según el contexto del filtro
       const laminas = [
         {
           nombre: "Resumen",
@@ -148,33 +149,33 @@ export default function SalasReportes() {
         },
         {
           nombre: "Mapa Ocupación Aulas",
-          incluir: mapaCalorTieneDatos && !filtroEspecialidad, // Solo se incluye si es global y tiene datos
+          incluir: mapaCalorTieneDatos && !filtroEspecialidad, 
           cols: [{ wch: 15 }, ...listaHorarios.map(() => ({ wch: 12 }))],
-          data: [
+          data: mapaCalorTieneDatos ? [
             ...prefacio,
             Object.keys(dataMapaInfraRaw[0] || {}),
             ...dataMapaInfraRaw.map(obj => Object.values(obj))
-          ]
+          ] : []
         },
         {
           nombre: "Top 5 Clases",
           incluir: dataTopClasesRaw.length > 0,
           cols: [{ wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 15 }],
-          data: [
+          data: dataTopClasesRaw.length > 0 ? [
             ...prefacio,
             Object.keys(dataTopClasesRaw[0] || {}),
             ...dataTopClasesRaw.map(obj => Object.values(obj))
-          ]
+          ] : []
         },
         {
           nombre: "Ocupación por Sala",
-          incluir: dataOcupacionFijaRaw.length > 0,
+          incluir: dataOcupacionFijaRaw.length > 0 && totalUsosFiltrados > 0,
           cols: [{ wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 25 }, { wch: 18 }],
-          data: [
+          data: dataOcupacionFijaRaw.length > 0 ? [
             ...prefacio,
             Object.keys(dataOcupacionFijaRaw[0] || {}),
             ...dataOcupacionFijaRaw.map(obj => Object.values(obj))
-          ]
+          ] : []
         }
       ];
 
@@ -196,8 +197,8 @@ export default function SalasReportes() {
       doc.text(`Salas Reservadas: ${reporte.resumen?.salas_reservadas || 0}`, 14, currentY); currentY += 6;
       doc.text(`Gente en Lista de Espera: ${reporte.resumen?.lista_espera || 0}`, 14, currentY); currentY += 14;
 
-      // Mapa de Calor (Solo se incluye en el reporte global)
-      if (!filtroEspecialidad && reporte.mapa_infraestructura && listaHorarios.length > 0 && totalUsosGlobal > 0) {
+      // Mapa de Calor
+      if (!filtroEspecialidad && mapaCalorTieneDatos) {
         checkPageBreak(50);
         doc.setFontSize(14);
         doc.text("Mapa de Calor: Ocupación de Infraestructura", 14, currentY);
@@ -297,14 +298,15 @@ export default function SalasReportes() {
             </div>
           </div>
 
-          {/* MAPA 1: INFRAESTRUCTURA (AHORA ARRIBA DE TODO, ANTES DEL FILTRO) */}
+          {/* MAPA 1: INFRAESTRUCTURA */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
               Mapa de Calor: Ocupación de Infraestructura (Aulas)
               <span style={s.badgeGlobalTitulo}>Global (Fijo)</span>
             </h2>
             <p style={s.bajada}>Cantidad de espacios físicos utilizados sobre el total de aulas disponibles en el rango.</p>
-            {totalUsosGlobal > 0 ? (
+            
+            {!filtroEspecialidad && totalUsosGlobal > 0 ? (
               <div style={s.wrapperTabla}>
                 <div style={s.gridCalorDinamico(listaHorarios.length)}>
                   <div style={s.celdaCalorCabecera}>Día / Módulo</div>
@@ -326,7 +328,10 @@ export default function SalasReportes() {
                 </div>
               </div>
             ) : (
-              <ReportesEmptyState entidad="usos de infraestructura" filtroEspecialidad="" />
+              <ReportesEmptyState 
+                entidad="usos de infraestructura edilicia" 
+                filtroEspecialidad={filtroEspecialidad} 
+              />
             )}
           </div>
 
@@ -341,7 +346,7 @@ export default function SalasReportes() {
             </div>
           </div>
 
-          {/* TOP CLASES (AHORA FILTRADO Y DEBAJO DEL SELECT) */}
+          {/* TOP CLASES */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
               Clases con Mayor Ocupación de Salas
@@ -433,12 +438,12 @@ export default function SalasReportes() {
             )}
           </div>
 
-      {/* BOTÓN CON FUNCIÓN INYECTADA */}
+          {/* BOTÓN DE EXPORTACIÓN */}
           <ReportesExportar tipoReporte="Salas" onExport={handleExport} />
         </>
       )}
 
-      {/* 🚨 NUEVO: MODAL DE ALERTA PROPIO DEL SISTEMA MODULARIZADO */}
+      {/* MODAL DE ALERTA */}
       <ReportesAlertaModal 
         visible={alertaCustom.visible}
         mensaje={alertaCustom.mensaje}
