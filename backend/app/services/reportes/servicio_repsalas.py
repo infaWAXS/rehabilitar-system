@@ -177,7 +177,16 @@ def generar_reporte_salas_service(db: Session, fecha_inicio: date, fecha_fin: da
     # 4. RANKING TOP CLASES (Corrección de UnboundLocalError aplicada)
     # ──────────────────────────────────────────────────────────────────────────
     clases_agrupadas = {}
-    actividades_reservadas = [a for a in actividades_filtradas_infra if a.room_id]
+    #    1. Obtenemos todas las actividades dentro del rango con specific_date no nula
+    actividades_reservadas = db.query(Activity).filter(
+        Activity.specific_date.isnot(None),
+        Activity.specific_date.between(fecha_inicio, fecha_fin)
+    ).all()
+
+    # 2. Computar de forma exacta la cantidad de SALAS ÚNICAS (room_id distintos) reservadas en el período
+    # Filtramos por si acaso alguna actividad no tiene room_id asignado (evitando contar None)
+    ids_salas_reservadas = {a.room_id for a in actividades_reservadas if a.room_id is not None}
+    salas_reservadas_count = len(ids_salas_reservadas)
     nombres_por_grupo = {}
 
     for act in actividades_reservadas:
