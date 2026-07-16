@@ -213,10 +213,13 @@ function CrearActividad() {
     () => generarFechasDelMes(form.mes, form.diaSemana),
     [form.mes, form.diaSemana]
   );
-  const fechasValidas = useMemo(
-    () => fechasGeneradas.filter((f) => !f.esFeriado),
-    [fechasGeneradas]
-  );
+  // No se ofrecen fechas pasadas: en un lote mensual se descartan los días del mes que
+  // ya transcurrieron, igual que los feriados (hoy sigue disponible; la hora de hoy la
+  // filtra horasDisponibles).
+  const fechasValidas = useMemo(() => {
+    const hoyStr = new Date().toISOString().split('T')[0];
+    return fechasGeneradas.filter((f) => !f.esFeriado && f.fechaStr >= hoyStr);
+  }, [fechasGeneradas]);
   // Fecha representativa para cálculos de colisión de sala/profesor
   const representativeDate = useMemo(() => {
     if (form.activity_type === 'individual') return form.specific_date || null;
@@ -313,7 +316,18 @@ function CrearActividad() {
   const horasDisponibles = useMemo(() => {
     if (!form.room_id || !representativeDate) return HORAS;
     const dia = DIAS_SEMANA[new Date(`${representativeDate}T00:00:00`).getDay()];
-    return HORAS.filter((h) => !ocupada(form.room_id, dia, h.valor));
+
+    // Si el turno es hoy, no se ofrecen las horas que ya pasaron (a las 12:51 no aparece
+    // el turno de las 12:00). Se compara contra ahora, sin mensaje de error.
+    const ahora = new Date();
+    const esHoy = representativeDate === ahora.toISOString().split('T')[0];
+    const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+
+    return HORAS.filter((h) => {
+      if (ocupada(form.room_id, dia, h.valor)) return false;
+      if (esHoy && parseMinutes(h.valor) <= minutosAhora) return false;
+      return true;
+    });
   }, [form.room_id, representativeDate, ocupada]);
 
   // ── Side-effects de limpieza ─────────────────────────────────────────────
