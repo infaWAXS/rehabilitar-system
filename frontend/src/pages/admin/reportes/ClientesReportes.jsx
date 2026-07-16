@@ -76,12 +76,11 @@ export default function ClientesReportes() {
   // 🚨 1. DECLARACIONES GLOBALES CORREGIDAS
   const motivosOcultos = ["Acumulación De 3 Faltas Consecutivas", "Inasistencia mayor al 50%"];
   
-  const sancionadosFiltrados = reporte?.sancionados
-    ? reporte.sancionados.filter(user => !motivosOcultos.includes(user.motivo))
-    : [];
+  const sancionadosFiltrados = reporte?.sancionados || [];
 
   const statsSanciones = React.useMemo(() => {
-    if (!reporte?.sancionados || reporte.sancionados.length === 0) {
+    // 🟢 Cambiado para usar sancionadosFiltrados en lugar del pool global del reporte
+    if (!sancionadosFiltrados || sancionadosFiltrados.length === 0) {
       return {
         tresFaltas: 0, cincuentaPorciento: 0, otrosMotivos: 0, reincidentes: 0,
         masAntiguo: { nombre: '-', fecha: '' }, masReciente: { nombre: '-', fecha: '' }
@@ -89,24 +88,41 @@ export default function ClientesReportes() {
     }
 
     const contadores = { tresFaltas: 0, cincuentaPorciento: 0, otrosMotivos: 0 };
-    reporte.sancionados.forEach(user => {
+    let registroMasAntiguo = null;
+    let registroMasReciente = null;
+
+    sancionadosFiltrados.forEach(user => {
+      // 1. Clasificación por motivo
       const motivoStr = user.motivo?.toLowerCase() || '';
-      if (motivoStr.includes('3 faltas') || motivoStr.includes('tres faltas')) {
+      if (motivoStr.includes('3 faltas') || motivoStr.includes('tres faltas') || motivoStr.includes('3_faltas')) {
         contadores.tresFaltas++;
       } else if (motivoStr.includes('50%') || motivoStr.includes('cincuenta')) {
         contadores.cincuentaPorciento++;
       } else {
         contadores.otrosMotivos++;
       }
+
+      // 2. Parseo de fechas (asumiendo formato DD/MM/YYYY que viene en user.fecha_inicio)
+      if (user.fecha_inicio) {
+        const partes = user.fecha_inicio.split('/');
+        const fechaObj = new Date(partes[2], partes[1] - 1, partes[0]);
+
+        if (!registroMasAntiguo || fechaObj < registroMasAntiguo.fechaObj) {
+          registroMasAntiguo = { nombre: user.nombre, fecha: user.fecha_inicio, fechaObj };
+        }
+        if (!registroMasReciente || fechaObj > registroMasReciente.fechaObj) {
+          registroMasReciente = { nombre: user.nombre, fecha: user.fecha_inicio, fechaObj };
+        }
+      }
     });
 
     return { 
       ...contadores,
       reincidentes: reporte.sanciones_estadisticas?.reincidentes || 0,
-      masAntiguo: reporte.sanciones_estadisticas?.masAntiguo || { nombre: '-', fecha: '' },
-      masReciente: reporte.sanciones_estadisticas?.masReciente || { nombre: '-', fecha: '' }
+      masAntiguo: registroMasAntiguo ? { nombre: registroMasAntiguo.nombre, fecha: registroMasAntiguo.fecha } : { nombre: '-', fecha: '' },
+      masReciente: registroMasReciente ? { nombre: registroMasReciente.nombre, fecha: registroMasReciente.fecha } : { nombre: '-', fecha: '' }
     };
-  }, [reporte]);
+  }, [sancionadosFiltrados, reporte]); // Depende de la lista filtrada por fechas
 
   // 🚨 2. CONTROL REACTIVO DE DATOS
   const tieneDatosConcurrencia = clasesFiltradas.length > 0 && totales.clases > 0;
