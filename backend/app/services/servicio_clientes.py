@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from database.connection import SessionLocal
 from app.models.audit_log import AuditType, AuditAction, AuditResult
 from app.services.servicio_auditoria import register_audit
+from app.models.user_suspension import UserSuspension
 
 
 
@@ -249,6 +250,16 @@ def _ejecutar_suspension(cliente: User, motivo: str, db: Session, audit_user_id:
         result=AuditResult.SUCCESS,
         detail=audit_detail,
     )
+    
+    # 🚨 CAMBIO PUNTUAL: Añadir el registro de la suspensión activa en la BD
+    nueva_suspension = UserSuspension(
+        user_id=cliente.id,
+        suspension_date=datetime.now(),
+        suspension_reason=motivo,
+        is_active=True
+    )
+    db.add(nueva_suspension)
+
     db.commit()
     db.refresh(cliente)
 
@@ -343,6 +354,17 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session, cu
 
     cliente.account_status = "active"
     cliente.suspension_reason = None
+    
+    # 🚨 CAMBIO PUNTUAL: Se añade reinstatement_date y reinstatement_reason al quitar la suspensión
+    db.query(UserSuspension).filter(
+        UserSuspension.user_id == cliente.id,
+        UserSuspension.is_active == True
+    ).update({
+        "is_active": False,
+        "reinstatement_date": datetime.now(),
+        "reinstatement_reason": motivo
+    }, synchronize_session=False)
+
     register_audit(
         db=db,
         user_id=current_user.id,

@@ -10,6 +10,8 @@ import RecuperarContrasena from './pages/public/RecuperarContrasena';
 import RestablecerContrasena from './pages/public/RestablecerContrasena';
 import Staff from './pages/public/Staff';
 
+import LayoutPrivado from './layouts/LayoutPrivado';
+
 // ── Simulación Mercado Pago (ventana de pago) ────────────
 import PagoMercadoPago from './pages/pago/PagoMercadoPago';
 
@@ -118,12 +120,12 @@ function App() {
         <Route path="/admin/auditoria" element={<ListaAuditoria />} />
 
         {/* Admin - Estadisticas */}
-        <Route path="/admin/reportes2" element={<ReportesAdmin />} />
-        <Route path="/admin/reportes" element={<HubReports />} />
-        <Route path="/admin/reportes/finanzas" element={<FinanzasReportes />} />
-        <Route path="/admin/reportes/clientes" element={<ClientesReportes />} />
-        <Route path="/admin/reportes/salas" element={<SalasReportes />} />
-        <Route path="/admin/reportes/staff" element={<StaffReportes />} />
+        <Route path="/admin/reportes2" element={<LayoutPrivado titulo="Reportes Estadísticos"><ReportesAdmin /></LayoutPrivado>} />
+        <Route path="/admin/reportes" element={<LayoutPrivado titulo="Hub de Reportes Analíticos"><HubReports /></LayoutPrivado>} />
+        <Route path="/admin/reportes/finanzas" element={<LayoutPrivado titulo="Reporte Financiero y Pagos"><FinanzasReportes /></LayoutPrivado>} />
+        <Route path="/admin/reportes/clientes" element={<LayoutPrivado titulo="Control de Concurrencia y Cancelaciones"><ClientesReportes /></LayoutPrivado>} />
+        <Route path="/admin/reportes/salas" element={<LayoutPrivado titulo="Logística de Salas y Actividades"><SalasReportes /></LayoutPrivado>} />
+        <Route path="/admin/reportes/staff" element={<LayoutPrivado titulo="Desempeño de Staff y Profesionales"><StaffReportes /></LayoutPrivado>} />
 
         {/* Recepcionista */}
         <Route path="/recepcionista/actividades" element={<ListaActividades />} />

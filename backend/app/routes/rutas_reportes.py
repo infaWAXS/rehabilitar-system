@@ -45,19 +45,70 @@ def get_reporte_hub(
     return generar_reporte_hub_service(db, fecha_inicio, fecha_fin)
 
 
-# ... (El resto de tus endpoints se mantienen exactamente igual)
+
+# 🚨 CAMBIO PUNTUAL: Devolver rango de fechas en la respuesta financiera
 @router.get("/finances")
-def get_reporte_financiero(fecha_inicio: date = Query(...), fecha_fin: date = Query(...), db: Session = Depends(get_db), current_user: User = Depends(require_role(["admin"]))):
-    return generar_reporte_financiero_service(db, fecha_inicio, fecha_fin)
+def get_reporte_financiero(
+    fecha_inicio: date = Query(...), 
+    fecha_fin: date = Query(...), 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(require_role(["admin"]))):
+    data = generar_reporte_financiero_service(db, fecha_inicio, fecha_fin)
+    # Metadatos del rango en DD/MM/AAAA
+    return {
+        "rango_fechas": {
+            "inicio": fecha_inicio.strftime("%d/%m/%Y"),
+            "fin": fecha_fin.strftime("%d/%m/%Y")
+        },
+        **data
+    }
 
+# 🚨 CAMBIO PUNTUAL: Devolver rango de fechas en la respuesta de clientes
 @router.get("/clients")
-def get_reporte_clientes(fecha_inicio: date = Query(...), fecha_fin: date = Query(...), db: Session = Depends(get_db), current_user: User = Depends(require_role(["admin"]))):
-    return generar_reporte_clientes_service(db, fecha_inicio, fecha_fin)
+def get_reporte_clientes(
+    fecha_inicio: date = Query(...), 
+    fecha_fin: date = Query(...), 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(require_role(["admin"]))):
+    data = generar_reporte_clientes_service(db, fecha_inicio, fecha_fin)
+    # Empaquetamos la respuesta agregando los metadatos del rango formateados en DD/MM/AAAA
+    return {
+        "rango_fechas": {
+            "inicio": fecha_inicio.strftime("%d/%m/%Y"),
+            "fin": fecha_fin.strftime("%d/%m/%Y")
+        },
+        **data
+    }
 
+# 🚨 CAMBIO PUNTUAL: Devolver rango de fechas en la respuesta de staff
 @router.get("/staff")
-def get_reporte_staff(fecha_inicio: date = Query(...), fecha_fin: date = Query(...), db: Session = Depends(get_db), current_user: User = Depends(require_role(["admin"]))):
-    return generar_reporte_staff_service(db, fecha_inicio, fecha_fin)
+def get_reporte_staff(
+    fecha_inicio: date = Query(...), 
+    fecha_fin: date = Query(...), 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(require_role(["admin"]))):
+    data = generar_reporte_staff_service(db, fecha_inicio, fecha_fin)
+    # Metadatos del rango formateados en DD/MM/AAAA
+    return {
+        "rango_fechas": {
+            "inicio": fecha_inicio.strftime("%d/%m/%Y"),
+            "fin": fecha_fin.strftime("%d/%m/%Y")
+        },
+        **data
+    }
 
+# 🚨 CAMBIO PUNTUAL: Devolver rango de fechas en la respuesta de salas
 @router.get("/rooms")
-def get_reporte_salas(fecha_inicio: date = Query(...), fecha_fin: date = Query(...), db: Session = Depends(get_db)):
-    return generar_reporte_salas_service(db, fecha_inicio, fecha_fin)
+def get_reporte_salas(
+    fecha_inicio: date = Query(...), 
+    fecha_fin: date = Query(...), 
+    db: Session = Depends(get_db)):
+    data = generar_reporte_salas_service(db, fecha_inicio, fecha_fin)
+    # Metadatos del rango formateados en DD/MM/AAAA
+    return {
+        "rango_fechas": {
+            "inicio": fecha_inicio.strftime("%d/%m/%Y"),
+            "fin": fecha_fin.strftime("%d/%m/%Y")
+        },
+        **data
+    }

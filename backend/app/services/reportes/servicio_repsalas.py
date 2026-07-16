@@ -45,23 +45,31 @@ def generar_reporte_salas_service(db: Session, fecha_inicio: date, fecha_fin: da
         for hora in horarios_establecimiento:
             h_dos_digitos = f"{int(hora.split(':')[0]):02d}"
             
+            # 1. Traemos las actividades de la base de datos para este bloque horario
             q_infra = db.query(Activity).filter(
                 Activity.status == "active",
-                or_(Activity.time_slot.like(f"{h_dos_digitos}:%"), Activity.schedule.like(f"% {h_dos_digitos}:%"))
+                or_(
+                    Activity.time_slot.like(f"{h_dos_digitos}:%"), 
+                    Activity.schedule.like(f"% {h_dos_digitos}:%")
+                )
             ).all()
             
-            acts_dia = [a for a in q_infra if (a.specific_date and fecha_inicio <= a.specific_date <= fecha_fin and a.specific_date.weekday() == idx_dia) or (not a.specific_date and dia_n in str(a.schedule))]
+            # 2. Clave de unicidad combinada (Fecha específica, ID de Sala) para permitir acumular semanas y salas distintas
+            aulas_usadas_set = set()
+            for a in q_infra:
+                if a.specific_date:
+                    if (fecha_inicio <= a.specific_date <= fecha_fin) and (a.specific_date.weekday() == idx_dia):
+                        # Guardamos la tupla (fecha, room_id). Así acumula por semana y por sala diferente!
+                        aulas_usadas_set.add((a.specific_date, a.room_id))
             
-            aulas_reservadas_totales = 0
-            fecha_iteracion = fecha_inicio
+            # Eliminamos tuplas que puedan contener room_id o fecha nulos por seguridad
+            aulas_usadas_set = {item for item in aulas_usadas_set if item[0] is not None and item[1] is not None}
             
-            while fecha_iteracion <= fecha_fin:
-                if fecha_iteracion.weekday() == idx_dia:
-                    aulas_usadas_set = {act.room_id for act in acts_dia if act.room_id and (act.specific_date == fecha_iteracion or not act.specific_date)}
-                    aulas_reservadas_totales += len(aulas_usadas_set)
-                fecha_iteracion += timedelta(days=1)
+            # El total de usos es la cantidad de registros únicos acumulados
+            cantidad_salas_usadas = len(aulas_usadas_set)
             
-            horas_infraestructura[hora] = f"{aulas_reservadas_totales}/{cupos_aula_disponibles}"
+            # Mostramos el total acumulado sobre los cupos disponibles en el rango de fechas
+            horas_infraestructura[hora] = f"{cantidad_salas_usadas}/{cupos_aula_disponibles}"
         
         mapa_infraestructura_datos.append({"dia": dia_n, "horas": horas_infraestructura})
 
@@ -114,11 +122,12 @@ def generar_reporte_salas_service(db: Session, fecha_inicio: date, fecha_fin: da
     # ──────────────────────────────────────────────────────────────────────────
     # 3. OCUPACIÓN FIJA POR SALA
     # ──────────────────────────────────────────────────────────────────────────
-    actividades_filtradas_infra = [
-        a for a in db.query(Activity).filter(Activity.status == "active").all() 
-        if (a.specific_date and fecha_inicio <= a.specific_date <= fecha_fin) 
-        or (not a.specific_date and a.activity_type == "fixed")
-    ]
+    # 🚨 EL CAMBIO ESTÁ ACÁ: Filtramos de forma estricta exigiendo que specific_date NO sea NULL
+    actividades_filtradas_infra = db.query(Activity).filter(
+        Activity.status == "active",
+        Activity.specific_date.isnot(None),  # 👈 Excluye cualquier clase con fecha NULL
+        Activity.specific_date.between(fecha_inicio, fecha_fin)
+    ).all()
     
     total_dias_rango = (fecha_fin - fecha_inicio).days + 1
     dias_habiles = sum(1 for i in range(total_dias_rango) if (fecha_inicio + timedelta(days=i)).weekday() < 5)
@@ -150,7 +159,8 @@ def generar_reporte_salas_service(db: Session, fecha_inicio: date, fecha_fin: da
                 Attendance.status == 'present'
             ).scalar() or 0
         
-        ocupacion_promedio = round((anotados_sala / capacidad_ofertada_sala * 100), 1) if capacidad_ofertada_sala > 0 else 0.0
+        # 💡 SANEAMIENTO: Limitamos al 100% máximo de ocupación edilicia
+        ocupacion_promedio = round(min((anotados_sala / capacidad_ofertada_sala * 100), 100.0), 1) if capacidad_ofertada_sala > 0 else 0.0
         porcentaje_presentes = round((presentes_sala / anotados_sala * 100), 1) if anotados_sala > 0 else 0.0
         
         por_especialidad_sala = {}
@@ -177,7 +187,20 @@ def generar_reporte_salas_service(db: Session, fecha_inicio: date, fecha_fin: da
     # 4. RANKING TOP CLASES (Corrección de UnboundLocalError aplicada)
     # ──────────────────────────────────────────────────────────────────────────
     clases_agrupadas = {}
-    actividades_reservadas = [a for a in actividades_filtradas_infra if a.room_id]
+    # 1. Obtenemos únicamente las actividades activas del rango (excluyendo canceladas)
+    actividades_reservadas = db.query(Activity).filter(
+        Activity.status == "active",
+        Activity.specific_date.isnot(None),
+        Activity.specific_date.between(fecha_inicio, fecha_fin)
+    ).all()
+
+    # 2. Excluimos rigurosamente las clases de fines de semana (Sábado y Domingo)
+    actividades_reservadas = [a for a in actividades_reservadas if a.specific_date.weekday() < 5]
+
+    # 2. Computar de forma exacta la cantidad de SALAS ÚNICAS (room_id distintos) reservadas en el período
+    # Filtramos por si acaso alguna actividad no tiene room_id asignado (evitando contar None)
+    ids_salas_reservadas = {a.room_id for a in actividades_reservadas if a.room_id is not None}
+    salas_reservadas_count = len(ids_salas_reservadas)
     nombres_por_grupo = {}
 
     for act in actividades_reservadas:
@@ -190,16 +213,20 @@ def generar_reporte_salas_service(db: Session, fecha_inicio: date, fecha_fin: da
         
         clases_agrupadas[key]["capacidad_total"] += act.capacity
         
+       # Convertimos la fecha de la actividad específica a string para comparar contra func.date() de SQLite
+        fecha_actividad_str = str(act.specific_date)
+        
         anotados = db.query(func.count(Attendance.id)).filter(
             Attendance.activity_id == act.id,
-            Attendance.timestamp.between(datetime_inicio, datetime_fin)
+            func.date(Attendance.timestamp) == fecha_actividad_str # 💡 FILTRO CRÍTICO: Solo cuenta asistencias de ESTE día
         ).scalar() or 0
         clases_agrupadas[key]["anotados_totales"] += anotados
 
     top_clases_list = []
     for key, data in clases_agrupadas.items():
         esp, rid, pid = key
-        ocupacion = round((data["anotados_totales"] / data["capacidad_total"] * 100), 1) if data["capacidad_total"] > 0 else 0.0
+        # 💡 SANEAMIENTO: Limitamos al 100% máximo por si hay clases sobrevendidas en el seed
+        ocupacion = round(min((data["anotados_totales"] / data["capacidad_total"] * 100), 100.0), 1) if data["capacidad_total"] > 0 else 0.0
         
         sala_obj = db.query(Room).filter(Room.id == rid).first()
         
@@ -227,24 +254,33 @@ def generar_reporte_salas_service(db: Session, fecha_inicio: date, fecha_fin: da
     # ──────────────────────────────────────────────────────────────────────────
     # 5. RESUMEN DE LOGÍSTICA
     # ──────────────────────────────────────────────────────────────────────────
-    if actividades_reservadas:
-        ids_reservadas = [a.id for a in actividades_reservadas]
-        capacidad_ofertada = sum([a.capacity for a in actividades_reservadas])
+    hoy = date.today()
+
+    # Para calcular la ocupación promedio real, solo tomamos las clases pasadas o del día de hoy
+    actividades_pasadas = [a for a in actividades_reservadas if a.specific_date <= hoy]
+
+    if actividades_pasadas:
+        ids_reservadas_pasadas = [a.id for a in actividades_pasadas]
+        capacidad_ofertada = sum([a.capacity for a in actividades_pasadas])
+        
         asistencias_reales = db.query(func.count(Attendance.id)).filter(
-            Attendance.activity_id.in_(ids_reservadas),
+            Attendance.activity_id.in_(ids_reservadas_pasadas),
             Attendance.timestamp.between(datetime_inicio, datetime_fin)
         ).scalar() or 0
+        
         ocupacion_promedio_salas = round((asistencias_reales / capacidad_ofertada * 100), 1) if capacidad_ofertada > 0 else 0.0
     else:
         ocupacion_promedio_salas = 0.0
-        ids_reservadas = []
 
+    # Las salas reservadas totales del reporte sí corresponden a todo el rango seleccionado
     salas_reservadas_count = len(actividades_reservadas)
 
+    # Lista de espera total asociada a las actividades del rango
     lista_espera_count = 0
-    if ids_reservadas:
+    ids_totales_rango = [a.id for a in actividades_reservadas]
+    if ids_totales_rango:
         try:
-            ids_str = ",".join(map(str, ids_reservadas))
+            ids_str = ",".join(map(str, ids_totales_rango))
             query_espera = text(f"SELECT COUNT(id) FROM waitlist WHERE activity_id IN ({ids_str}) AND status = 'waiting'")
             lista_espera_count = db.execute(query_espera).scalar() or 0
         except Exception as e:

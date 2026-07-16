@@ -9,6 +9,7 @@ from app.models.activity import Activity
 from app.models.attendance import Attendance
 from app.models.room import Room
 from app.models.credit_transaction import CreditTransaction
+from app.models.reservation import Reservation
 
 def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date):
     """
@@ -30,10 +31,16 @@ def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date
         join(UserPlan, UserPlan.plan_id == Plan.id).\
         filter(UserPlan.start_date.between(fecha_inicio, fecha_fin)).scalar() or 0.0
         
+    # Suma de transacciones tradicionales de crédito
     ingresos_transacciones_rango = db.query(func.sum(CreditTransaction.amount)).\
         filter(CreditTransaction.created_at.between(datetime_inicio, datetime_fin)).scalar() or 0.0
+
+    # Suma de inscripciones de clases fijas puras que no pasaron por la tabla de transacciones
+    ingresos_fijas_directas = db.query(func.sum(Activity.price)).\
+        select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).\
+        filter(Reservation.status != 'cancelled', Activity.activity_type == 'fixed', Reservation.created_at.between(datetime_inicio, datetime_fin)).scalar() or 0.0
         
-    ingresos_totales = float(ingresos_planes_rango) + float(ingresos_transacciones_rango)
+    ingresos_totales = float(ingresos_planes_rango) + float(ingresos_transacciones_rango) + float(ingresos_fijas_directas)
 
     # Cálculo de Ausentismo/Presentismo global en el rango
     total_asistencias = db.query(func.count(Attendance.id)).filter(Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
@@ -66,13 +73,18 @@ def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date
             filter(UserPlan.start_date.between(fecha_ini_mes, fecha_fin_mes)).\
             scalar() or 0.0
             
-        # 4. Ingresos por Transacciones/Señas en el mes 'm'
+       # 4. Ingresos por Transacciones/Señas en el mes 'm'
         ingresos_transacciones_mes = db.query(func.sum(CreditTransaction.amount)).\
             filter(CreditTransaction.created_at.between(datetime_ini_mes, datetime_fin_mes)).\
             scalar() or 0.0
 
-        # Unificamos ambas fuentes de ingresos
-        ingresos_mes_total = float(ingresos_planes_mes) + float(ingresos_transacciones_mes)
+        # Suma de inscripciones fijas en el mes 'm'
+        ingresos_fijas_mes = db.query(func.sum(Activity.price)).\
+            select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).\
+            filter(Reservation.status != 'cancelled', Activity.activity_type == 'fixed', Reservation.created_at.between(datetime_ini_mes, datetime_fin_mes)).scalar() or 0.0
+
+        # Unificamos las fuentes de ingresos de forma simple
+        ingresos_mes_total = float(ingresos_planes_mes) + float(ingresos_transacciones_mes) + float(ingresos_fijas_mes)
 
         cronologia_lista.append({
             "mes_corto": meses_mapeo[m],
@@ -83,13 +95,13 @@ def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date
     # 3. OCUPACIÓN DE SALAS
     # ──────────────────────────────────────────────────────────────────────────
     actividades_infra = db.query(Activity).filter(Activity.status == "active").all()
+    hoy = date.today() # Tomamos la fecha del día de hoy
     actividades_filtradas_infra = []
     for a in actividades_infra:
-        if a.specific_date:
-            if fecha_inicio <= a.specific_date <= fecha_fin:
+        # 💡 REGLA ESTRICTA: Excluimos NULLs, filtramos por rango temporal y evitamos clases futuras (> hoy)
+        if a.specific_date is not None:
+            if (fecha_inicio <= a.specific_date <= fecha_fin) and (a.specific_date <= hoy):
                 actividades_filtradas_infra.append(a)
-        elif a.activity_type == "fixed":
-            actividades_filtradas_infra.append(a)
 
     aulas_lista = []
     todas_las_salas = db.query(Room).order_by(Room.id).all()
@@ -149,23 +161,22 @@ def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date
             
             acts_g = []
             for a in q_global:
-                if a.specific_date:
-                    if fecha_inicio <= a.specific_date <= fecha_fin and a.specific_date.weekday() == idx_dia:
-                        acts_g.append(a)
-                elif a.schedule and dia_n in a.schedule:
-                    acts_g.append(a)
-                elif a.activity_type == "fixed":
+                # Tratamos todas las clases por igual: validamos que tengan specific_date dentro del rango
+                # y que coincidan con el día de la semana iterado (idx_dia)
+                if a.specific_date and (fecha_inicio <= a.specific_date <= fecha_fin) and (a.specific_date.weekday() == idx_dia):
                     acts_g.append(a)
             
             cap_g = sum([a.capacity for a in acts_g])
-            val_g = 0.0
+            # Si no hay capacidad ofertada, significa que no hubo clases planificadas en este horario
             if cap_g > 0:
                 anot_g = db.query(func.count(Attendance.id)).filter(
                     Attendance.activity_id.in_([a.id for a in acts_g]), 
                     Attendance.timestamp.between(datetime_inicio, datetime_fin)
                 ).scalar() or 0
                 val_g = round(min((anot_g / cap_g * 100), 100), 1)
-
+            else:
+                val_g = None  # Marcador para indicar que no hubo clases dictadas
+                
             horas_alumnos[hora] = {"general": val_g}
         
         mapa_calor_datos.append({"dia": dia_n, "horas": horas_alumnos})

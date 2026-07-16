@@ -28,36 +28,53 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
 
     clientes_suspendidos_rango = db.query(func.count(UserSuspension.id)).join(User).filter(
         User.role == "client",
-        UserSuspension.suspension_date.between(datetime_inicio, datetime_fin) 
+        UserSuspension.suspension_date.between(datetime_inicio, datetime_fin),
+        or_(
+            UserSuspension.is_active == True,
+            UserSuspension.reinstatement_date > datetime_fin
+        )
     ).scalar() or 0
 
-    total_asistencias = db.query(func.count(Attendance.id)).filter(
-        Attendance.timestamp.between(datetime_inicio, datetime_fin)
-    ).scalar() or 0
+# Computamos asistencias uniendo con Activity para asegurar que la clase esté activa
+    total_asistencias = db.query(func.count(Attendance.id)).\
+        join(Activity, Attendance.activity_id == Activity.id).\
+        filter(
+            Activity.status == "active",
+            Attendance.timestamp.between(datetime_inicio, datetime_fin)
+        ).scalar() or 0
     
-    total_ausentes = db.query(func.count(Attendance.id)).filter(
-        Attendance.status == 'absent', 
-        Attendance.timestamp.between(datetime_inicio, datetime_fin)
-    ).scalar() or 0
+    # Computamos ausencias bajo el mismo criterio de clase activa
+    total_ausentes = db.query(func.count(Attendance.id)).\
+        join(Activity, Attendance.activity_id == Activity.id).\
+        filter(
+            Attendance.status == 'absent',
+            Activity.status == "active",
+            Attendance.timestamp.between(datetime_inicio, datetime_fin)
+        ).scalar() or 0
     
     tasa_ausentismo = round((total_ausentes / total_asistencias * 100), 1) if total_asistencias > 0 else 0.0
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # 2. RENDIMIENTO POR ESPECIALIDAD (TABLA DE CONCURRENCIA)
+# ──────────────────────────────────────────────────────────────────────────
+    # 2. RENDIMIENTO POR ESPECIALIDAD Y DESGLOSE DE CLASES INDIVIDUALES
     # ──────────────────────────────────────────────────────────────────────────
     especialidades_db = db.query(Activity.specialization).distinct().filter(Activity.specialization.isnot(None)).all()
     lista_especialidades = [esp[0] for esp in especialidades_db if esp[0]]
 
-    # 🚨 AGREGA ESTAS LÍNEAS PARA DEFINIR LA VARIABLE FALTANTE
+    # 🚨 FILTRO GLOBAL: Solo clases que ya ocurrieron (fecha <= hoy) dentro del rango
+    hoy = date.today()
     actividades_filtradas = db.query(Activity).filter(
-        Activity.status == "active"
+        Activity.status == "active",
+        Activity.specific_date.between(fecha_inicio, fecha_fin),
+        Activity.specific_date <= hoy
     ).all()
 
     clases_lista = []
+    desglose_clases_lista = []
     
     for esp in lista_especialidades:
         acts_esp = [a for a in actividades_filtradas if a.specialization == esp]
         
+        # --- A. CÁLCULO AGRUPADO POR ESPECIALIDAD (VISTA GLOBAL) ---
         cant_clases = len(acts_esp)
         cupos_iniciales = sum([a.capacity for a in acts_esp])
         
@@ -69,22 +86,18 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
         if acts_esp:
             ids_actividades = [a.id for a in acts_esp]
             
-            # 1. Asistencias (Presentes físicos en la sala)
             asistencias = db.query(func.count(Attendance.id)).filter(
                 Attendance.activity_id.in_(ids_actividades),
                 Attendance.status == 'present',
                 Attendance.timestamp.between(datetime_inicio, datetime_fin)
             ).scalar() or 0
             
-            # 2. Inasistencias (Ocuparon el cupo pero no fueron)
             inasistencias = db.query(func.count(Attendance.id)).filter(
                 Attendance.activity_id.in_(ids_actividades),
                 Attendance.status == 'absent',
                 Attendance.timestamp.between(datetime_inicio, datetime_fin)
             ).scalar() or 0
             
-            # 3. Cancelaciones (Última acción: Reservaron pero cancelaron y no volvieron a anotarse)
-            # Contamos las reservas canceladas que NO tienen un registro de asistencia posterior para esa misma clase
             cancelaciones = db.query(func.count(Reservation.id)).filter(
                 Reservation.activity_id.in_(ids_actividades),
                 Reservation.status == 'cancelled',
@@ -93,7 +106,6 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
                 )
             ).scalar() or 0
             
-            # 4. Lista de Espera (Gente que quedó en status waiting y nunca pasó a confirmed)
             lista_espera = db.query(func.count(Waitlist.id)).filter(
                 Waitlist.activity_id.in_(ids_actividades),
                 Waitlist.status == 'waiting' 
@@ -101,6 +113,7 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
 
         clases_lista.append({
             "tipo": esp,
+            "is_clase_individual": False,
             "cant_clases": cant_clases,
             "cupos_iniciales": cupos_iniciales,
             "asistencias": asistencias,
@@ -108,6 +121,38 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
             "cancelaciones": cancelaciones,
             "lista_espera": lista_espera
         })
+
+        # --- B. CÁLCULO DETALLADO CLASE POR CLASE (CON FILTRO APLICADO) ---
+        # 🚨 FILTRO DETALLADO: Solo buscamos clases en el rango que ya hayan pasado (fecha <= hoy)
+        clases_recientes = db.query(Activity).filter(
+            Activity.specialization == esp,
+            Activity.status == "active",
+            Activity.specific_date.between(fecha_inicio, fecha_fin),
+            Activity.specific_date <= hoy  # 👈 AGREGADO ACÁ TAMBIÉN para bloquear la tabla con filtro
+        ).order_by(Activity.specific_date.desc()).limit(10).all()
+
+        for cl in clases_recientes:
+            c_asist = db.query(func.count(Attendance.id)).filter(Attendance.activity_id == cl.id, Attendance.status == 'present').scalar() or 0
+            c_inasist = db.query(func.count(Attendance.id)).filter(Attendance.activity_id == cl.id, Attendance.status == 'absent').scalar() or 0
+            c_cancel = db.query(func.count(Reservation.id)).filter(
+                Reservation.activity_id == cl.id,
+                Reservation.status == 'cancelled',
+                ~Reservation.user_id.in_(db.query(Attendance.user_id).filter(Attendance.activity_id == cl.id))
+            ).scalar() or 0
+            c_espera = db.query(func.count(Waitlist.id)).filter(Waitlist.activity_id == cl.id, Waitlist.status == 'waiting').scalar() or 0
+
+            fecha_legible = cl.specific_date.strftime("%d/%m")
+            desglose_clases_lista.append({
+                "tipo": esp,
+                "is_clase_individual": True,
+                "nombre_clase": f"{cl.name} ({fecha_legible})",
+                "cant_clases": 1,
+                "cupos_iniciales": cl.capacity,
+                "asistencias": c_asist,
+                "inasistencias": c_inasist,
+                "cancelaciones": c_cancel,
+                "lista_espera": c_espera
+            })
 
     # ──────────────────────────────────────────────────────────────────────────
     # 3. MATRIZ DE MAPA DE CALOR (SOLO ALUMNOS)
@@ -135,34 +180,38 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
             
             acts_g = []
             for a in q_global:
-                if a.specific_date:
-                    if fecha_inicio <= a.specific_date <= fecha_fin and a.specific_date.weekday() == idx_dia:
-                        acts_g.append(a)
-                elif a.schedule and dia_n in a.schedule:
-                    acts_g.append(a)
-                elif a.activity_type == "fixed":
+                # Tratamos todas las clases por igual: validamos que tengan specific_date dentro del rango
+                # y que coincidan con el día de la semana iterado (idx_dia)
+                if a.specific_date and (fecha_inicio <= a.specific_date <= fecha_fin) and (a.specific_date.weekday() == idx_dia):
                     acts_g.append(a)
             
             cap_g = sum([a.capacity for a in acts_g])
-            val_g = 0.0
+            # Si no hay clases planificadas para el módulo general
             if cap_g > 0:
                 anot_g = db.query(func.count(Attendance.id)).filter(
                     Attendance.activity_id.in_([a.id for a in acts_g]), 
                     Attendance.timestamp.between(datetime_inicio, datetime_fin)
                 ).scalar() or 0
                 val_g = round(min((anot_g / cap_g * 100), 100), 1)
+            else:
+                val_g = None  # Indica que no hubo clases planificadas en este horario
 
             horas_alumnos[hora] = {"general": val_g}
+            
             for esp in lista_especialidades:
                 acts_e = [a for a in acts_g if a.specialization == esp]
                 cap_e = sum([a.capacity for a in acts_e])
-                val_e = 0.0
+                
+                # Si no hay clases planificadas para esta especialidad
                 if cap_e > 0:
                     anot_e = db.query(func.count(Attendance.id)).filter(
                         Attendance.activity_id.in_([a.id for a in acts_e]), 
                         Attendance.timestamp.between(datetime_inicio, datetime_fin)
                     ).scalar() or 0
                     val_e = round(min((anot_e / cap_e * 100), 100), 1)
+                else:
+                    val_e = None  # Indica que no hubo clases de la especialidad en este horario
+                    
                 horas_alumnos[hora][esp] = val_e
 
         mapa_calor_datos.append({"dia": dia_n, "horas": horas_alumnos})
@@ -172,7 +221,11 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
     # ──────────────────────────────────────────────────────────────────────────
     sanciones_query = db.query(UserSuspension).join(User).filter(
         User.role == "client",
-        UserSuspension.suspension_date.between(datetime_inicio, datetime_fin)
+        UserSuspension.suspension_date.between(datetime_inicio, datetime_fin),
+        or_(
+            UserSuspension.is_active == True,
+            UserSuspension.reinstatement_date > datetime_fin
+        )
     ).all()
 
     sancionados_lista = []
@@ -214,7 +267,7 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
             "clientes_suspendidos_rango": clientes_suspendidos_rango,
             "tasa_ausentismo": tasa_ausentismo
         },
-        "clase": clases_lista, 
+        "clase": clases_lista + desglose_clases_lista, 
         "sancionados": sancionados_lista, 
         "sanciones_estadisticas": sanciones_estadisticas,
         "mapa_calor": mapa_calor_datos
