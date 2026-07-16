@@ -56,11 +56,12 @@ export default function ClientesReportes() {
 
   const opcionesEspecialidades = [...ESPECIALIZACIONES].sort();
 
+// Aplicando el patrón de filtrado del módulo de Staff
   const clasesFiltradas = reporte 
-    ? (filtroEspecialidad 
-        ? reporte.clase.filter(c => c.tipo === filtroEspecialidad && c.is_clase_individual === true) 
-        : reporte.clase.filter(c => c.is_clase_individual === false)) 
-    : [];
+  ? (filtroEspecialidad 
+      ? reporte.clase.filter(c => c.is_clase_individual === true && c.tipo === filtroEspecialidad) 
+      : reporte.clase.filter(c => c.is_clase_individual === false))
+  : [];
 
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
   
@@ -496,30 +497,53 @@ export default function ClientesReportes() {
                     </tr>
                   </thead>
                   <tbody>
-                    {clasesFiltradas.map((c, i) => {
-                      if (!c.cant_clases || c.cant_clases === 0) return null;
-                      return (
-                        <tr key={i}>
-                          <td style={s.td}><strong>{c.nombre_clase || c.tipo}</strong></td>
-                          <td style={s.td}>{c.cant_clases}</td>
-                          <td style={s.td}>{c.cupos_iniciales}</td>
-                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{c.asistencias}</span></td>
-                          <td style={s.td}>{c.inasistencias}</td>
-                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{c.cancelaciones}</span></td>
-                          <td style={s.td}>{c.lista_espera}</td>
-                        </tr>
-                      );
-                    })}
-                    <tr style={{ fontWeight: 'bold', background: '#f8fafc', borderTop: '2px solid var(--color-borde)' }}>
-                      <td style={{...s.td, color: 'var(--color-primario-oscuro)'}}>TOTALES</td>
-                      <td style={s.td}>{totales.clases}</td>
-                      <td style={s.td}>{totales.cupos}</td>
-                      <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{totales.asistencias}</span></td>
-                      <td style={s.td}>{totales.inasistencias}</td>
-                      <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{totales.cancelaciones}</span></td>
-                      <td style={s.td}>{totales.espera}</td>
-                    </tr>
-                  </tbody>
+                  {clasesFiltradas.map((c, i) => {
+                    // Si la fila por alguna razón viene vacía, no la renderizamos
+                    if (!c.cant_clases || c.cant_clases === 0) return null;
+                    
+                    return (
+                      <tr key={i}>
+                        {/* Renderizado dinámico idéntico al del Staff */}
+                        <td style={s.td}>
+                          <strong>{filtroEspecialidad ? c.nombre_clase : c.tipo}</strong>
+                        </td>
+                        <td style={s.td}>{c.cant_clases}</td>
+                        <td style={s.td}>{c.cupos_iniciales}</td>
+                        <td style={s.td}>
+                          <span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>
+                            {c.asistencias}
+                          </span>
+                        </td>
+                        <td style={s.td}>{c.inasistencias}</td>
+                        <td style={s.td}>
+                          <span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>
+                            {c.cancelaciones}
+                          </span>
+                        </td>
+                        <td style={s.td}>{c.lista_espera}</td>
+                      </tr>
+                    );
+                  })}
+                  
+                  {/* Fila de Totales (se mantiene idéntica calculando sobre el set filtrado actual) */}
+                  <tr style={{ fontWeight: 'bold', background: '#f8fafc', borderTop: '2px solid var(--color-borde)' }}>
+                    <td style={{...s.td, color: 'var(--color-primario-oscuro)'}}>TOTALES</td>
+                    <td style={s.td}>{totales.clases}</td>
+                    <td style={s.td}>{totales.cupos}</td>
+                    <td style={s.td}>
+                      <span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>
+                        {totales.asistencias}
+                      </span>
+                    </td>
+                    <td style={s.td}>{totales.inasistencias}</td>
+                    <td style={s.td}>
+                      <span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>
+                        {totales.cancelaciones}
+                      </span>
+                    </td>
+                    <td style={s.td}>{totales.espera}</td>
+                  </tr>
+                </tbody>
                 </table>
               </div>
             ) : (
