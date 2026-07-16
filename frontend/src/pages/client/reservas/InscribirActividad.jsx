@@ -439,7 +439,8 @@ function InscribirActividad() {
       return esAbonado ? 'waitlist' : 'full_payment';
     }
     if (inscriptionOptions?.can_use_subscription) return 'subscription';
-    if (credits > 0) return 'credit';
+    // El crédito solo aplica a clases fijas (da igual la especialidad) y reserva una sola.
+    if (credits > 0 && tipoReserva === 'fixed') return 'credit';
     return 'full_payment';
   }
 
@@ -769,7 +770,7 @@ function InscribirActividad() {
                         <div style={s.metodoBtnSub}>Sin costo adicional (especialidad: {inscriptionOptions?.plan_specialization})</div>
                       </button>
                     )}
-                    {esAbonado && (
+                    {esAbonado && tipoReserva === 'fixed' && (
                       <button
                         style={credits > 0 ? s.metodoBtn(metodo === 'credit') : s.metodoBtnDeshabilitado}
                         onClick={() => credits > 0 && setMetodo('credit')}

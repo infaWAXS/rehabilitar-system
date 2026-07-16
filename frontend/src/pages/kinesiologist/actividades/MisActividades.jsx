@@ -55,11 +55,6 @@ const s = {
     fontSize: '13px', fontWeight: '600', cursor: 'pointer',
   },
   // Histórico: acción de consulta, en gris, para que no compita con las accionables.
-  botonConsultar: {
-    padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--color-borde)',
-    background: 'transparent', color: 'var(--color-texto-suave)',
-    fontSize: '13px', fontWeight: '600', cursor: 'pointer',
-  },
   vacio: {
     textAlign: 'center', padding: '32px',
     color: 'var(--color-texto-suave)', fontSize: '14px',
@@ -369,8 +364,7 @@ function obtenerDiaYFecha(activity) {
         ))
       )}
 
-      {/* Sección: histórico. La única acción es consultar las asistencias en modo lectura;
-          renunciar a una clase que ya se dictó no significa nada. */}
+      {/* Sección: histórico. Solo lectura de lo que ya se dictó, sin acciones. */}
       <h2 style={s.seccionTitulo}>Actividades pasadas</h2>
 
       {!cargando && actividadesPasadas.length === 0 ? (
@@ -385,12 +379,6 @@ function obtenerDiaYFecha(activity) {
               <div style={s.detalle}>{obtenerDiaYFecha(a)}</div>
               <div style={s.detalle}>{obtenerRangoHorario(a)}</div>
             </div>
-            <button
-              style={s.botonConsultar}
-              onClick={() => navigate(`/profesor/actividades/${a.id}/asistencias?solo-lectura=1`)}
-            >
-              Asistencia
-            </button>
           </div>
         ))
       )}
