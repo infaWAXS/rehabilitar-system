@@ -186,6 +186,73 @@ def seed_estadisticas(db: Session):
                 status=estado_asistencia, 
                 timestamp=fecha_clase_dt
             ))
+    # ──────────────────────────────────────────────────────────────────────────
+    # 4.5. NUEVA CLASE INDIVIDUAL REQUERIDA (Pilates Clínico - 06/05/2026)
+    # ──────────────────────────────────────────────────────────────────────────
+    print("⏳ Generando nueva clase de Pilates Clínico e inscripciones personalizadas...")
+    
+    # 1. Crear la actividad solicitada
+    act_pilates_personalizada = Activity(
+        room_id=sala_4.id,
+        name="Pilates Clínico",
+        specialization="Tren Superior",
+        activity_type="individual",
+        specific_date=date(2026, 5, 6),
+        time_slot="10:00",
+        professor="Carlos Gómez",
+        price=10000.00, # 👈 Precio de la clase: $10.000
+        capacity=8,
+        status="active"
+    )
+    db.add(act_pilates_personalizada)
+    db.flush() # Flush para obtener el ID asignado por la BD
+
+    # 2. Tomar 2 clientes creados para matricularlos
+    # Usamos clientes de la lista generada en la Sección 1
+    cliente_1 = clientes_creados[0]
+    cliente_2 = clientes_creados[1]
+
+    # Datos de inscripción solicitados (fechas de reserva y pago)
+    inscripciones = [
+        {"cliente": cliente_1, "fecha_pago": datetime(2026, 5, 1, 14, 30)},   # Se inscribe el 01/05/2026
+        {"cliente": cliente_2, "fecha_pago": datetime(2026, 4, 27, 11, 15)}   # Se inscribe el 27/04/2026
+    ]
+
+    fecha_clase_dt = datetime(2026, 5, 6, 10, 0) # 06/05/2026 a las 10:00 hs
+
+    for insc in inscripciones:
+        # A. Crear la reserva confirmada y paga
+        nueva_reserva_esp = Reservation(
+            user_id=insc["cliente"].id,
+            activity_id=act_pilates_personalizada.id,
+            reservation_type="individual",
+            reservation_date=date(2026, 5, 6),
+            status="confirmed",
+            payment_status="paid",
+            created_at=insc["fecha_pago"]
+        )
+        db.add(nueva_reserva_esp)
+        db.flush()
+
+        # B. Registrar la transacción financiera en la caja del establecimiento
+        nueva_transaccion_esp = CreditTransaction(
+            user_id=insc["cliente"].id,
+            amount=10000.00,
+            activity_type="class_reservation",
+            reservation_id=nueva_reserva_esp.id,
+            reason=f"Pago por reserva de clase individual: {act_pilates_personalizada.name}",
+            created_at=insc["fecha_pago"]
+        )
+        db.add(nueva_transaccion_esp)
+
+        # C. Generar la hoja de asistencia (en estado "present" por defecto)
+        db.add(Attendance(
+            user_id=insc["cliente"].id,
+            activity_id=act_pilates_personalizada.id,
+            status="present",
+            timestamp=fecha_clase_dt
+        ))
+
     db.commit()
 
     # ──────────────────────────────────────────────────────────────────────────

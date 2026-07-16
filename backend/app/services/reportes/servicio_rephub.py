@@ -9,6 +9,7 @@ from app.models.activity import Activity
 from app.models.attendance import Attendance
 from app.models.room import Room
 from app.models.credit_transaction import CreditTransaction
+from app.models.reservation import Reservation
 
 def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date):
     """
@@ -30,10 +31,16 @@ def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date
         join(UserPlan, UserPlan.plan_id == Plan.id).\
         filter(UserPlan.start_date.between(fecha_inicio, fecha_fin)).scalar() or 0.0
         
+    # Suma de transacciones tradicionales de crédito
     ingresos_transacciones_rango = db.query(func.sum(CreditTransaction.amount)).\
         filter(CreditTransaction.created_at.between(datetime_inicio, datetime_fin)).scalar() or 0.0
+
+    # Suma de inscripciones de clases fijas puras que no pasaron por la tabla de transacciones
+    ingresos_fijas_directas = db.query(func.sum(Activity.price)).\
+        select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).\
+        filter(Reservation.status != 'cancelled', Activity.activity_type == 'fixed', Reservation.created_at.between(datetime_inicio, datetime_fin)).scalar() or 0.0
         
-    ingresos_totales = float(ingresos_planes_rango) + float(ingresos_transacciones_rango)
+    ingresos_totales = float(ingresos_planes_rango) + float(ingresos_transacciones_rango) + float(ingresos_fijas_directas)
 
     # Cálculo de Ausentismo/Presentismo global en el rango
     total_asistencias = db.query(func.count(Attendance.id)).filter(Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
@@ -66,13 +73,18 @@ def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date
             filter(UserPlan.start_date.between(fecha_ini_mes, fecha_fin_mes)).\
             scalar() or 0.0
             
-        # 4. Ingresos por Transacciones/Señas en el mes 'm'
+       # 4. Ingresos por Transacciones/Señas en el mes 'm'
         ingresos_transacciones_mes = db.query(func.sum(CreditTransaction.amount)).\
             filter(CreditTransaction.created_at.between(datetime_ini_mes, datetime_fin_mes)).\
             scalar() or 0.0
 
-        # Unificamos ambas fuentes de ingresos
-        ingresos_mes_total = float(ingresos_planes_mes) + float(ingresos_transacciones_mes)
+        # Suma de inscripciones fijas en el mes 'm'
+        ingresos_fijas_mes = db.query(func.sum(Activity.price)).\
+            select_from(Reservation).join(Activity, Reservation.activity_id == Activity.id).\
+            filter(Reservation.status != 'cancelled', Activity.activity_type == 'fixed', Reservation.created_at.between(datetime_ini_mes, datetime_fin_mes)).scalar() or 0.0
+
+        # Unificamos las fuentes de ingresos de forma simple
+        ingresos_mes_total = float(ingresos_planes_mes) + float(ingresos_transacciones_mes) + float(ingresos_fijas_mes)
 
         cronologia_lista.append({
             "mes_corto": meses_mapeo[m],
