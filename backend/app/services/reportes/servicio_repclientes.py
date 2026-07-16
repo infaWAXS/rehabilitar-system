@@ -35,14 +35,22 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
         )
     ).scalar() or 0
 
-    total_asistencias = db.query(func.count(Attendance.id)).filter(
-        Attendance.timestamp.between(datetime_inicio, datetime_fin)
-    ).scalar() or 0
+# Computamos asistencias uniendo con Activity para asegurar que la clase esté activa
+    total_asistencias = db.query(func.count(Attendance.id)).\
+        join(Activity, Attendance.activity_id == Activity.id).\
+        filter(
+            Activity.status == "active",
+            Attendance.timestamp.between(datetime_inicio, datetime_fin)
+        ).scalar() or 0
     
-    total_ausentes = db.query(func.count(Attendance.id)).filter(
-        Attendance.status == 'absent', 
-        Attendance.timestamp.between(datetime_inicio, datetime_fin)
-    ).scalar() or 0
+    # Computamos ausencias bajo el mismo criterio de clase activa
+    total_ausentes = db.query(func.count(Attendance.id)).\
+        join(Activity, Attendance.activity_id == Activity.id).\
+        filter(
+            Attendance.status == 'absent',
+            Activity.status == "active",
+            Attendance.timestamp.between(datetime_inicio, datetime_fin)
+        ).scalar() or 0
     
     tasa_ausentismo = round((total_ausentes / total_asistencias * 100), 1) if total_asistencias > 0 else 0.0
 
