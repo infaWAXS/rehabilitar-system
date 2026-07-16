@@ -251,23 +251,58 @@ function CrearActividad() {
   }, [form.specialization]);
 
   // ── Derivaciones: opciones disponibles ───────────────────────────────────
+
+  // Las fechas que realmente se van a crear. Una fija genera una clase por cada fecha
+  // del mes, no una sola: hay que chequear el profesor contra TODAS.
+  const fechasACrear = useMemo(() => {
+    if (esIndividual) return form.specific_date ? [form.specific_date] : [];
+    return fechasValidas.map((f) => f.fechaStr);
+  }, [esIndividual, form.specific_date, fechasValidas]);
+
+  // Un profesor no se ofrece si ya tiene una actividad que se pisa con alguna de las
+  // fechas a crear. Se compara contra la FECHA concreta y no contra el día de la semana:
+  // por día, un profesor con clase el jueves de agosto quedaba excluido al crear los
+  // jueves de septiembre, donde en realidad está libre.
   const profesoresDisponibles = useMemo(() => {
-    if (!horaInicio || !representativeDate) return profesores;
-    const diaFormulario = DIAS_SEMANA[new Date(`${representativeDate}T00:00:00`).getDay()];
+    if (!horaInicio || fechasACrear.length === 0) return profesores;
+    const inicioProp = parseMinutes(horaInicio);
+    const fechas = new Set(fechasACrear);
+
     return profesores.filter((prof) => {
-      const nombreCompleto = `${prof.name} ${prof.lastname}`;
+      const nombreCompleto = `${prof.name} ${prof.lastname}`.trim().toLowerCase();
       return !actividadesActivas.some((act) => {
         if (!act.professor) return false;
-        if (act.professor.trim().toLowerCase() !== nombreCompleto.trim().toLowerCase()) return false;
-        const diasAct = diasDeActividad(act);
-        if (!diasAct.has(diaFormulario)) return false;
+        if (act.professor.trim().toLowerCase() !== nombreCompleto) return false;
+
+        if (act.specific_date) {
+          if (!fechas.has(act.specific_date)) return false;
+        } else {
+          // Fija legacy sin fecha: se repite todas las semanas, así que choca si comparte
+          // el día de la semana con alguna de las fechas a crear.
+          const diasAct = diasDeActividad(act);
+          const chocaElDia = fechasACrear.some(
+            (f) => diasAct.has(DIAS_SEMANA[new Date(`${f}T00:00:00`).getDay()])
+          );
+          if (!chocaElDia) return false;
+        }
+
         const [inicioExist, finExist] = rangoDeActividad(act);
         if (inicioExist === null) return false;
-        const inicioProp = parseMinutes(horaInicio);
         return inicioProp < finExist && inicioExist < inicioProp + 60;
       });
     });
-  }, [profesores, actividadesActivas, horaInicio, representativeDate]);
+  }, [profesores, actividadesActivas, horaInicio, fechasACrear]);
+
+  // Si el profesor ya elegido deja de estar disponible (se cambió la hora, el mes o el
+  // día), hay que soltarlo: si no, queda seleccionado uno ocupado y el alta muere con el
+  // 409 del backend ("ya tiene una actividad asignada en ese horario").
+  useEffect(() => {
+    if (!form.professor) return;
+    const sigueDisponible = profesoresDisponibles.some(
+      (p) => `${p.name} ${p.lastname}` === form.professor
+    );
+    if (!sigueDisponible) setForm((f) => ({ ...f, professor: '' }));
+  }, [profesoresDisponibles, form.professor]);
 
   const salasDisponibles = useMemo(() => {
     if (!representativeDate || !horaInicio) return salas;
@@ -547,18 +582,25 @@ function CrearActividad() {
               <label style={s.label}>
                 Profesor {esIndividual ? '(opcional)' : '*'}
               </label>
+              {/* Sin la fecha y la hora no se sabe quién está ocupado, y listar a todos
+                  invita a elegir un profesor que después rebota con el 409 del backend.
+                  Por eso el selector espera a tener esos datos. */}
               <select
                 style={s.select}
                 name="professor"
                 value={form.professor}
                 onChange={handleChange}
-                disabled={!form.specialization}
+                disabled={!form.specialization || !horaInicio || fechasACrear.length === 0}
               >
                 <option value="">
                   {!form.specialization
                     ? '— Seleccioná primero una especialidad —'
+                    : fechasACrear.length === 0
+                    ? '— Seleccioná primero la fecha —'
+                    : !horaInicio
+                    ? '— Seleccioná primero el horario —'
                     : profesoresDisponibles.length === 0
-                    ? '— No hay profesores disponibles —'
+                    ? '— No hay profesores libres en ese horario —'
                     : esIndividual
                     ? '— Sin asignar (el profesor se puede asignar después) —'
                     : '— Seleccionar profesor —'}

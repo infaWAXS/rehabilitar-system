@@ -22,6 +22,13 @@ class Activity(Base):
     activity_type = Column(String(20), nullable=False)   # "fixed" | "individual"
     schedule = Column(String(200), nullable=True)         # "Lunes, Miércoles · 09:00–10:00" (clases fijas)
     specific_date = Column(Date, nullable=True)           # fecha puntual (solo clases individuales)
+
+    # Lote de ocurrencias creadas juntas: una clase fija que se dicta 4 veces al mes son
+    # 4 filas distintas (una por fecha) que comparten este id. Es lo que permite que
+    # inscribirse por suscripción a una anote automáticamente a las demás del mes, sin
+    # tener que adivinar el grupo por nombre+sala+hora (que se rompe si el admin edita
+    # una ocurrencia). NULL en las individuales y en las fijas legacy sin fecha.
+    activity_group_id = Column(String(36), nullable=True, index=True)
     time_slot = Column(String(10), nullable=True)         # "15:00" (hora del turno individual)
     professor = Column(String(120), nullable=True)        # nombre del profesor (opcional)
     price = Column(Numeric(10, 2), nullable=False)

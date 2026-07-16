@@ -2,8 +2,10 @@
 # HU: Inscribirse a actividad fija / Inscribirse a actividad individual
 from threading import Thread
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from fastapi import HTTPException
-from datetime import datetime
+from calendar import monthrange
+from datetime import date, datetime
 
 from app.models.reservation import Reservation
 from app.models.user import User
@@ -14,6 +16,163 @@ from database.connection import SessionLocal
 
 from app.models.audit_log import AuditType, AuditAction, AuditResult
 from app.services.servicio_auditoria import register_audit
+
+def _cupos_libres(activity: Activity, db: Session) -> int:
+    """Cupos libres de UNA ocurrencia concreta.
+
+    Las ocurrencias de una fija son filas separadas con su propia specific_date, así
+    que alcanza con contar las reservas de esa fila (no hace falta filtrar por fecha
+    como en obtener_disponibilidad_actividad, que existe para las fijas legacy donde
+    una sola fila cubre todos los turnos).
+    """
+    usadas = db.query(func.count(Reservation.id)).filter(
+        Reservation.activity_id == activity.id,
+        Reservation.status != "cancelled",
+    ).scalar() or 0
+    return max(0, (activity.capacity or 0) - usadas)
+
+
+def _hora_de(activity: Activity) -> datetime:
+    """Fecha+hora de inicio de la ocurrencia, para guardar en reservation_date."""
+    hora, minuto = 0, 0
+    if activity.time_slot and ":" in activity.time_slot:
+        try:
+            hora, minuto = (int(p) for p in activity.time_slot.split(":")[:2])
+        except ValueError:
+            hora, minuto = 0, 0
+    return datetime(
+        activity.specific_date.year,
+        activity.specific_date.month,
+        activity.specific_date.day,
+        hora,
+        minuto,
+    )
+
+
+def _inscribir_ocurrencias_del_mes(user_id: int, actividad: Activity, user_plan, db: Session) -> dict:
+    """Anota al cliente en el resto de las clases del mes del mismo lote.
+
+    Regla de negocio: el plan cubre las clases fijas del mes de su especialidad, así que
+    inscribirse a una es inscribirse al mes entero — el cliente no elige clase por clase.
+    Solo aplica al pago por suscripción; el resto de los métodos reserva una sola clase.
+
+    Las que están llenas van a lista de espera (prioritaria, por ser abonado) en vez de
+    hacer fallar la inscripción entera: una clase completa no puede dejarlo sin el mes.
+
+    Devuelve el detalle de lo que hizo para poder informarlo en la respuesta.
+    """
+    from app.services.servicio_lista_espera import add_to_waitlist
+    from app.models.waitlist import Waitlist
+    from app.utils.subscriptions import MAX_SUBSCRIPTION_FIXED_CLASSES, count_subscription_classes_used
+
+    # clases_del_mes incluye la que el cliente eligió: es el total que le va a dar el
+    # token, y con eso se decide si le corresponde el descuento por mes corto.
+    resultado = {"reservadas": [], "en_espera": [], "omitidas": [], "clases_del_mes": 1}
+
+    if not actividad.activity_group_id or not actividad.specific_date:
+        # Fija legacy (una sola fila para todos los turnos): no hay ocurrencias
+        # hermanas que anotar, se comporta como antes.
+        return resultado
+
+    # "El mes" = mes calendario de la clase elegida. Se compara por rango y no con
+    # strftime para no atarse a SQLite y para que el filtro pueda usar el índice.
+    hoy = date.today()
+    primer_dia = actividad.specific_date.replace(day=1)
+    ultimo_dia = actividad.specific_date.replace(
+        day=monthrange(actividad.specific_date.year, actividad.specific_date.month)[1]
+    )
+    hermanas = db.query(Activity).filter(
+        Activity.activity_group_id == actividad.activity_group_id,
+        Activity.id != actividad.id,
+        Activity.status == "active",
+        Activity.specific_date.isnot(None),
+        Activity.specific_date >= primer_dia,
+        Activity.specific_date <= ultimo_dia,
+        Activity.specific_date >= hoy,
+    ).order_by(Activity.specific_date.asc()).all()
+
+    # Las clases que quedan del mes: las hermanas futuras más la elegida. Es el total
+    # real que recibe el token, aunque alguna termine en lista de espera por estar llena.
+    resultado["clases_del_mes"] = min(1 + len(hermanas), MAX_SUBSCRIPTION_FIXED_CLASSES)
+
+    for hermana in hermanas:
+        # El plan cubre un máximo de clases: se corta al llegar al tope (un mes puede
+        # tener 5 ocurrencias del mismo día de semana).
+        usadas = count_subscription_classes_used(user_plan.id, db)
+        if usadas >= MAX_SUBSCRIPTION_FIXED_CLASSES:
+            resultado["omitidas"].append(hermana.specific_date)
+            continue
+
+        ya_reservada = db.query(Reservation).filter(
+            Reservation.user_id == user_id,
+            Reservation.activity_id == hermana.id,
+            Reservation.status != "cancelled",
+        ).first()
+        if ya_reservada:
+            continue
+
+        if _cupos_libres(hermana, db) > 0:
+            db.add(Reservation(
+                user_id=user_id,
+                activity_id=hermana.id,
+                reservation_type="fixed",
+                status="confirmed",
+                payment_status="completed",
+                reservation_date=_hora_de(hermana),
+                deposit_percent=None,
+                user_plan_id=user_plan.id,
+            ))
+            db.commit()
+            resultado["reservadas"].append(hermana.specific_date)
+        else:
+            ya_en_espera = db.query(Waitlist).filter(
+                Waitlist.user_id == user_id,
+                Waitlist.activity_id == hermana.id,
+                Waitlist.status == "waiting",
+            ).first()
+            if ya_en_espera:
+                continue
+            try:
+                # Sin aviso propio: el aviso único del mes ya informa las que quedaron
+                # en lista de espera.
+                add_to_waitlist(user_id, hermana.id, db, notificar=False)
+                resultado["en_espera"].append(hermana.specific_date)
+            except HTTPException:
+                # Que no se pueda encolar en una clase no invalida el resto del mes.
+                resultado["omitidas"].append(hermana.specific_date)
+
+    return resultado
+
+
+def _otorgar_descuento_mes_corto(user: User, clases_del_mes: int, db: Session) -> int:
+    """Compensa con un descuento al cliente que gastó su token en un mes corto.
+
+    El plan cubre 4 clases de un mes; si la actividad elegida tenía SHORT_MONTH_CLASSES o
+    menos en ese mes, el token se gasta igual y el cliente recibió menos de lo que pagó.
+    El descuento queda pendiente para su próxima compra.
+
+    El corte es "o menos" y no "exactamente 2" a propósito: `clases_del_mes` cuenta solo
+    las clases FUTURAS del mes, así que quien gasta el token en el último martes se queda
+    con 1 sola clase. Es el que menos recibió por lo que pagó y también le corresponde.
+
+    Devuelve lo que se otorgó ACÁ, o 0. Si el cliente ya tenía un descuento mayor (por
+    ejemplo el 30% de una cancelación) se le respeta el suyo —los descuentos no se
+    acumulan— pero devolver ese número haría que el aviso se lo atribuya al mes corto y
+    le informe un descuento que no se le acaba de otorgar.
+    """
+    from app.utils.subscriptions import SHORT_MONTH_CLASSES, SHORT_MONTH_DISCOUNT_PERCENT
+
+    if not user or clases_del_mes > SHORT_MONTH_CLASSES:
+        return 0
+
+    if (user.pending_discount_percent or 0) < SHORT_MONTH_DISCOUNT_PERCENT:
+        user.pending_discount_percent = SHORT_MONTH_DISCOUNT_PERCENT
+        user.pending_discount_reason = "mes_corto"
+        db.commit()
+        return SHORT_MONTH_DISCOUNT_PERCENT
+
+    return 0
+
 
 # Crea una nueva reserva para un usuario en una actividad.
 # payment_method: subscription | full_payment | partial_payment | credit
@@ -56,14 +215,16 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
     # Validar disponibilidad de cupo en la suscripción (máximo 4 clases fijas por plan)
     user_plan_usado = None
     if payment_method == "subscription":
-        from app.utils.subscriptions import find_active_plan_for_specialization, MAX_SUBSCRIPTION_FIXED_CLASSES
+        from app.utils.subscriptions import find_active_plan_for_specialization
         if reservation_type != "fixed":
             raise HTTPException(status_code=400, detail="La suscripción solo aplica a clases fijas.")
+        # El token es de un solo uso: si ya lo gastó, no hay plan disponible para esta
+        # especialidad hasta que compre otro.
         user_plan_usado = find_active_plan_for_specialization(user_id, activity.specialization, db, require_capacity=True)
         if not user_plan_usado:
             raise HTTPException(
                 status_code=400,
-                detail=f"No tenés cupo disponible en tu suscripción para esta especialidad (máximo {MAX_SUBSCRIPTION_FIXED_CLASSES} clases fijas por plan).",
+                detail="No tenés una suscripción disponible para esta especialidad. Ya usaste la que tenías o todavía no compraste una.",
             )
 
     # % efectivamente abonado (solo relevante para pagos monetarios; se usa luego para
@@ -131,18 +292,47 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
     if payment_method == "credit":
         spend_credit(user_id, db, reservation_id=new_reservation.id)
 
+    # El token cubre el mes: inscribirse por suscripción a una clase fija anota también
+    # al resto de las clases del mes de ese mismo lote. Tiene que pasar ANTES de avisar,
+    # porque de eso depende qué aviso corresponde.
+    extras = {"reservadas": [], "en_espera": [], "omitidas": [], "clases_del_mes": 1}
+    descuento_mes_corto = 0
+    anoto_el_mes = False
+    if payment_method == "subscription" and reservation_type == "fixed" and user_plan_usado:
+        extras = _inscribir_ocurrencias_del_mes(user_id, activity, user_plan_usado, db)
+        descuento_mes_corto = _otorgar_descuento_mes_corto(user, extras["clases_del_mes"], db)
+        anoto_el_mes = bool(activity.activity_group_id and activity.specific_date)
+
     uid_copia = new_reservation.user_id
     aid_copia = new_reservation.activity_id
 
-    def _notif_async(uid: int, aid: int) -> None:
-        from app.utils.notifications import notify_reservation_created
-        db_n = SessionLocal()
-        try:
-            notify_reservation_created(uid, aid, db_n)
-        except Exception:
-            pass
-        finally:
-            db_n.close()
+    if anoto_el_mes:
+        # Un solo aviso con todas las clases del mes: para el cliente fue una sola acción.
+        fechas_reservadas = sorted([activity.specific_date] + extras["reservadas"])
+        fechas_espera = sorted(extras["en_espera"])
+        descuento_copia = descuento_mes_corto
+
+        def _notif_async(uid: int, aid: int) -> None:
+            from app.utils.notifications import notify_month_subscription_enrollment
+            db_n = SessionLocal()
+            try:
+                notify_month_subscription_enrollment(
+                    uid, aid, fechas_reservadas, fechas_espera, descuento_copia, db_n
+                )
+            except Exception:
+                pass
+            finally:
+                db_n.close()
+    else:
+        def _notif_async(uid: int, aid: int) -> None:
+            from app.utils.notifications import notify_reservation_created
+            db_n = SessionLocal()
+            try:
+                notify_reservation_created(uid, aid, db_n)
+            except Exception:
+                pass
+            finally:
+                db_n.close()
 
     Thread(target=_notif_async, args=(uid_copia, aid_copia), daemon=True).start()
 
@@ -156,6 +346,15 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
         "reservation_date": new_reservation.reservation_date,
         "created_at": new_reservation.created_at,
         "deposit_percent": new_reservation.deposit_percent,
+        # Resto del mes anotado automáticamente (solo suscripción). El total de clases
+        # incluye la que el cliente eligió.
+        "month_enrolled_count": len(extras["reservadas"]) + 1,
+        "month_enrolled_dates": [d.isoformat() for d in extras["reservadas"]],
+        "month_waitlisted_dates": [d.isoformat() for d in extras["en_espera"]],
+        "month_skipped_dates": [d.isoformat() for d in extras["omitidas"]],
+        # Descuento otorgado para la próxima compra por haber gastado el token en un
+        # mes con menos clases de las que cubre el plan. 0 si no corresponde.
+        "short_month_discount_percent": descuento_mes_corto,
     }
 
 
@@ -320,14 +519,17 @@ def cancel_reservation_with_policy(reservation_id: int, user_id: int, db: Sessio
                 result = "discount_20"
                 message = "Turno cancelado. Tendrás un 20% de descuento en el pago de tu próxima suscripción mensual."
                 user.pending_discount_percent = 20
+                user.pending_discount_reason = "cancelacion"
             elif discount_band_count == 1:
                 result = "discount_30"
                 message = "Turno cancelado. Tendrás un 30% de descuento (total, no acumulativo) en el pago de tu próxima suscripción mensual."
                 user.pending_discount_percent = 30
+                user.pending_discount_reason = "cancelacion"
             else:
                 result = "no_benefit"
                 message = "Turno cancelado. Perdiste el beneficio de descuento por cancelaciones repetidas este mes."
                 user.pending_discount_percent = 0
+                user.pending_discount_reason = None
         else:
             result = "no_benefit"
             message = "Turno cancelado. No recibís crédito ni devolución: cancelaste con menos de 24 hs de anticipación."
@@ -419,24 +621,27 @@ def confirm_reservation(reservation_id: int, db: Session):
 
 def check_subscription_availability(user_id: int, activity_id: int, db: Session):
     """
-    Verifica si el usuario puede inscribirse a una actividad usando su suscripción activa.
-    Un plan es mensual (30 días) e incluye como máximo MAX_SUBSCRIPTION_FIXED_CLASSES
-    clases fijas de su especialidad; el usuario puede tener varios planes activos.
+    Verifica si el usuario puede inscribirse a ESTA actividad usando una suscripción.
+
+    Ojo: no alcanza con ser abonado. La suscripción es un token de un solo uso atado a
+    una especialidad, así que sirve para esta actividad solo si es de esa especialidad y
+    todavía no se gastó. Es el dato que la pantalla usa para decir "tu situación".
+
     Retorna:
     {
-        "can_use_subscription": bool,
-        "has_age_discount": bool,  # >65 años
-        "plan_specialization": str,  # especialidad del plan encontrado (con o sin cupo)
-        "activity_specialization": str,  # especialidad de la actividad
+        "can_use_subscription": bool,   # hay un token sin usar para la especialidad de la actividad
+        "has_age_discount": bool,       # 65 años o más
+        "plan_specialization": str,     # especialidad del plan encontrado (usado o no); None si no tiene
+        "activity_specialization": str, # especialidad de la actividad
         "classes_used": int | None,
         "classes_max": int,
         "classes_remaining": int | None,
     }
     """
-    from datetime import date as date_cls
     from app.utils.subscriptions import (
         find_active_plan_for_specialization,
         count_subscription_classes_used,
+        get_age_discount_percent,
         MAX_SUBSCRIPTION_FIXED_CLASSES,
     )
 
@@ -448,13 +653,10 @@ def check_subscription_availability(user_id: int, activity_id: int, db: Session)
     if not activity:
         raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
-    # Verificar edad del usuario (>65 años)
-    today = date_cls.today()
-    if user.birth_date:
-        age = today.year - user.birth_date.year - ((today.month, today.day) < (user.birth_date.month, user.birth_date.day))
-        has_age_discount = age > 65
-    else:
-        has_age_discount = False
+    # Descuento por edad: el mismo criterio que al adquirir un plan (65 años o más).
+    # Antes acá se recalculaba a mano con `> 65`, así que un cliente de exactamente 65
+    # tenía descuento al comprar el plan y no al inscribirse.
+    has_age_discount = get_age_discount_percent(user) > 0
 
     can_use_subscription = False
     plan_specialization = None

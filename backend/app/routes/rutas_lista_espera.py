@@ -27,7 +27,8 @@ def add_user_to_waitlist(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    return add_to_waitlist(current_user.id, request.activity_id, db)
+    return add_to_waitlist(current_user.id, request.activity_id, db,
+                           deposit_percent=request.deposit_percent)
 
 
 # Obtener mi lista de espera

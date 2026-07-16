@@ -27,6 +27,11 @@ class User(Base):
     failed_login_attempts = Column(Integer, default=0)
     notifications_enabled = Column(Boolean, nullable=False, default=True, server_default='1')
     pending_discount_percent = Column(Integer, nullable=False, default=0, server_default='0')
+    # Por qué se le debe ese descuento: "cancelacion" (canceló un turno con 24-48 hs) o
+    # "mes_corto" (gastó un token en un mes que tenía menos clases que las que cubre el
+    # plan). El monto es uno solo y no se acumula, pero el motivo cambia el texto que ve
+    # el cliente. NULL cuando no hay descuento pendiente.
+    pending_discount_reason = Column(String(40), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     birth_date = Column(Date, nullable=False)
 

@@ -22,6 +22,18 @@ def listar_actividades(
     return servicio_actividades.listar_actividades(room_id, activity_type, status, db)
 
 
+# Tiene que quedar ANTES de /{activity_id}: si no, "assumable" entra por esa ruta y
+# FastAPI falla al parsearlo como int.
+@router.get("/assumable", response_model=List[ActivityResponse])
+def listar_actividades_asumibles(
+    db: Session = Depends(get_db),
+    current_user: object = Depends(require_role(["professor"])),
+):
+    """Actividades que el profesor autenticado puede asumir: de su especialidad, sin
+    profesor y sin choque de día/horario con las que ya tiene."""
+    return servicio_actividades.listar_actividades_asumibles(current_user, db)
+
+
 @router.get("/{activity_id}", response_model=ActivityResponse)
 def obtener_actividad(activity_id: int, db: Session = Depends(get_db)):
     return servicio_actividades.obtener_actividad(activity_id, db)

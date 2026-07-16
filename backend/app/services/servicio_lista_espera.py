@@ -13,13 +13,23 @@ from database.connection import SessionLocal
 
 
 # Añade un usuario a la lista de espera de una actividad
-def add_to_waitlist(user_id: int, activity_id: int, db: Session):
+def add_to_waitlist(user_id: int, activity_id: int, db: Session, notificar: bool = True,
+                    deposit_percent: int = None):
     """
     Añade un usuario a la lista de espera de una actividad.
     Cola determinada por tipo de actividad:
       - Si es "individual": siempre cola "general" (sin importar si es abonado)
       - Si es "fixed": "priority" si es abonado, "general" si no
     Cada cola mantiene su propia secuencia de posiciones.
+
+    Regla de negocio: el abonado entra a la cola sin pagar; el no abonado tiene que
+    abonar el total o una seña (mínimo 50%) para reservar su lugar. Ese pago viaja en
+    `deposit_percent` y se arrastra a la reserva cuando le toca el cupo. Si la clase pasa
+    sin que le haya tocado, se le reintegra (servicio_reintegros).
+
+    `notificar=False` lo usa la inscripción al mes por suscripción: ahí el cliente hizo
+    una sola acción y recibe un aviso único con todas las clases, así que el aviso por
+    clase encolada sería un duplicado.
     """
     from app.models.reservation import Reservation
     from app.models.activity import Activity
@@ -52,13 +62,32 @@ def add_to_waitlist(user_id: int, activity_id: int, db: Session):
             detail="El usuario ya está en la lista de espera de esta actividad"
         )
 
+    abonado = is_abonado(user_id, db)
+
     # Determinar cola según tipo de actividad
     if activity.activity_type == "individual":
         # Actividades individuales: siempre cola general
         tipo_cola = "general"
     else:
         # Actividades fijas: priority si es abonado, general si no
-        tipo_cola = "priority" if is_abonado(user_id, db) else "general"
+        tipo_cola = "priority" if abonado else "general"
+
+    # El abonado no paga; al no abonado se le exige el pago para reservar el lugar.
+    if abonado:
+        payment_status = "none"
+        deposit_percent = None
+    else:
+        if deposit_percent is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Para anotarte en la lista de espera tenés que abonar el total o una seña de al menos el 50%.",
+            )
+        if not (50 <= deposit_percent <= 100):
+            raise HTTPException(
+                status_code=400,
+                detail="La seña debe ser un porcentaje entre 50 y 100.",
+            )
+        payment_status = "completed" if deposit_percent == 100 else "partial"
 
     # Posición dentro de su propia cola (independiente de la otra)
     max_position = db.query(func.max(Waitlist.position)).filter(
@@ -75,7 +104,9 @@ def add_to_waitlist(user_id: int, activity_id: int, db: Session):
         activity_id=activity_id,
         status="waiting",
         position=next_position,
-        waitlist_type=tipo_cola
+        waitlist_type=tipo_cola,
+        payment_status=payment_status,
+        deposit_percent=deposit_percent,
     )
 
     db.add(waitlist_entry)
@@ -96,7 +127,8 @@ def add_to_waitlist(user_id: int, activity_id: int, db: Session):
         finally:
             db_n.close()
 
-    Thread(target=_notif_async, args=(uid_copia, aid_copia, pos_copia), daemon=True).start()
+    if notificar:
+        Thread(target=_notif_async, args=(uid_copia, aid_copia, pos_copia), daemon=True).start()
 
     return waitlist_entry
 
@@ -345,15 +377,29 @@ def promote_next_waitlist_entry(activity_id: int, db: Session):
         except (ValueError, AttributeError):
             pass
 
-    abonado = is_abonado(next_entry.user_id, db)
+    # El pago que hizo al anotarse define cómo queda la reserva. El abonado entró sin
+    # pagar y su reserva queda confirmada por el beneficio de abonado; el no abonado ya
+    # abonó el total (confirmada) o una seña (pendiente por el resto).
+    if next_entry.payment_status == "completed":
+        estado, estado_pago = "confirmed", "completed"
+        deposito = next_entry.deposit_percent or 100
+    elif next_entry.payment_status == "partial":
+        estado, estado_pago = "pending", "partial"
+        deposito = next_entry.deposit_percent
+    else:
+        abonado = is_abonado(next_entry.user_id, db)
+        estado = "confirmed" if abonado else "pending"
+        estado_pago = "completed" if abonado else "pending"
+        deposito = None
 
     nueva_reserva = Reservation(
         user_id=next_entry.user_id,
         activity_id=activity_id,
         reservation_type=actividad.activity_type,
-        status="confirmed" if abonado else "pending",
-        payment_status="completed" if abonado else "pending",
+        status=estado,
+        payment_status=estado_pago,
         reservation_date=reservation_date,
+        deposit_percent=deposito,
     )
     db.add(nueva_reserva)
 

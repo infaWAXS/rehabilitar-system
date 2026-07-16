@@ -49,6 +49,16 @@ export function resignActivity(activityId) {
   return apiRequest(`/activities/${activityId}/resign`, { method: 'PATCH' });
 }
 
+/**
+ * Actividades que el profesor autenticado puede asumir.
+ * El filtrado lo hace el backend con las mismas reglas que aplica al asumir
+ * (especialidad, sin profesor y sin choque de día/horario), así la lista no ofrece
+ * nada que después vaya a rechazar.
+ */
+export function getAssumableActivities() {
+  return apiRequest('/activities/assumable');
+}
+
 /** El profesor autenticado asume una actividad disponible */
 export function assumeActivity(activityId) {
   return apiRequest(`/activities/${activityId}/assume`, { method: 'PATCH' });

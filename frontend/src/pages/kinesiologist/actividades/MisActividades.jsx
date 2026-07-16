@@ -1,9 +1,8 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
-import { getActivities, resignActivity, assumeActivity } from '../../../services/activitiesService';
+import { getActivities, getAssumableActivities, resignActivity, assumeActivity } from '../../../services/activitiesService';
 import { getAttendanceSessionStatus } from '../../../services/attendanceService';
-import { getCurrentUser } from '../../../services/usersService';
 
 const s = {
   cabecera: {
@@ -115,23 +114,16 @@ export default function MisActividades() {
       setCargando(true);
       setError('');
       try {
-        const [todasActs, meData] = await Promise.all([
+        // El filtrado de "puedo asumir esto" lo resuelve el backend: aplica las mismas
+        // reglas que al asumir (especialidad, sin profesor y sin choque de día/horario
+        // con las que ya tengo), así no se ofrece nada que después sea rechazado.
+        const [todasActs, paraAsumir] = await Promise.all([
           getActivities(),
-          getCurrentUser(),
+          getAssumableActivities(),
         ]);
-
-        const especialidad = meData?.specialization || '';
 
         const misActs = todasActs.filter(
           (a) => a.status === 'active' && a.professor === nombreProfesor
-        );
-
-        const paraAsumir = todasActs.filter(
-          (a) =>
-            a.status === 'active' &&
-            !a.professor &&
-            especialidad &&
-            a.specialization === especialidad
         );
 
         setActividades(misActs);
