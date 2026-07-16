@@ -39,9 +39,16 @@ export default function SalasReportes() {
     consultarFechas(fechaInicio, fechaFin);
   };
 
-  const opcionesEspecialidades = reporte?.ocupacion_aulas?.[0]?.por_especialidad 
-    ? Object.keys(reporte.ocupacion_aulas[0].por_especialidad).filter(k => !k.includes('_cantidad_usos')).sort() 
-    : [];
+  // Listado oficial de especializaciones permitidas en el sistema
+  const ESPECIALIZACIONES = [
+    'Kinesiologia deportiva', 'Fisioterapia', 'Kinesiologia neurologica',
+    'Rehabilitacion cardiovascular', 'Kinesiologia traumatologica', 'Pilates terapeutico',
+    'Kinesiologia pediatrica', 'Osteopatia', 'Acupuntura', 'Masoterapia',
+    'Kinesiologia respiratoria', 'Rehabilitacion post-quirurgica',
+    'Kinesiologia gerontologica', 'Electroterapia',
+  ];
+
+  const opcionesEspecialidades = [...ESPECIALIZACIONES].sort();
 
   const listaHorarios = reporte?.mapa_calor?.[0]?.horas 
     ? Object.keys(reporte.mapa_calor[0].horas).sort() 

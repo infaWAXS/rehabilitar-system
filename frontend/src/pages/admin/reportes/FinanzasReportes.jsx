@@ -47,7 +47,16 @@ export default function FinanzasReportes() {
   // ────────────────────────────────────────────────────────────────────────
   // LÓGICA DE FILTRADO REACTIVO
   // ────────────────────────────────────────────────────────────────────────
-  const opcionesEspecialidades = reporte?.especialidades?.sort() || [];
+// Listado oficial de especializaciones permitidas en el sistema
+  const ESPECIALIZACIONES = [
+    'Kinesiologia deportiva', 'Fisioterapia', 'Kinesiologia neurologica',
+    'Rehabilitacion cardiovascular', 'Kinesiologia traumatologica', 'Pilates terapeutico',
+    'Kinesiologia pediatrica', 'Osteopatia', 'Acupuntura', 'Masoterapia',
+    'Kinesiologia respiratoria', 'Rehabilitacion post-quirurgica',
+    'Kinesiologia gerontologica', 'Electroterapia',
+  ];
+
+  const opcionesEspecialidades = [...ESPECIALIZACIONES].sort();
 
 // Tarjetas Superiores y Desglose
   const ingresosPlanesRender = filtroEspecialidad 

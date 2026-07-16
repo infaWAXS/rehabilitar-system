@@ -69,7 +69,16 @@ export default function StaffReportes() {
     return copia;
   };
 
-  const opcionesEspecialidades = reporte?.clases_lista ? [...new Set(reporte.clases_lista.map(c => c.tipo))].sort() : [];
+// Listado oficial de especializaciones permitidas en el sistema
+  const ESPECIALIZACIONES = [
+    'Kinesiologia deportiva', 'Fisioterapia', 'Kinesiologia neurologica',
+    'Rehabilitacion cardiovascular', 'Kinesiologia traumatologica', 'Pilates terapeutico',
+    'Kinesiologia pediatrica', 'Osteopatia', 'Acupuntura', 'Masoterapia',
+    'Kinesiologia respiratoria', 'Rehabilitacion post-quirurgica',
+    'Kinesiologia gerontologica', 'Electroterapia',
+  ];
+
+  const opcionesEspecialidades = [...ESPECIALIZACIONES].sort();
   
   // Filtramos la lista para conservar únicamente profesores con al menos 1 clase dictada en el rango
   const profesoresOrdenados = reporte 

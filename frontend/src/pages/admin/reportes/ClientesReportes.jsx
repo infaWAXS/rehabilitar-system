@@ -45,11 +45,23 @@ export default function ClientesReportes() {
     setSortConcurrencia({ llave, direccion });
   };
 
+  // Listado oficial de especializaciones permitidas en el sistema
+  const ESPECIALIZACIONES = [
+    'Kinesiologia deportiva', 'Fisioterapia', 'Kinesiologia neurologica',
+    'Rehabilitacion cardiovascular', 'Kinesiologia traumatologica', 'Pilates terapeutico',
+    'Kinesiologia pediatrica', 'Osteopatia', 'Acupuntura', 'Masoterapia',
+    'Kinesiologia respiratoria', 'Rehabilitacion post-quirurgica',
+    'Kinesiologia gerontologica', 'Electroterapia',
+  ];
+
+  const opcionesEspecialidades = [...ESPECIALIZACIONES].sort();
+
   const clasesFiltradas = reporte 
     ? (filtroEspecialidad 
         ? reporte.clase.filter(c => c.tipo === filtroEspecialidad && c.is_clase_individual === true) 
         : reporte.clase.filter(c => c.is_clase_individual === false)) 
     : [];
+
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
   
   const totales = clasesFiltradas.reduce((acc, c) => ({
@@ -337,17 +349,6 @@ export default function ClientesReportes() {
 
     {reporte && (
         <>
-          {/* 1. FILTRO POR ESPECIALIDAD */}
-          <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)', marginBottom: '24px' }}>
-            <div style={s.grupo}>
-              <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
-              <select id="filtroEsp" style={s.select} value={filtroEspecialidad} onChange={(e) => setFiltroEspecialidad(e.target.value)}>
-                <option value="">Mostrar todo (Perspectiva Global)</option>
-                {reporte?.clase ? [...new Set(reporte.clase.map(c => c.tipo))].sort().map((op, i) => <option key={i} value={op}>{op}</option>) : null}
-              </select>
-            </div>
-          </div>
-
           {/* 2. TARJETAS DE RESUMEN (Siempre visibles) */}
           <div style={s.gridResumen}>
             <div style={s.tarjetaMini}>
@@ -361,6 +362,17 @@ export default function ClientesReportes() {
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Clientes Suspendidos (En Período)</span>
               <p style={{ ...s.valorMini, color: 'var(--color-texto)' }}>{reporte.resumen.clientes_suspendidos_rango || 0}</p>
+            </div>
+          </div>
+
+          {/* 1. FILTRO POR ESPECIALIDAD */}
+          <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)', marginBottom: '24px' }}>
+            <div style={s.grupo}>
+              <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
+              <select id="filtroEsp" style={s.select} value={filtroEspecialidad} onChange={(e) => setFiltroEspecialidad(e.target.value)}>
+                <option value="">Mostrar todo (Perspectiva Global)</option>
+                {opcionesEspecialidades.map((op, i) => <option key={i} value={op}>{op}</option>)}
+              </select>
             </div>
           </div>
 
