@@ -12,45 +12,72 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
     datetime_fin = datetime.combine(fecha_fin, datetime.max.time())
 
 # ──────────────────────────────────────────────────────────────────────────
-    # 1. LISTADO DE ESPECIALIDADES FIJAS Y RESUMEN
+    # 1. LISTADO DE ESPECIALIDADES FIJAS Y RESUMEN (TOP 3 ESPECIALIDADES DINÁMICAS)
     # ──────────────────────────────────────────────────────────────────────────
+    # Mantenemos ambos nombres para no romper las referencias inferiores del archivo
     lista_especialidades = ["Tren Superior", "Tren Medio", "Tren Inferior"]
-    clases_lista = [{"tipo": esp} for esp in lista_especialidades]
+    lista_especialidades_fijas = ["Tren Superior", "Tren Medio", "Tren Inferior"]
+    clases_lista = [{"tipo": esp} for esp in lista_especialidades_fijas]
 
-    def contar_profesores_validos(palabra_clave):
-        # 1. Buscamos todas las cuentas de profesores que cumplen las reglas de fechas estrictas
+    # Obtenemos la fecha actual para la regla de rango
+    fecha_actual = date.today()
+    profesores_activos_en_rango = []
+
+    # REGLA: El día de inicio del rango debe ser estrictamente anterior a la fecha actual
+    if fecha_inicio < fecha_actual:
         profesores_activos_en_rango = db.query(User).filter(
             User.role == "professor",
-            User.created_at <= datetime_fin, # Cuenta creada ANTES o DURANTE el fin del reporte
+            # Comparamos estrictamente a nivel de FECHA (ignorando horas/zonas horarias)
+            or_(
+                User.created_at.is_(None),
+                func.date(User.created_at) <= fecha_fin
+            ),
+            # Filtro estricto de baja lógica
             or_(
                 User.is_deleted == False,
                 User.is_deleted.is_(None),
-                User.deleted_at > datetime_fin # Si fue borrado, que la baja haya sido DESPUÉS del fin del reporte
+                func.date(User.deleted_at) > fecha_fin # Si fue borrado, la fecha de baja fue posterior al fin del reporte
             )
         ).all()
 
-        contador = 0
-        for prof in profesores_activos_en_rango:
-            nombre_completo = f"{prof.name} {prof.lastname}".strip()
-            
-            # 2. Solo verificamos si este profesor ejerce la especialidad que estamos buscando
-            tiene_especialidad = db.query(Activity.id).filter(
-                Activity.status == "active",
-                Activity.professor == nombre_completo,
-                func.lower(Activity.specialization).like(f"%{palabra_clave}%")
-            ).first()
-            
-            if tiene_especialidad:
-                contador += 1
-                
-        return contador
 
-    resumen = {
-        "tren_superior": contar_profesores_validos("superior"),
-        "tren_inferior": contar_profesores_validos("inferior"),
-        "tren_medio": contar_profesores_validos("medio")
-    }
 
+    # Si no se encontraron profesores válidos, forzamos resumen a None para que el frontend oculte el módulo
+    if not profesores_activos_en_rango:
+        resumen = None
+    else:
+        # Buscamos actividades activas en el rango asociadas a estos profesores
+        prof_nombres_validos = [f"{p.name} {p.lastname}".strip() for p in profesores_activos_en_rango]
+        
+        actividades_profesores = db.query(Activity).filter(
+            Activity.status == "active",
+            Activity.professor.in_(prof_nombres_validos),
+            Activity.specialization.isnot(None)
+        ).all()
+
+        # Agrupamos profesores únicos por especialidad (evitando duplicar si dictan más de una clase)
+        especialidad_profesores = {}
+        for act in actividades_profesores:
+            esp = act.specialization
+            if esp not in especialidad_profesores:
+                especialidad_profesores[esp] = set()
+            especialidad_profesores[esp].add(act.professor)
+
+        # Mapeamos a una estructura de ranking y ordenamos de mayor a menor para tomar el Top 3
+        ranking_especialidades = []
+        for esp, profs in especialidad_profesores.items():
+            ranking_especialidades.append({
+                "especialidad": esp,
+                "cantidad_profesores": len(profs)
+            })
+
+        ranking_especialidades = sorted(ranking_especialidades, key=lambda x: x["cantidad_profesores"], reverse=True)[:3]
+
+        # Estructuramos el resumen con el ranking dinámico
+        resumen = {
+            "ranking_especialidades": ranking_especialidades,
+            "total_profesores_activos": len(profesores_activos_en_rango)
+        }
     # ──────────────────────────────────────────────────────────────────────────
     # 2. CONCURRENCIA Y PERFORMANCE DE PROFESORES
     # ──────────────────────────────────────────────────────────────────────────
@@ -295,7 +322,7 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
     # 5. EMPAQUETADO FINAL
     # ──────────────────────────────────────────────────────────────────────────
     return {
-        "resumen": resumen,
+        "resumen": resumen,  # Mantiene de forma limpia el valor calculado arriba (será dict o None)
         "clases_lista": clases_lista,
         "profesores_mayor_concurrencia": profesores_lista,
         "profesores_eliminados": [{"nombre": f"{p.name} {p.lastname}".strip(), "fecha_baja": p.deleted_at} for p in profesores_eliminados],

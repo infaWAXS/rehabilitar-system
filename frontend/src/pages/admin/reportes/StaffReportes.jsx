@@ -131,13 +131,6 @@ export default function StaffReportes() {
     if (formato === 'excel') {
       const prefacio = generarPrefacioExcel("REPORTE DE DESEMPEÑO DE STAFF Y PROFESIONALES", subTextoRango);
 
-      // Pestaña 1: Resumen General
-      const dataResumenRaw = [
-        { "Métrica": "Profesionales Activos (Tren Superior)", "Valor": reporte.resumen?.tren_superior || 0 },
-        { "Métrica": "Profesionales Activos (Tren Inferior)", "Valor": reporte.resumen?.tren_inferior || 0 },
-        { "Métrica": "Profesionales Activos (Tren Medio)", "Valor": reporte.resumen?.tren_medio || 0 }
-      ];
-
       // Pestaña 2: Concurrencia de Profesores
       const dataConcurrenciaRaw = profesoresOrdenados
         .map((p) => {
@@ -191,17 +184,8 @@ export default function StaffReportes() {
 
       const laminas = [
         {
-          nombre: "Resumen General",
-          cols: [{ wch: 40 }, { wch: 15 }],
-          data: [
-            ...prefacio,
-            Object.keys(dataResumenRaw[0]),
-            ...dataResumenRaw.map(obj => Object.values(obj))
-          ]
-        },
-        {
           nombre: "Concurrencia Staff",
-          incluir: dataConcurrenciaRaw.length > 1, // Se incluye si hay profesores además de la fila final de Totales
+          incluir: dataConcurrenciaRaw.length > 1, 
           cols: [{ wch: 30 }, { wch: 18 }, { wch: 15 }, { wch: 15 }, { wch: 18 }],
           data: [
             ...prefacio,
@@ -231,7 +215,7 @@ export default function StaffReportes() {
         },
         {
           nombre: "Historial de Bajas",
-          incluir: dataBajasRaw.length > 0 && !filtroEspecialidad, // Solo en global
+          incluir: dataBajasRaw.length > 0 && !filtroEspecialidad, 
           cols: [{ wch: 30 }, { wch: 20 }],
           data: [
             ...prefacio,
@@ -243,7 +227,7 @@ export default function StaffReportes() {
 
       exportarAExcel(filename, laminas);
 
-    } else if (formato === 'pdf') {
+  } else if (formato === 'pdf') {
       const { doc, currentY: startY } = inicializarPDF("Reporte de Desempeño del Staff", subTextoRango, filtroEspecialidad);
       let currentY = startY;
 
@@ -251,12 +235,6 @@ export default function StaffReportes() {
         const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
         if (currentY + espacioNecesario >= pageHeight - 10) { doc.addPage(); currentY = 14; }
       };
-
-      // Resumen
-      doc.setFontSize(11);
-      doc.text(`Profesionales en Tren Superior: ${reporte.resumen?.tren_superior || 0}`, 14, currentY); currentY += 6;
-      doc.text(`Profesionales en Tren Inferior: ${reporte.resumen?.tren_inferior || 0}`, 14, currentY); currentY += 6;
-      doc.text(`Profesionales en Tren Medio: ${reporte.resumen?.tren_medio || 0}`, 14, currentY); currentY += 14;
 
       // Tabla 1: Concurrencia[cite: 12]
       if (profesoresOrdenados.length > 0) {
@@ -371,21 +349,6 @@ export default function StaffReportes() {
 
       {reporte && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-            <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Prof. Tren Superior</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>{reporte.resumen?.tren_superior || 0}</p>
-            </div>
-            <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Prof. Tren Inferior</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-secundario-oscuro)' }}>{reporte.resumen?.tren_inferior || 0}</p>
-            </div>
-            <div style={s.tarjetaMini}>
-              <span style={s.labelMini}>Prof. Tren Medio</span>
-              <p style={{ ...s.valorMini, color: '#0f766e' }}>{reporte.resumen?.tren_medio || 0}</p>
-            </div>
-          </div>
-
           <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)' }}>
             <div style={s.grupo}>
               <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
