@@ -251,7 +251,7 @@ export default function ClientesReportes() {
         },
         {
           nombre: "Cuentas Suspendidas",
-          incluir: sancionadosFiltrados.length > 0 && !filtroEspecialidad,
+          incluir: sancionadosFiltrados.length > 0,
           cols: [{ wch: 30 }, { wch: 45 }, { wch: 25 }],
           data: sancionadosFiltrados.length > 0 ? [
             ...prefacio,
@@ -337,7 +337,7 @@ export default function ClientesReportes() {
       }
 
       // Sanciones (Solo renderiza si hay suspendidos y no hay filtro aplicado)
-      if (sancionadosFiltrados.length > 0 && !filtroEspecialidad) {
+      if (sancionadosFiltrados.length > 0) {
         checkPageBreak(40);
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
