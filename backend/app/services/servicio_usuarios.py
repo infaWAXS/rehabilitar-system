@@ -212,12 +212,6 @@ def login_user(request: UserLogin, db: Session):
             detail="Email invalido"
         )
 
-    if existing_user.account_status.lower() == "disabled":
-        raise HTTPException(
-            status_code=403,
-            detail="Cuenta deshabilitada"
-        )
-
     access_token = create_access_token(
         data={
             "sub": existing_user.email
@@ -235,6 +229,12 @@ def login_user(request: UserLogin, db: Session):
             "suspension_reason": existing_user.suspension_reason,
             "id": existing_user.id,
         }
+
+    if existing_user.account_status.lower() == "disabled":
+        raise HTTPException(
+            status_code=403,
+            detail="Cuenta deshabilitada"
+        )
 
     password_correct = verify_password(
         request.password,
@@ -497,6 +497,12 @@ def request_password_recovery(email: str, http_request, db: Session):
         raise HTTPException(
             status_code=404,
             detail="El correo no está registrado en el sistema"
+        )
+
+    if user.account_status =="suspended":
+        raise HTTPException(
+            status_code=403,
+            detail="Cuenta suspendida"
         )
 
     # Generar token con expiración de 30 minutos

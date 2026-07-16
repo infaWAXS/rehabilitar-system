@@ -8,8 +8,17 @@ import { getMyPlan } from '../../services/paymentsService';
 import apiClient from '../../services/apiClient';
 import FiltroActividades from './FiltroActividades';
 
-/* ── Menús por rol (no-admin) ──────────────────────────── */
+/* ── Menús por rol ────────────────────────────────────── */
 const MENUS_ROL = {
+  admin: [
+    { label: 'Usuarios',      ruta: '/admin/usuarios' },
+    { label: 'Clientes',      ruta: '/admin/clientes' },
+    { label: 'Aptos Físicos', ruta: '/admin/aptos-fisicos' },
+    { label: 'Actividades',   ruta: '/admin/actividades' },
+    { label: 'Sugerencias',    ruta: '/admin/sugerencias' },
+    { label: 'Auditoría',     ruta: '/admin/auditoria' },
+    { label: 'Mi Perfil',   ruta: '/perfil' },
+  ],
   client: [
     { label: 'Mis Reservas',        ruta: '/cliente/reservas' },
     { label: 'Mis Suscripciones',   ruta: '/cliente/suscripciones' },
@@ -559,7 +568,7 @@ function InicioPublico() {
   const esAdmin      = role === 'admin';
   const puedeVerNotificaciones = role === 'client' || role === 'professor' || role === 'admin';
   const tieneSidebar = estaLogueado && role !== 'client';
-  const itemsSidebar = esAdmin ? MENU_ADMIN : (MENUS_ROL[role] || []);
+  const itemsSidebar = MENUS_ROL[role] || [];
 
   // Cargar actividades activas al montar
   useEffect(() => {

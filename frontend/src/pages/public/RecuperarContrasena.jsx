@@ -54,6 +54,8 @@ function RecuperarContrasena() {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('registrado') || msg.toLowerCase().includes('not found')) {
         setError('El correo no está registrado en el sistema.');
+      } else if (msg.toLowerCase().includes('suspendida')) {
+        setError('Tu cuenta está suspendida, no podés reestablecer contraseña. Solicitá un reintegro intentando iniciar sesión.')
       } else {
         setError('Ocurrió un error. Intentá de nuevo.');
       }
