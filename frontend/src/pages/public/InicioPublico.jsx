@@ -17,6 +17,7 @@ const MENUS_ROL = {
     { label: 'Actividades',   ruta: '/admin/actividades' },
     { label: 'Sugerencias',    ruta: '/admin/sugerencias' },
     { label: 'Auditoría',     ruta: '/admin/auditoria' },
+    { label: 'Reportes',      ruta: '/admin/reportes' },
     { label: 'Mi Perfil',   ruta: '/perfil' },
   ],
   client: [
