@@ -32,6 +32,9 @@ from database.seed_mock import seed as seed_mock_users
 from app.routes.rutas_reportes import router as reportes_router
 
 from seed_estadisticas import seed_estadisticas #para mockear estadisticas
+from seed_auditoria_clientes import seed_auditoria_clientes
+
+
 
 app = FastAPI()
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -98,6 +101,7 @@ try:
     # Validamos si ya hay asistencias creadas para no duplicar datos infinitamente
     if db_test.query(Attendance).count() == 0:
         seed_estadisticas(db_test)
+        seed_auditoria_clientes(db_test) 
 finally:
     db_test.close()
 

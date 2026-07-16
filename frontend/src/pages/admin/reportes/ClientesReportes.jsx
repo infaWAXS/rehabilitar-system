@@ -56,11 +56,12 @@ export default function ClientesReportes() {
 
   const opcionesEspecialidades = [...ESPECIALIZACIONES].sort();
 
+// Aplicando el patrón de filtrado del módulo de Staff
   const clasesFiltradas = reporte 
-    ? (filtroEspecialidad 
-        ? reporte.clase.filter(c => c.tipo === filtroEspecialidad && c.is_clase_individual === true) 
-        : reporte.clase.filter(c => c.is_clase_individual === false)) 
-    : [];
+  ? (filtroEspecialidad 
+      ? reporte.clase.filter(c => c.is_clase_individual === true && c.tipo === filtroEspecialidad) 
+      : reporte.clase.filter(c => c.is_clase_individual === false))
+  : [];
 
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
   
@@ -76,12 +77,11 @@ export default function ClientesReportes() {
   // 🚨 1. DECLARACIONES GLOBALES CORREGIDAS
   const motivosOcultos = ["Acumulación De 3 Faltas Consecutivas", "Inasistencia mayor al 50%"];
   
-  const sancionadosFiltrados = reporte?.sancionados
-    ? reporte.sancionados.filter(user => !motivosOcultos.includes(user.motivo))
-    : [];
+  const sancionadosFiltrados = reporte?.sancionados || [];
 
   const statsSanciones = React.useMemo(() => {
-    if (!reporte?.sancionados || reporte.sancionados.length === 0) {
+    // 🟢 Cambiado para usar sancionadosFiltrados en lugar del pool global del reporte
+    if (!sancionadosFiltrados || sancionadosFiltrados.length === 0) {
       return {
         tresFaltas: 0, cincuentaPorciento: 0, otrosMotivos: 0, reincidentes: 0,
         masAntiguo: { nombre: '-', fecha: '' }, masReciente: { nombre: '-', fecha: '' }
@@ -89,24 +89,41 @@ export default function ClientesReportes() {
     }
 
     const contadores = { tresFaltas: 0, cincuentaPorciento: 0, otrosMotivos: 0 };
-    reporte.sancionados.forEach(user => {
+    let registroMasAntiguo = null;
+    let registroMasReciente = null;
+
+    sancionadosFiltrados.forEach(user => {
+      // 1. Clasificación por motivo
       const motivoStr = user.motivo?.toLowerCase() || '';
-      if (motivoStr.includes('3 faltas') || motivoStr.includes('tres faltas')) {
+      if (motivoStr.includes('3 faltas') || motivoStr.includes('tres faltas') || motivoStr.includes('3_faltas')) {
         contadores.tresFaltas++;
       } else if (motivoStr.includes('50%') || motivoStr.includes('cincuenta')) {
         contadores.cincuentaPorciento++;
       } else {
         contadores.otrosMotivos++;
       }
+
+      // 2. Parseo de fechas (asumiendo formato DD/MM/YYYY que viene en user.fecha_inicio)
+      if (user.fecha_inicio) {
+        const partes = user.fecha_inicio.split('/');
+        const fechaObj = new Date(partes[2], partes[1] - 1, partes[0]);
+
+        if (!registroMasAntiguo || fechaObj < registroMasAntiguo.fechaObj) {
+          registroMasAntiguo = { nombre: user.nombre, fecha: user.fecha_inicio, fechaObj };
+        }
+        if (!registroMasReciente || fechaObj > registroMasReciente.fechaObj) {
+          registroMasReciente = { nombre: user.nombre, fecha: user.fecha_inicio, fechaObj };
+        }
+      }
     });
 
     return { 
       ...contadores,
       reincidentes: reporte.sanciones_estadisticas?.reincidentes || 0,
-      masAntiguo: reporte.sanciones_estadisticas?.masAntiguo || { nombre: '-', fecha: '' },
-      masReciente: reporte.sanciones_estadisticas?.masReciente || { nombre: '-', fecha: '' }
+      masAntiguo: registroMasAntiguo ? { nombre: registroMasAntiguo.nombre, fecha: registroMasAntiguo.fecha } : { nombre: '-', fecha: '' },
+      masReciente: registroMasReciente ? { nombre: registroMasReciente.nombre, fecha: registroMasReciente.fecha } : { nombre: '-', fecha: '' }
     };
-  }, [reporte]);
+  }, [sancionadosFiltrados, reporte]); // Depende de la lista filtrada por fechas
 
   // 🚨 2. CONTROL REACTIVO DE DATOS
   const tieneDatosConcurrencia = clasesFiltradas.length > 0 && totales.clases > 0;
@@ -234,7 +251,7 @@ export default function ClientesReportes() {
         },
         {
           nombre: "Cuentas Suspendidas",
-          incluir: sancionadosFiltrados.length > 0 && !filtroEspecialidad,
+          incluir: sancionadosFiltrados.length > 0,
           cols: [{ wch: 30 }, { wch: 45 }, { wch: 25 }],
           data: sancionadosFiltrados.length > 0 ? [
             ...prefacio,
@@ -320,7 +337,7 @@ export default function ClientesReportes() {
       }
 
       // Sanciones (Solo renderiza si hay suspendidos y no hay filtro aplicado)
-      if (sancionadosFiltrados.length > 0 && !filtroEspecialidad) {
+      if (sancionadosFiltrados.length > 0) {
         checkPageBreak(40);
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 0);
@@ -480,30 +497,53 @@ export default function ClientesReportes() {
                     </tr>
                   </thead>
                   <tbody>
-                    {clasesFiltradas.map((c, i) => {
-                      if (!c.cant_clases || c.cant_clases === 0) return null;
-                      return (
-                        <tr key={i}>
-                          <td style={s.td}><strong>{c.nombre_clase || c.tipo}</strong></td>
-                          <td style={s.td}>{c.cant_clases}</td>
-                          <td style={s.td}>{c.cupos_iniciales}</td>
-                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{c.asistencias}</span></td>
-                          <td style={s.td}>{c.inasistencias}</td>
-                          <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{c.cancelaciones}</span></td>
-                          <td style={s.td}>{c.lista_espera}</td>
-                        </tr>
-                      );
-                    })}
-                    <tr style={{ fontWeight: 'bold', background: '#f8fafc', borderTop: '2px solid var(--color-borde)' }}>
-                      <td style={{...s.td, color: 'var(--color-primario-oscuro)'}}>TOTALES</td>
-                      <td style={s.td}>{totales.clases}</td>
-                      <td style={s.td}>{totales.cupos}</td>
-                      <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{totales.asistencias}</span></td>
-                      <td style={s.td}>{totales.inasistencias}</td>
-                      <td style={s.td}><span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>{totales.cancelaciones}</span></td>
-                      <td style={s.td}>{totales.espera}</td>
-                    </tr>
-                  </tbody>
+                  {clasesFiltradas.map((c, i) => {
+                    // Si la fila por alguna razón viene vacía, no la renderizamos
+                    if (!c.cant_clases || c.cant_clases === 0) return null;
+                    
+                    return (
+                      <tr key={i}>
+                        {/* Renderizado dinámico idéntico al del Staff */}
+                        <td style={s.td}>
+                          <strong>{filtroEspecialidad ? c.nombre_clase : c.tipo}</strong>
+                        </td>
+                        <td style={s.td}>{c.cant_clases}</td>
+                        <td style={s.td}>{c.cupos_iniciales}</td>
+                        <td style={s.td}>
+                          <span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>
+                            {c.asistencias}
+                          </span>
+                        </td>
+                        <td style={s.td}>{c.inasistencias}</td>
+                        <td style={s.td}>
+                          <span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>
+                            {c.cancelaciones}
+                          </span>
+                        </td>
+                        <td style={s.td}>{c.lista_espera}</td>
+                      </tr>
+                    );
+                  })}
+                  
+                  {/* Fila de Totales (se mantiene idéntica calculando sobre el set filtrado actual) */}
+                  <tr style={{ fontWeight: 'bold', background: '#f8fafc', borderTop: '2px solid var(--color-borde)' }}>
+                    <td style={{...s.td, color: 'var(--color-primario-oscuro)'}}>TOTALES</td>
+                    <td style={s.td}>{totales.clases}</td>
+                    <td style={s.td}>{totales.cupos}</td>
+                    <td style={s.td}>
+                      <span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>
+                        {totales.asistencias}
+                      </span>
+                    </td>
+                    <td style={s.td}>{totales.inasistencias}</td>
+                    <td style={s.td}>
+                      <span style={{ ...s.badgePorcentaje, background: '#fee2e2', color: '#b91c1c' }}>
+                        {totales.cancelaciones}
+                      </span>
+                    </td>
+                    <td style={s.td}>{totales.espera}</td>
+                  </tr>
+                </tbody>
                 </table>
               </div>
             ) : (

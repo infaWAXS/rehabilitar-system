@@ -231,12 +231,12 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
     sancionados_lista = []
     
     for sancion in sanciones_query:
-        if sancion.is_active:
-            sancionados_lista.append({
-                "nombre": f"{sancion.user.name} {sancion.user.lastname}", 
-                "motivo": sancion.suspension_reason.replace("_", " ").title(),
-                "fecha_inicio": sancion.suspension_date.strftime("%d/%m/%Y")
-            })
+        sancionados_lista.append({
+            "nombre": f"{sancion.user.name} {sancion.user.lastname}", 
+            "motivo": sancion.suspension_reason.replace("_", " ").title(),
+            "fecha_inicio": sancion.suspension_date.strftime("%d/%m/%Y"),
+            "fecha_fin": sancion.reinstatement_date.strftime("%d/%m/%Y") if sancion.reinstatement_date else "Permanente"
+        })
 
     reincidentes = db.query(UserSuspension.user_id).group_by(UserSuspension.user_id).having(func.count(UserSuspension.id) > 1).count()
     sancion_mas_antigua = db.query(UserSuspension).filter(UserSuspension.is_active == True).order_by(UserSuspension.suspension_date.asc()).first()
