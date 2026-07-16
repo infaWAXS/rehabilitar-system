@@ -78,6 +78,24 @@ def _validar_disponibilidad_profesor(
                 detail=f"El profesor {actividad_propuesta.professor} ya tiene una actividad asignada en ese horario.",
             )
 
+def _es_fecha_hora_pasada(fecha, time_slot: Optional[str]) -> bool:
+    """True si la fecha + hora de inicio ya pasó respecto de ahora.
+
+    Compara el instante completo, no solo el día: hoy a las 12:00 ya es pasado si son
+    las 12:51. Sin time_slot se toma el inicio del día.
+    """
+    if not fecha:
+        return False
+    hora, minuto = 0, 0
+    if time_slot and ":" in time_slot:
+        try:
+            hora, minuto = (int(p) for p in time_slot.split(":")[:2])
+        except ValueError:
+            hora, minuto = 0, 0
+    inicio = datetime(fecha.year, fecha.month, fecha.day, hora, minuto)
+    return inicio <= datetime.now()
+
+
 def _dia_desde_fecha(specific_date) -> Optional[str]:
     if not specific_date:
         return None
@@ -358,6 +376,19 @@ def crear_actividad(datos, db: Session, current_user) -> list:
             raise HTTPException(status_code=400, detail="Las actividades fijas requieren fechas (dates) o una fecha de inicio (specific_date).")
     else:
         fechas_a_crear = [datos.specific_date] if datos.specific_date else [None]
+
+    # No se puede crear una actividad en el pasado: se descartan las ocurrencias cuya
+    # fecha + hora ya transcurrió. En un lote mensual deja las futuras y omite las que ya
+    # pasaron, igual que con los feriados. Esta es la red de seguridad del backend; en la
+    # UI el selector ya no ofrece horarios pasados, así que el error no se ve en uso normal.
+    if any(f is not None for f in fechas_a_crear):
+        futuras = [f for f in fechas_a_crear if f is None or not _es_fecha_hora_pasada(f, datos.time_slot)]
+        if not futuras:
+            raise HTTPException(
+                status_code=400,
+                detail="No se puede crear una actividad en una fecha y horario que ya pasaron. Elegí una fecha y hora futuras.",
+            )
+        fechas_a_crear = futuras
 
     base_data = datos.model_dump(exclude={"repetitions", "dates"})
     creadas = []
