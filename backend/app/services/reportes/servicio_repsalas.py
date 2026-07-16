@@ -159,7 +159,8 @@ def generar_reporte_salas_service(db: Session, fecha_inicio: date, fecha_fin: da
                 Attendance.status == 'present'
             ).scalar() or 0
         
-        ocupacion_promedio = round((anotados_sala / capacidad_ofertada_sala * 100), 1) if capacidad_ofertada_sala > 0 else 0.0
+        # 💡 SANEAMIENTO: Limitamos al 100% máximo de ocupación edilicia
+        ocupacion_promedio = round(min((anotados_sala / capacidad_ofertada_sala * 100), 100.0), 1) if capacidad_ofertada_sala > 0 else 0.0
         porcentaje_presentes = round((presentes_sala / anotados_sala * 100), 1) if anotados_sala > 0 else 0.0
         
         por_especialidad_sala = {}
@@ -212,16 +213,20 @@ def generar_reporte_salas_service(db: Session, fecha_inicio: date, fecha_fin: da
         
         clases_agrupadas[key]["capacidad_total"] += act.capacity
         
+       # Convertimos la fecha de la actividad específica a string para comparar contra func.date() de SQLite
+        fecha_actividad_str = str(act.specific_date)
+        
         anotados = db.query(func.count(Attendance.id)).filter(
             Attendance.activity_id == act.id,
-            Attendance.timestamp.between(datetime_inicio, datetime_fin)
+            func.date(Attendance.timestamp) == fecha_actividad_str # 💡 FILTRO CRÍTICO: Solo cuenta asistencias de ESTE día
         ).scalar() or 0
         clases_agrupadas[key]["anotados_totales"] += anotados
 
     top_clases_list = []
     for key, data in clases_agrupadas.items():
         esp, rid, pid = key
-        ocupacion = round((data["anotados_totales"] / data["capacidad_total"] * 100), 1) if data["capacidad_total"] > 0 else 0.0
+        # 💡 SANEAMIENTO: Limitamos al 100% máximo por si hay clases sobrevendidas en el seed
+        ocupacion = round(min((data["anotados_totales"] / data["capacidad_total"] * 100), 100.0), 1) if data["capacidad_total"] > 0 else 0.0
         
         sala_obj = db.query(Room).filter(Room.id == rid).first()
         

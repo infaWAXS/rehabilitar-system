@@ -324,6 +324,102 @@ def seed_estadisticas(db: Session):
         "timestamp": "2026-02-10 10:00:00" 
     })
     
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 7. INYECCIÓN DE CLASES FIJINI (IDs 19, 20 y 21) CON SUS MATRÍCULAS
+    # ──────────────────────────────────────────────────────────────────────────
+    print("⏳ Generando actividades FIJINI con sus respectivas inscripciones...")
+
+    # Estructuramos la configuración tal cual se muestra en la base de datos
+    datos_fijini = [
+        {
+            "id": 19,
+            "fecha": date(2026, 7, 1),
+            "cant_clientes": 5 # Inscribe 5 clientes para el 01/07
+        },
+        {
+            "id": 20,
+            "fecha": date(2026, 7, 8),
+            "cant_clientes": 4 # Inscribe 4 clientes para el 08/07
+        },
+        {
+            "id": 21,
+            "fecha": date(2026, 7, 15),
+            "cant_clientes": 3 # Inscribe 3 clientes para el 15/07
+        }
+    ]
+
+    for item in datos_fijini:
+        # Verificamos si la actividad ya fue inyectada para evitar duplicar IDs
+        existe_act = db.query(Activity).filter(Activity.id == item["id"]).first()
+        
+        if not existe_act:
+            nueva_act = Activity(
+                id=item["id"], # Forzamos el ID canónico para asegurar consistencia
+                room_id=sala_1.id,
+                name="FIJINI",
+                specialization="Kinesiologia neurologica",
+                activity_type="fixed",
+                schedule="Miércoles · 09:00–10:00",
+                specific_date=item["fecha"],
+                time_slot="09:00",
+                professor="Maria Neurologia",
+                price=5000.00, # Seteamos un precio base
+                capacity=2,    # Capacidad original de la imagen
+                status="active"
+            )
+            db.add(nueva_act)
+            db.flush() # Guardamos para que el ID se asocie correctamente
+            act_id = nueva_act.id
+        else:
+            act_id = existe_act.id
+
+        # Tomamos una muestra aleatoria de alumnos de tu lista global para simular inscripciones
+        alumnos_para_fijini = random.sample(clientes_creados, min(item["cant_clientes"], len(clientes_creados)))
+        
+        fecha_clase_dt = datetime.combine(item["fecha"], datetime.min.time()) + timedelta(hours=9)
+
+        for index, alumno in enumerate(alumnos_para_fijini):
+            # Fecha de compra/reserva simulada de 1 a 3 días antes de la clase
+            fecha_pago = fecha_clase_dt - timedelta(days=random.randint(1, 3))
+            
+            # Repartimos asistencias presentes y ausentes para poblar los gráficos de Staff y Clientes
+            estado_asistencia = "present" if index % 2 == 0 else "absent"
+
+            # A. Crear la Reserva confirmada y paga en la BD
+            nueva_reserva_fijini = Reservation(
+                user_id=alumno.id,
+                activity_id=act_id,
+                reservation_type="fixed",
+                reservation_date=item["fecha"],
+                status="confirmed",
+                payment_status="paid",
+                created_at=fecha_pago
+            )
+            db.add(nueva_reserva_fijini)
+            db.flush()
+
+            # B. Registrar la Transacción financiera en caja
+            nueva_transaccion_fijini = CreditTransaction(
+                user_id=alumno.id,
+                amount=float(act_fijini.price or 5000.00), # 💡 Convertido a float para que SQLite lo acepte
+                activity_type="class_reservation",
+                reservation_id=nueva_reserva_fijini.id,
+                reason=f"Pago por reserva de clase fija: {act_fijini.name}",
+                created_at=fecha_pago
+            )
+            db.add(nueva_transaccion_fijini)
+
+            # C. Registrar la asistencia del alumno
+            db.add(Attendance(
+                user_id=alumno.id,
+                activity_id=act_id,
+                status=estado_asistencia,
+                timestamp=fecha_clase_dt
+            ))
+
+    db.commit()
+    print("✅ Inyección y matriculación de clases FIJINI finalizada correctamente.")
 # ──────────────────────────────────────────────────────────────────────────
     # 7. MATRÍCULAS E INSCRIPCIONES PERSONALIZADAS EN CLASES FIJINI
     # ──────────────────────────────────────────────────────────────────────────
