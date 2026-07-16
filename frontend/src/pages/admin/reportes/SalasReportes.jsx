@@ -149,7 +149,7 @@ export default function SalasReportes() {
         },
         {
           nombre: "Mapa Ocupación Aulas",
-          incluir: mapaCalorTieneDatos && !filtroEspecialidad, 
+          incluir: mapaCalorTieneDatos, 
           cols: [{ wch: 15 }, ...listaHorarios.map(() => ({ wch: 12 }))],
           data: mapaCalorTieneDatos ? [
             ...prefacio,
@@ -198,7 +198,7 @@ export default function SalasReportes() {
       doc.text(`Gente en Lista de Espera: ${reporte.resumen?.lista_espera || 0}`, 14, currentY); currentY += 14;
 
       // Mapa de Calor
-      if (!filtroEspecialidad && mapaCalorTieneDatos) {
+      if (mapaCalorTieneDatos) {
         checkPageBreak(50);
         doc.setFontSize(14);
         doc.text("Mapa de Calor: Ocupación de Infraestructura", 14, currentY);
@@ -306,7 +306,7 @@ export default function SalasReportes() {
             </h2>
             <p style={s.bajada}>Cantidad de espacios físicos utilizados sobre el total de aulas disponibles en el rango.</p>
             
-            {!filtroEspecialidad && totalUsosGlobal > 0 ? (
+              {totalUsosGlobal > 0 ? (
               <div style={s.wrapperTabla}>
                 <div style={s.gridCalorDinamico(listaHorarios.length)}>
                   <div style={s.celdaCalorCabecera}>Día / Módulo</div>
@@ -319,6 +319,7 @@ export default function SalasReportes() {
                         let pctColor = 0;
                         if (typeof valorVisual === 'string' && valorVisual.includes('/')) {
                           const [usadas, totales] = valorVisual.split('/').map(Number);
+                          // El porcentaje de color se basa en la proporción real del rango
                           pctColor = totales > 0 ? (usadas / totales) * 100 : 0;
                         }
                         return <div key={idx} style={s.celdaBloque(pctColor)}>{valorVisual}</div>;
@@ -395,47 +396,62 @@ export default function SalasReportes() {
               {filtroEspecialidad ? <span style={s.badgeFiltroTitulo}>Filtro: {filtroEspecialidad}</span> : <span style={s.badgeGlobalTitulo}>Global</span>}
             </h2>
             <p style={s.bajada}>Rendimiento integral del aula cuando esta ha sido reservada.</p>
-            {totalUsosFiltrados > 0 ? (
-              <table style={s.tabla}>
-                <thead>
-                  <tr>
-                    <th style={s.thOrdenable}>Espacio Físico</th>
-                    <th style={s.thOrdenable}>Capacidad</th>
-                    <th style={s.thOrdenable}>Usos</th>
-                    <th style={s.thOrdenable}>Tasa Reserva</th>
-                    <th style={s.thOrdenable}>Ocupación (Anotados)</th>
-                    <th style={s.thOrdenable}>Presentismo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reporte.ocupacion_aulas?.map((a, i) => {
-                    const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
-                    const usosRender = filtroEspecialidad ? (a.por_especialidad?.[`${filtroEspecialidad}_cantidad_usos`] ?? 0) : a.cantidad_usos;
-                    const matches = !filtroEspecialidad || pctRender > 0;
-                    if (!matches && filtroEspecialidad) return null;
+            {(() => {
+              // Filtramos las salas que de verdad tienen métricas válidas según el filtro actual
+              const salasFiltradasParaMostrar = reporte.ocupacion_aulas?.filter(a => {
+                const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+                return !filtroEspecialidad || pctRender > 0;
+              }) || [];
 
-                    return (
-                      <tr key={i} style={{ background: filtroEspecialidad ? '#f0fdf4' : 'transparent' }}>
-                        <td style={s.td}><strong>{a.aula}</strong></td>
-                        <td style={s.td}>{a.capacidad}</td>
-                        <td style={s.td}>{usosRender}</td>
-                        <td style={s.td}>
-                          <span style={{ fontSize: '14px', fontWeight: '600', color: '#64748b' }}>{a.porcentaje_reserva}%</span>
-                        </td>
-                        <td style={s.td}>
-                          <span style={s.badgePorcentaje}>{pctRender}%</span> 
-                        </td>
-                        <td style={s.td}>
-                          <span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{a.porcentaje_presentes}%</span>
-                        </td>
+              // Si hay al menos una sala válida, dibujamos la tabla de forma segura
+              if (salasFiltradasParaMostrar.length > 0 && totalUsosFiltrados > 0) {
+                return (
+                  <table style={s.tabla}>
+                    <thead>
+                      <tr>
+                        <th style={s.thOrdenable}>Espacio Físico</th>
+                        <th style={s.thOrdenable}>Capacidad</th>
+                        <th style={s.thOrdenable}>Usos</th>
+                        <th style={s.thOrdenable}>Tasa Reserva</th>
+                        <th style={s.thOrdenable}>Ocupación (Anotados)</th>
+                        <th style={s.thOrdenable}>Presentismo</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <ReportesEmptyState entidad="usos de salas" filtroEspecialidad={filtroEspecialidad} />
-            )}
+                    </thead>
+                    <tbody>
+                      {salasFiltradasParaMostrar.map((a, i) => {
+                        const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+                        const usosRender = filtroEspecialidad ? (a.por_especialidad?.[`${filtroEspecialidad}_cantidad_usos`] ?? 0) : a.cantidad_usos;
+
+                        return (
+                          <tr key={i} style={{ background: filtroEspecialidad ? '#f0fdf4' : 'transparent' }}>
+                            <td style={s.td}><strong>{a.aula}</strong></td>
+                            <td style={s.td}>{a.capacidad}</td>
+                            <td style={s.td}>{usosRender}</td>
+                            <td style={s.td}>
+                              <span style={{ fontSize: '14px', fontWeight: '600', color: '#64748b' }}>{a.porcentaje_reserva}%</span>
+                            </td>
+                            <td style={s.td}>
+                              <span style={s.badgePorcentaje}>{pctRender}%</span> 
+                            </td>
+                            <td style={s.td}>
+                              <span style={{ ...s.badgePorcentaje, background: '#dcfce7', color: '#166534' }}>{a.porcentaje_presentes}%</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              }
+
+              // Si se filtró y quedó en cero, mostramos prolijamente el Empty State en lugar de romper el grid
+              return (
+                <ReportesEmptyState 
+                  entidad="usos de salas transcurridos" 
+                  filtroEspecialidad={filtroEspecialidad} 
+                />
+              );
+            })()}
           </div>
 
           {/* BOTÓN DE EXPORTACIÓN */}
