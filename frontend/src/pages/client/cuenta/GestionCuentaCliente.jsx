@@ -105,7 +105,7 @@ function GestionCuentaCliente() {
       await changePassword(passForm.nueva, passForm.confirmar);
       // E1: exito → cerrar sesion y redirigir al login
       clearUserData();
-      navigate('/login', { state: { mensaje: 'Contrasena actualizada. Inicia sesion con tu nueva contrasena.' } });
+      navigate('/login', { state: { mensaje: 'Contraseña actualizada. Inicia sesión con tu nueva contraseña.' } });
     } catch (err) {
       setPassError(err.message || 'No se pudo cambiar la contraseña.');
     } finally {
