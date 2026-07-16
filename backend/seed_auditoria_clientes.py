@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.user_suspension import UserSuspension
 from app.models.credit_transaction import CreditTransaction
 from app.models.audit_log import AuditLog, AuditType, AuditAction, AuditResult
+from app.models.activity import Activity
 
 def seed_auditoria_clientes(db: Session):
     print("⏳ [Auditoría] Generando registros de auditoría de clientes...")
@@ -145,6 +146,40 @@ def seed_auditoria_clientes(db: Session):
                 timestamp=tx.created_at
             )
             db.add(log_pago)
+            db.flush()
+
+# ──────────────────────────────────────────────────────────────────────────
+    # REGISTRO DE CREACIÓN DE ACTIVIDADES (ACTIVITY -> CREATE)
+    # ──────────────────────────────────────────────────────────────────────────
+    print("⏳ [Auditoría] Generando registros de auditoría para actividades...")
+    
+    # Buscamos todas las actividades creadas en seed_estadisticas
+    actividades = db.query(Activity).all()
+    print(f"⏳ [Auditoría] Procesando {len(actividades)} registros de creación de actividades...")
+
+    for act in actividades:
+        # Verificamos si ya existe el log de creación para esta actividad específica
+        existe_log_act = db.query(AuditLog).filter(
+            AuditLog.user_id == admin.id,
+            AuditLog.action == AuditAction.CREATE,
+            AuditLog.detail.like(f" %[ID: {act.id}]%")
+        ).first()
+
+        if not existe_log_act:
+            fecha_legible = act.specific_date.strftime("%d/%m/%Y") if act.specific_date else "Sin fecha"
+            
+            # 💡 CORRECCIÓN: Usamos directamente specific_date combinada con la hora mínima si no hay created_at
+            fecha_log = datetime.combine(act.specific_date, datetime.min.time()) if act.specific_date else datetime.now()
+
+            log_actividad = AuditLog(
+                user_id=admin.id,  # Registrado bajo la autoría del administrador
+                type=AuditType.ACTIVITY,
+                action=AuditAction.CREATE,
+                result=AuditResult.SUCCESS,
+                detail=f"Se creó la actividad: {act.name} de la especialidad {act.specialization or 'General'} para el día {fecha_legible} [ID: {act.id}]",
+                timestamp=fecha_log
+            )
+            db.add(log_actividad)
             db.flush()
 
 
