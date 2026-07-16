@@ -16,10 +16,13 @@ def listar_actividades(
     room_id: Optional[int] = None,
     activity_type: Optional[str] = None,
     status: Optional[str] = "active",
+    include_past: bool = False,
     db: Session = Depends(get_db),
 ):
-    """Lista actividades con filtros por sala, tipo y estado."""
-    return servicio_actividades.listar_actividades(room_id, activity_type, status, db)
+    """Lista actividades con filtros por sala, tipo y estado.
+    include_past=true agrega las que ya terminaron (histórico): lo pide la pantalla del
+    profesor. Sin el parámetro, el listado sigue devolviendo solo las vigentes."""
+    return servicio_actividades.listar_actividades(room_id, activity_type, status, db, include_past)
 
 
 # Tiene que quedar ANTES de /{activity_id}: si no, "assumable" entra por esa ruta y

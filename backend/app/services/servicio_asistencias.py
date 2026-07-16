@@ -64,9 +64,15 @@ def _sesion_activa(activity: Activity) -> bool:
         # Ventana flexible: desde 30 min antes hasta 30 min después de finalizar
         return (inicio - 30) <= minutos_ahora <= (fin + 30)
 
-    # Actividad fija: validar día de semana y, si hay horario parseable, validar rango
+    # Actividad fija: cada ocurrencia del lote es una fila con su propia fecha, así que
+    # manda specific_date. El día de la semana solo alcanza para las fijas legacy sin
+    # fecha, que se repiten toda la semana: comparando únicamente el día, una clase del
+    # 20/08 daba "en curso" un jueves de julio a la misma hora.
     if activity.activity_type == "fixed":
-        if activity.schedule:
+        if activity.specific_date:
+            if activity.specific_date != ahora.date():
+                return False
+        elif activity.schedule:
             dias = {
                 "lunes": 0,
                 "martes": 1,

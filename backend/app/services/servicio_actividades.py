@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Thread
 import re
 import uuid
@@ -20,6 +20,11 @@ from app.models.audit_log import AuditAction, AuditResult, AuditType
 from app.services.servicio_auditoria import register_audit
 
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+# Minutos que una actividad sigue listándose después de terminar. Tiene que acompañar a la
+# ventana de servicio_asistencias._sesion_activa: si el listado cierra antes, el profesor
+# pierde de vista la clase mientras todavía puede registrar asistencia.
+GRACIA_ASISTENCIA_MIN = 30
 
 
 def _extraer_dias(schedule: Optional[str]) -> set[str]:
@@ -115,19 +120,31 @@ def _dias_actividad(activity: Activity) -> set[str]:
 
 
 def _ya_paso(actividad: Activity, ahora: datetime) -> bool:
-    """True si la actividad ya comenzó o finalizó según su specific_date + horario."""
+    """True si la actividad ya terminó y venció su ventana de asistencia.
+
+    El corte es el fin + GRACIA_ASISTENCIA_MIN, no el inicio: servicio_asistencias.
+    _sesion_activa habilita marcar asistencia hasta 30 min después de terminar, así que
+    cortar en el inicio dejaba al profesor sin forma de abrir una clase en curso.
+    """
     if not actividad.specific_date:
         return False  # recurrente sin fecha puntual (legacy) -> siempre vigente
 
-    inicio, _ = _rango_horario(actividad)
-    if inicio is None:
+    inicio, fin = _rango_horario(actividad)
+    if fin is None:
         return actividad.specific_date < ahora.date()
 
-    inicio_dt = datetime(
+    # Clase que cruza medianoche ("23:00–00:00" da fin=0): el fin cae al día siguiente, no
+    # a la medianoche con la que arrancó ese día.
+    if inicio is not None and fin <= inicio:
+        fin += 24 * 60
+
+    # fin puede pasarse de las 24hs, fuera del rango de hora de datetime: se suma como
+    # offset desde la medianoche en vez de construir la hora directamente.
+    medianoche = datetime(
         actividad.specific_date.year, actividad.specific_date.month, actividad.specific_date.day,
-        inicio // 60, inicio % 60,
     )
-    return inicio_dt <= ahora
+    fin_dt = medianoche + timedelta(minutes=fin + GRACIA_ASISTENCIA_MIN)
+    return fin_dt <= ahora
 
 
 def _solapa_en_sala(propuesta: Activity, existente: Activity) -> bool:
@@ -247,9 +264,11 @@ def listar_actividades(
     activity_type: Optional[str] = None,
     status: Optional[str] = "active",
     db: Session = None,
+    include_past: bool = False,
 ) -> List[Activity]:
     """Lista actividades con filtros opcionales por sala, tipo y estado.
-    Cuando se filtra por status="active", excluye las que ya comenzaron o finalizaron.
+    Cuando se filtra por status="active", excluye las que ya terminaron, salvo que
+    include_past sea True (histórico completo: lo usa la pantalla del profesor).
     """
     query = db.query(Activity)
     if room_id is not None:
@@ -261,7 +280,7 @@ def listar_actividades(
 
     actividades = query.order_by(Activity.id).all()
 
-    if status == "active":
+    if status == "active" and not include_past:
         ahora = datetime.now()
         actividades = [a for a in actividades if not _ya_paso(a, ahora)]
 
