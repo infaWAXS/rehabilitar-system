@@ -97,7 +97,7 @@ function ListaAuditoria() {
             <div style={s.filtros}>
                 <input
                     type="text"
-                    placeholder="Buscar por usuario"
+                    placeholder="Buscar por texto"
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
                     style={s.inputBuscar} />

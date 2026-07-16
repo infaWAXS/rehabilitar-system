@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.user import User
+from app.models.user_suspension import UserSuspension
 from app.models.activity import Activity
 
 from app.utils.security import hash_password, verify_password, create_access_token, verify_token, generate_temporary_password
