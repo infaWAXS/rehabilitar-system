@@ -95,13 +95,13 @@ def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date
     # 3. OCUPACIÓN DE SALAS
     # ──────────────────────────────────────────────────────────────────────────
     actividades_infra = db.query(Activity).filter(Activity.status == "active").all()
+    hoy = date.today() # Tomamos la fecha del día de hoy
     actividades_filtradas_infra = []
     for a in actividades_infra:
-        if a.specific_date:
-            if fecha_inicio <= a.specific_date <= fecha_fin:
+        # 💡 REGLA ESTRICTA: Excluimos NULLs, filtramos por rango temporal y evitamos clases futuras (> hoy)
+        if a.specific_date is not None:
+            if (fecha_inicio <= a.specific_date <= fecha_fin) and (a.specific_date <= hoy):
                 actividades_filtradas_infra.append(a)
-        elif a.activity_type == "fixed":
-            actividades_filtradas_infra.append(a)
 
     aulas_lista = []
     todas_las_salas = db.query(Room).order_by(Room.id).all()

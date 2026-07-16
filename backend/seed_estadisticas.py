@@ -324,5 +324,70 @@ def seed_estadisticas(db: Session):
         "timestamp": "2026-02-10 10:00:00" 
     })
     
+# ──────────────────────────────────────────────────────────────────────────
+    # 7. MATRÍCULAS E INSCRIPCIONES PERSONALIZADAS EN CLASES FIJINI
+    # ──────────────────────────────────────────────────────────────────────────
+    print("⏳ Inscribiendo clientes en las clases de FIJINI (IDs 19, 20 y 21)...")
+    
+    # Configuración de cantidad de inscritos requerida por actividad
+    config_fijini = [
+        {"id": 21, "cant_clientes": 3},  # 3 inscritos para el 15/07/2026
+        {"id": 20, "cant_clientes": 4},  # 4 inscritos para el 08/07/2026
+        {"id": 19, "cant_clientes": 5}   # 5 inscritos para el 01/07/2026
+    ]
+    
+    for conf in config_fijini:
+        # Buscamos la actividad por su ID para garantizar la integridad
+        act_fijini = db.query(Activity).filter(Activity.id == conf["id"]).first()
+        
+        if act_fijini:
+            # Tomamos una muestra aleatoria de clientes reales creados en la Sección 1
+            alumnos_seleccionados = random.sample(clientes_creados, min(conf["cant_clientes"], len(clientes_creados)))
+            
+            # Seteamos la hora de la clase (09:00 hs según tu schedule)
+            hora_clase = 9
+            fecha_dt = datetime.combine(act_fijini.specific_date, datetime.min.time()) + timedelta(hours=hora_clase)
+            
+            for index, alumno in enumerate(alumnos_seleccionados):
+                # Generamos una fecha de compra/pago de 1 a 3 días antes de la clase
+                fecha_reserva_pago = fecha_dt - timedelta(days=random.randint(1, 3))
+                
+                # Simulamos asistencias realistas: algunos presentes, otros ausentes
+                estado_asistencia = "present" if index % 2 == 0 else "absent"
+                
+                # A. Crear la Reserva confirmada y paga
+                nueva_reserva_fijini = Reservation(
+                    user_id=alumno.id,
+                    activity_id=act_fijini.id,
+                    reservation_type="fixed",
+                    reservation_date=act_fijini.specific_date,
+                    status="confirmed",
+                    payment_status="paid",
+                    created_at=fecha_reserva_pago
+                )
+                db.add(nueva_reserva_fijini)
+                db.flush()
+                
+                # B. Registrar la Transacción financiera en caja
+                nueva_transaccion_fijini = CreditTransaction(
+                    user_id=alumno.id,
+                    amount=act_fijini.price or 5000.00,
+                    activity_type="class_reservation",
+                    reservation_id=nueva_reserva_fijini.id,
+                    reason=f"Pago por reserva de clase fija: {act_fijini.name}",
+                    created_at=fecha_reserva_pago
+                )
+                db.add(nueva_transaccion_fijini)
+                
+                # C. Registrar la planilla de Asistencia
+                db.add(Attendance(
+                    user_id=alumno.id,
+                    activity_id=act_fijini.id,
+                    status=estado_asistencia,
+                    timestamp=fecha_dt
+                ))
+        else:
+            print(f"⚠️ Advertencia: No se encontró la actividad FIJINI con ID {conf['id']} en la BD.")
+
     db.commit()
-    print("✅ Seed finalizado. Reservas, transacciones y auditoría cargadas a la base de datos correctamente.")
+    print("✅ Proceso de seed de FIJINI completado con éxito.")

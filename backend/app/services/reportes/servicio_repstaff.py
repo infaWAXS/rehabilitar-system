@@ -99,11 +99,12 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
             Activity.professor == nombre_completo
         ).all()
         
+        hoy = date.today() # Tomamos la fecha del día de hoy
         actividades_filtradas_prof = []
         for a in actividades_prof:
-            # 💡 REGLA ESTRICTA: Solo contamos clases que tengan una fecha válida cargada y que caiga en el rango
+            # 💡 REGLA ESTRICTA: Excluimos NULLs, filtramos por rango temporal y evitamos clases futuras (> hoy)
             if a.specific_date is not None:
-                if fecha_inicio <= a.specific_date <= fecha_fin:
+                if (fecha_inicio <= a.specific_date <= fecha_fin) and (a.specific_date <= hoy):
                     actividades_filtradas_prof.append(a)
 
         cantidad_clases_global = len(actividades_filtradas_prof)
