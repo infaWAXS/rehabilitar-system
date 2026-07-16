@@ -164,15 +164,17 @@ export default function ClientesReportes() {
         ["Clientes Suspendidos", reporte.resumen.clientes_suspendidos_rango || 0]
       ];
 
-      const dataConcurrenciaRaw = clasesFiltradas.map(c => ({
-        "Especialidad / Clase": c.nombre_clase || c.tipo,
-        "Clases": c.cant_clases,
-        "Cupos Iniciales": c.cupos_iniciales,
-        "Asistencias": c.asistencias,
-        "Inasistencias": c.inasistencias,
-        "Cancelaciones": c.cancelaciones,
-        "Lista Espera": c.lista_espera
-      }));
+        const dataConcurrenciaRaw = clasesFiltradas
+        .filter(c => c.cant_clases > 0) // 💡 Ahora sí filtra las filas vacías antes de mapear
+        .map(c => ({
+          "Especialidad / Clase": c.nombre_clase || c.tipo,
+          "Clases": c.cant_clases,
+          "Cupos Iniciales": c.cupos_iniciales,
+          "Asistencias": c.asistencias,
+          "Inasistencias": c.inasistencias,
+          "Cancelaciones": c.cancelaciones,
+          "Lista Espera": c.lista_espera
+        }));
       if (tieneDatosConcurrencia) {
         dataConcurrenciaRaw.push({
           "Especialidad / Clase": "TOTALES",
@@ -266,9 +268,17 @@ export default function ClientesReportes() {
         doc.setFontSize(14);
         doc.text("Concurrencia y Cancelaciones", 14, currentY);
         
-        const bodyConcurrencia = clasesFiltradas.map(c => [
-          c.nombre_clase || c.tipo, c.cant_clases, c.cupos_iniciales, c.asistencias, c.inasistencias, c.cancelaciones, c.lista_espera
-        ]);
+       const bodyConcurrencia = clasesFiltradas
+          .filter(c => c.cant_clases > 0) // 💡 Filtra las filas vacías también para el PDF
+          .map(c => [
+            c.nombre_clase || c.tipo, 
+            c.cant_clases, 
+            c.cupos_iniciales, 
+            c.asistencias, 
+            c.inasistencias, 
+            c.cancelaciones, 
+            c.lista_espera
+          ]);
         bodyConcurrencia.push([{ content: 'TOTALES', styles: { fontStyle: 'bold', textColor: [15, 118, 110] } }, totales.clases, totales.cupos, totales.asistencias, totales.inasistencias, totales.cancelaciones, totales.espera]);
 
         autoTable(doc, {

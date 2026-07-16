@@ -101,11 +101,10 @@ def generar_reporte_staff_service(db: Session, fecha_inicio: date, fecha_fin: da
         
         actividades_filtradas_prof = []
         for a in actividades_prof:
-            if a.specific_date:
+            # 💡 REGLA ESTRICTA: Solo contamos clases que tengan una fecha válida cargada y que caiga en el rango
+            if a.specific_date is not None:
                 if fecha_inicio <= a.specific_date <= fecha_fin:
                     actividades_filtradas_prof.append(a)
-            elif a.activity_type == "fixed":
-                actividades_filtradas_prof.append(a)
 
         cantidad_clases_global = len(actividades_filtradas_prof)
         total_presentes_prof_global = 0
