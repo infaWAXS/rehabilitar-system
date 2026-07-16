@@ -271,7 +271,7 @@ function DetalleUsuario() {
                   type="date"
                   name="fecha_nacimiento"
                   value={form.fecha_nacimiento}
-                  onChange={cambio}
+                  readOnly
                 />
                 {erroresCampos.fecha_nacimiento && <span style={s.errorCampo}>{erroresCampos.fecha_nacimiento}</span>}
               </div>

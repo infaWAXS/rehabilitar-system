@@ -76,7 +76,7 @@ function EditarPerfil() {
     const errs = {};
     if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido.';
     if (!form.apellido.trim()) errs.apellido = 'El apellido es requerido.';
-    if (!form.fecha_nacimiento) {
+    /*if (!form.fecha_nacimiento) {
       errs.fecha_nacimiento = 'La fecha de nacimiento es requerida.';
     } else {
       const hoy = new Date();
@@ -84,7 +84,7 @@ function EditarPerfil() {
       const edad = hoy.getFullYear() - nacimiento.getFullYear() - 
         ((hoy.getMonth() * 100 + hoy.getDate()) < (nacimiento.getMonth() * 100 + nacimiento.getDate()) ? 1 : 0);
       if (edad < 18) errs.fecha_nacimiento = 'Debés ser mayor de 18 años.';
-    }
+    }*/
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
       return;
@@ -144,6 +144,7 @@ function EditarPerfil() {
               <input style={s.input} name="apellido" value={form.apellido} onChange={cambio} />
             </div>
           </div>
+          {/*
           <div style={s.campo}>
             <label style={s.label}>Fecha de nacimiento</label>
             {fieldErrors.fecha_nacimiento && <span style={s.errInline}>{fieldErrors.fecha_nacimiento}</span>}
@@ -155,6 +156,7 @@ function EditarPerfil() {
               onChange={cambio}
             />
           </div>
+          */}
           <div style={s.grid}>
             <div style={s.campo}>
               <label style={s.label}>Dirección <span style={{ fontWeight: 400, color: 'var(--color-texto-suave)' }}>(opcional)</span></label>

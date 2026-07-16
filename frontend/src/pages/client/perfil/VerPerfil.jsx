@@ -236,7 +236,7 @@ export default function VerPerfil() {
                 color: 'var(--color-texto)', fontWeight: '600', fontSize: '14px', textDecoration: 'none',
               }}
             >
-              Cambiar contraseña
+              Gestionar cuenta
             </Link>
           </p>
         </>

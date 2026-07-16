@@ -661,14 +661,19 @@ def delete_user(user_id: int, deleted_by_id: int, db: Session):
     user.deleted_by = deleted_by_id
 
     current_user = db.query(User).filter(User.id == deleted_by_id).first()
+    print(current_user.role)
     if current_user.role in ["admin", "receptionist", "professor"]:
+        if current_user.id == user.id:
+            detalle = f"{name} eliminó su propia cuenta."
+        else:
+            detalle = f"Admin {current_user.name} {current_user.lastname} eliminó la cuenta de {name} (id {user.id})."
         register_audit(
             db=db,
             user_id=current_user.id,
             type=AuditType.ACCOUNT,
             action=AuditAction.DELETE,
             result=AuditResult.SUCCESS,
-            detail=f"Admin {current_user.name} {current_user.lastname} eliminó la cuenta de {name} (id {user.id})"
+            detail=detalle,
         )
     db.commit()
 
@@ -713,18 +718,6 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
     if not employee:
         raise user_not_found_exception()
 
-    if name is not None:
-        employee.name = name
-
-    if lastname is not None:
-        employee.lastname = lastname
-
-    if email is not None and email != employee.email:
-        existing = db.query(User).filter(User.email == email, User.id != employee_id).first()
-        if existing:
-            raise email_already_exists_exception()
-        employee.email = email
-
     if specialization is not None:
         # Solo los profesores pueden tener especialidad asignada
         if employee.role != "professor":
@@ -740,6 +733,18 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
                 Activity.status == "active",
             ).update({Activity.professor: None}, synchronize_session=False)
         employee.specialization = specialization
+
+    if name is not None:
+        employee.name = name
+
+    if lastname is not None:
+        employee.lastname = lastname
+
+    if email is not None and email != employee.email:
+        existing = db.query(User).filter(User.email == email, User.id != employee_id).first()
+        if existing:
+            raise email_already_exists_exception()
+        employee.email = email
 
     if direccion is not None:
         employee.direccion = direccion
