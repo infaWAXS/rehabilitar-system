@@ -14,6 +14,7 @@ const menus = {
     { label: 'Actividades',   ruta: '/admin/actividades' },
     { label: 'Sugerencias',   ruta: '/admin/sugerencias' },
     { label: 'Auditoría',     ruta: '/admin/auditoria' },
+    { label: 'Reportes',      ruta: '/admin/reportes' },
   ],
   profesor: [
     { label: 'Actividades', ruta: '/profesor/actividades' },
@@ -363,7 +364,12 @@ function LayoutPrivado({ children, titulo = '' }) {
     return () => document.removeEventListener('click', onClickOutside);
   }, []);
 
-  const tieneSidebar = rol !== 'cliente' || ubicacion.pathname.startsWith('/cliente/') || ubicacion.pathname.startsWith('/perfil');
+  const tieneSidebar = 
+    rol !== 'cliente' || 
+    ubicacion.pathname.startsWith('/cliente/') || 
+    ubicacion.pathname.startsWith('/perfil') || 
+    ubicacion.pathname.startsWith('/admin/reportes'); // 👈 Asegura que se mantenga en todo el Hub de reportes
+    
   const itemsMenu = menus[rol] || [];
   const estaSuspendido = rol === 'cliente' && estadoCuenta === 'suspended';
   const enPaginaCuenta = ubicacion.pathname === '/cliente/cuenta';

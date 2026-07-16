@@ -1,6 +1,6 @@
 # app/services/servicio_reportes.py
 import random
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from app.models.user import User
@@ -9,29 +9,48 @@ from app.models.plan import Plan
 from app.models.activity import Activity
 from app.models.attendance import Attendance
 from app.models.room import Room
+from app.models.user_suspension import UserSuspension
+import calendar
+
 
 def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_fin: date):
     datetime_inicio = datetime.combine(fecha_inicio, datetime.min.time())
     datetime_fin = datetime.combine(fecha_fin, datetime.max.time())
 
-    # ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────
     # 1. RESUMEN GLOBAL FIJO
     # ──────────────────────────────────────────────────────────────────────────
     primer_cliente = db.query(User).order_by(User.created_at.asc()).first()
     fecha_inicio_sistema = primer_cliente.created_at if primer_cliente else None
 
+    # [MANTENIDO PARA EL HUB] Totales absolutos actuales de la base de datos
     clientes_totales = db.query(func.count(User.id)).filter(
         User.role == "client"
     ).scalar() or 0
 
+    profesores_totales = db.query(func.count(User.id)).filter(
+        User.role == "professor"
+    ).scalar() or 0
+
+    # [NUEVO PARA CLIENTES REPORTE] Nuevos registros creados estrictamente en el rango
+    nuevos_registros = db.query(func.count(User.id)).filter(
+        User.role == "client",
+        User.created_at.between(datetime_inicio, datetime_fin)
+    ).scalar() or 0
+
+    # [NUEVO PARA CLIENTES REPORTE] Clientes suspendidos en este rango temporal
+    # Nota: Usamos created_at de una tabla de auditoría o el deshabilitado del usuario según tu modelo
+    clientes_suspendidos_rango = db.query(func.count(User.id)).filter(
+        User.role == "client",
+        User.account_status == "disabled",
+        User.created_at.between(datetime_inicio, datetime_fin) 
+    ).scalar() or 0
+
+    # Ingresos y ausentismo (Ya estaban correctamente segmentados por rango)
     ingresos_totales = db.query(func.sum(Plan.price)).\
         join(UserPlan, UserPlan.plan_id == Plan.id).\
         filter(UserPlan.start_date.between(fecha_inicio, fecha_fin)).\
         scalar() or 0.0
-
-    profesores_totales = db.query(func.count(User.id)).filter(
-        User.role == "professor"
-    ).scalar() or 0
 
     total_asistencias = db.query(func.count(Attendance.id)).filter(Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
     total_ausentes = db.query(func.count(Attendance.id)).filter(Attendance.status == 'absent', Attendance.timestamp.between(datetime_inicio, datetime_fin)).scalar() or 0
@@ -43,6 +62,40 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
 
     especialidades_db = db.query(Activity.specialization).distinct().filter(Activity.specialization.isnot(None)).all()
     lista_especialidades = [esp[0] for esp in especialidades_db if esp[0]]
+
+# [NUEVO] 1. Suscripciones activas en el rango (Se cruzó la fecha de inicio/fin del plan con el rango)
+    suscripciones_activas = db.query(func.count(UserPlan.id)).filter(
+        UserPlan.start_date <= fecha_fin,
+        UserPlan.end_date >= fecha_inicio
+    ).scalar() or 0
+
+ # [NUEVO] 2. Desglose de ingresos
+    # A. Ingresos por planes (Mantenemos tu lógica, pero casteado a float)
+    ingresos_planes_db = db.query(func.sum(Plan.price)).\
+        join(UserPlan, UserPlan.plan_id == Plan.id).\
+        filter(UserPlan.start_date.between(fecha_inicio, fecha_fin)).\
+        scalar() or 0.0
+    ingresos_planes = float(ingresos_planes_db)
+        
+    # B. Ingresos por clases individuales (Casteado a float)
+    ingresos_individuales_db = db.query(func.sum(Activity.price)).\
+        join(Attendance, Attendance.activity_id == Activity.id).\
+        filter(
+            Activity.activity_type == 'individual',
+            Attendance.status == 'present',
+            Attendance.timestamp.between(datetime_inicio, datetime_fin)
+        ).scalar() or 0.0
+    ingresos_individuales = float(ingresos_individuales_db)
+        
+    # C. Ingresos por Señas
+    ingresos_senas = 0.0 
+
+    # Total general unificado (ahora son todos floats, no va a crashear)
+    ingresos_totales_reales = ingresos_planes + ingresos_individuales + ingresos_senas
+
+    # Promedio
+    ingreso_promedio = (ingresos_totales_reales / suscripciones_activas) if suscripciones_activas > 0 else 0.0
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # 2. RENDIMIENTO POR ESPECIALIDAD (TABLAS 1 Y 2)
@@ -315,30 +368,62 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
         })
         
 # ──────────────────────────────────────────────────────────────────────────
-    # 5bis. APARTADO: AUDITORIA DE MOTIVOS DE SANCIONES (RESTAURADO Y CORREGIDO)
+    # 5bis. SANCIONES Y REINTEGROS (100% REAL)
     # ──────────────────────────────────────────────────────────────────────────
-    clientes_sancionados_db = db.query(User).filter(
+    # 1. Traemos TODAS las sanciones creadas en este rango de fechas
+    sanciones_query = db.query(UserSuspension).join(User).filter(
         User.role == "client",
-        User.account_status == "disabled"
+        UserSuspension.suspension_date.between(datetime_inicio, datetime_fin)
     ).all()
 
+    tres_faltas = 0
+    ausencia_50 = 0
+    otros_motivos = 0
     sancionados_lista = []
-    for u in clientes_sancionados_db:
-        fecha_sancion = u.created_at.strftime("%d/%m/%Y") if u.created_at else "Reciente"
-        
-        sancionados_lista.append({
-            "nombre": f"{u.name} {u.lastname}", 
-            "motivo": "Ausencias recurrentes registradas a módulos asignados dentro del mes operativo.",
-            "fecha_inicio": fecha_sancion
-        })
 
-    if len(sancionados_lista) == 0 and clientes_suspendidos > 0:
-        sancionados_lista = [
-            {"nombre": "Facundo Juárez", "motivo": "Tres faltas consecutivas sin aviso previo en módulos fijos de Tren Inferior.", "fecha_inicio": "15/06/2026"},
-            {"nombre": "Martina Rossi", "motivo": "Falta de pago/vencimiento de abono mensual y reserva de cupo duplicada.", "fecha_inicio": "18/06/2026"},
-            {"nombre": "Lautaro Silva", "motivo": "Cancelación fuera de término de manera reiterada (menos de 2 horas antes).", "fecha_inicio": "22/06/2026"},
-            {"nombre": "Sofía Castro", "motivo": "Penalización automática del sistema por acumulación de 4 inasistencias en el mes.", "fecha_inicio": "24/06/2026"}
-        ]
+    # 2. Iteramos para contar y armar la tabla
+    for sancion in sanciones_query:
+        # Contadores para las tarjetas
+        if sancion.suspension_reason == "tres_faltas":
+            tres_faltas += 1
+        elif sancion.suspension_reason == "ausencia_50":
+            ausencia_50 += 1
+        else:
+            otros_motivos += 1
+
+        # Si la sanción sigue activa, va a la tabla de abajo
+        if sancion.is_active:
+            sancionados_lista.append({
+                "nombre": f"{sancion.user.name} {sancion.user.lastname}", 
+                "motivo": sancion.suspension_reason.replace("_", " ").title(),
+                "fecha_inicio": sancion.suspension_date.strftime("%d/%m/%Y")
+            })
+
+    # 3. Calculamos reincidentes (más de 1 registro en TODA su historia)
+    reincidentes = db.query(UserSuspension.user_id).group_by(UserSuspension.user_id).having(func.count(UserSuspension.id) > 1).count()
+
+    # 4. Buscamos la más antigua y la más reciente (de las activas actualmente)
+    sancion_mas_antigua = db.query(UserSuspension).filter(UserSuspension.is_active == True).order_by(UserSuspension.suspension_date.asc()).first()
+    sancion_mas_reciente = db.query(UserSuspension).filter(UserSuspension.is_active == True).order_by(UserSuspension.suspension_date.desc()).first()
+
+    obj_antiguo = {
+        "nombre": f"{sancion_mas_antigua.user.name} {sancion_mas_antigua.user.lastname}" if sancion_mas_antigua else "-", 
+        "fecha": sancion_mas_antigua.suspension_date.strftime("%d/%m/%Y") if sancion_mas_antigua else "-"
+    }
+    obj_reciente = {
+        "nombre": f"{sancion_mas_reciente.user.name} {sancion_mas_reciente.user.lastname}" if sancion_mas_reciente else "-", 
+        "fecha": sancion_mas_reciente.suspension_date.strftime("%d/%m/%Y") if sancion_mas_reciente else "-"
+    }
+
+    # Empaquetamos todo para mandárselo a React
+    sanciones_estadisticas = {
+        "tresFaltas": tres_faltas,
+        "cincuentaPorciento": ausencia_50,
+        "otrosMotivos": otros_motivos,
+        "reincidentes": reincidentes,
+        "masAntiguo": obj_antiguo,
+        "masReciente": obj_reciente
+    }
 
 # ──────────────────────────────────────────────────────────────────────────
     # 6. HISTORICOS DE EVOLUCIÓN MENSUAL (100% REAL Y ASOCIADO)
@@ -384,16 +469,38 @@ def generar_reporte_estadistico_service(db: Session, fecha_inicio: date, fecha_f
             "ingresos_brutos": float(ingresos_mes) # <── Dato financiero inyectado
         })
 
+    
+    # Fíjate cómo en "resumen" ahora incluimos las dos variables nuevas
     return {
         "fecha_inicio_sistema": fecha_inicio_sistema.strftime("%Y-%m-%d") if fecha_inicio_sistema else None,
-        "resumen": {"clientes_totales": clientes_totales, "ingresos_totales": float(ingresos_totales), "profesores_totales": profesores_totales, "tasa_ausentismo": tasa_ausentismo},
-        "clase": clases_lista, "sancionados": sancionados_lista, "ocupacion_aulas": aulas_lista, "profesores_mayor_concurrencia": profesores_lista,
+        "resumen": {
+            "clientes_totales": clientes_totales, 
+            "profesores_totales": profesores_totales,
+            "nuevos_registros": nuevos_registros,                       # <--- ESTO FALTABA
+            "clientes_suspendidos_rango": clientes_suspendidos_rango,   # <--- ESTO FALTABA
+            "ingresos_totales": float(ingresos_totales), 
+            "tasa_ausentismo": tasa_ausentismo
+        },
+        "clase": clases_lista, 
+        "sancionados": sancionados_lista, 
+        "sanciones_estadisticas": sanciones_estadisticas,               # <--- Tu panel de sanciones real
+        "ocupacion_aulas": aulas_lista, 
+        "profesores_mayor_concurrencia": profesores_lista,
         "evolucion_temporal": {
             "granularidad": "meses",
             "datos": cronologia_lista
         },
         "mapa_calor": mapa_calor_datos,
-        "mapa_infraestructura": mapa_infraestructura_datos  # <── Agregado acá
+        "mapa_infraestructura": mapa_infraestructura_datos,
+        "finanzas": {
+            "ingresos_totales": float(ingresos_totales_reales),
+            "suscripciones_activas": suscripciones_activas,
+            "ingreso_promedio": float(ingreso_promedio),
+            "desglose": {
+                "planes": float(ingresos_planes),
+                "individuales": float(ingresos_individuales),
+                "senas": float(ingresos_senas)
+            }
+        }
     }
-    
     

@@ -172,12 +172,13 @@ function ListaClientes() {
     setErrMotivo('');
   };
 
-  const confirmarSuspender = async () => {
+const confirmarSuspender = async () => {
     if (!motivoSuspender.trim()) { setErrMotivo('El motivo es obligatorio.'); return; }
     setSuspendiendo(true);
     try {
-      const updated = await suspendClient(clienteASuspender.id, motivoSuspender.trim());
-      const nuevoEstado = updated?.account_status || 'suspended';
+      const response = await suspendClient(clienteASuspender.id, motivoSuspender.trim());
+      // 🚨 Cambiamos 'updated' por 'response' y usamos el campo que devuelve el servicio
+      const nuevoEstado = response?.account_status || 'suspended'; 
       setClientes((prev) => prev.map((c) => (c.id === clienteASuspender.id ? { ...c, account_status: nuevoEstado } : c)));
       setExito(`La cuenta de ${clienteASuspender.name} ${clienteASuspender.lastname} fue suspendida correctamente.`);
       cerrarModalSuspender();
