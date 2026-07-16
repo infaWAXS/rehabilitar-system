@@ -371,7 +371,7 @@ def reincorporar_cliente(cliente_id: int, motivo: Optional[str], db: Session, cu
         type=AuditType.ACCOUNT,
         action=AuditAction.REINTEGRATE_ACCOUNT,
         result=AuditResult.SUCCESS,
-        detail=f"Admin {current_user.name} {current_user.lastname} reintegró la cuenta del cliente {cliente.name} {cliente.lastname} (id {cliente.id}). Motivo: {motivo}",
+        detail=f"Admin {current_user.name} {current_user.lastname} reintegró la cuenta del cliente {cliente.name} {cliente.lastname} (id {cliente.id}).",
     )
     db.commit()
     db.refresh(cliente)
