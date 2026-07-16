@@ -281,6 +281,25 @@ USUARIOS_MOCK = [
         "dni": "47000009",
         "birth_date": date(1996, 7, 9),
     },
+    # Clientes utilizados para reintegrar cuenta y rechazar cuenta en la demo
+    {
+        "name": "Reintegrar",
+        "lastname": "Sin Solicitud",
+        "email": "reintegrar@rehabilitar.com",
+        "password": "Cliente123",
+        "role": "client",
+        "dni": "44332211",
+        "birth_date": date(2000, 1, 1),
+    },
+    {
+        "name": "Rechazar",
+        "lastname": "Solicitud",
+        "email": "rechazar@rehabilitar.com",
+        "password": "Cliente123",
+        "role": "client",
+        "dni": "44332212",
+        "birth_date": date(2000, 1, 1),
+    }
 ]
 
 # Clientes que ocupan los 3 cupos de "Rehabilitar Codo (lista de espera)" — HU 9 E4/E5.
@@ -1118,6 +1137,7 @@ def seed():
     _reparar_profesor_rehabilitar_codo()
     _seed_actividades_modificar_cancelar_renunciar()
     _seed_cancelar_turno()
+    suspender_usuarios_demo(db)
 
 
 def _reparar_profesor_rehabilitar_codo() -> None:
@@ -1807,6 +1827,18 @@ def _seed_cancelar_turno() -> None:
     finally:
         db.close()
 
+def suspender_usuarios_demo(db):
+
+    usuario1 = db.query(User).filter(User.email == "reintegrar@rehabilitar.com",).first()
+    usuario1.account_status = "suspended"
+    usuario1.suspension_reason = "No pagó"
+
+    usuario2 = db.query(User).filter(User.email == "rechazar@rehabilitar.com",).first()
+    usuario2.account_status = "suspended"
+    usuario2.suspension_reason = "No pagó"
+    db.commit()
+    from app.services.servicio_clientes import registrar_reintegro
+    registrar_reintegro(usuario2.id, "Si pagué", db)
 
 if __name__ == "__main__":
     seed()
