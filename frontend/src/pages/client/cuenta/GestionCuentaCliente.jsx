@@ -105,7 +105,7 @@ function GestionCuentaCliente() {
       await changePassword(passForm.nueva, passForm.confirmar);
       // E1: exito → cerrar sesion y redirigir al login
       clearUserData();
-      navigate('/login', { state: { mensaje: 'Contrasena actualizada. Inicia sesion con tu nueva contrasena.' } });
+      navigate('/login', { state: { mensaje: 'Contraseña actualizada. Inicia sesión con tu nueva contraseña.' } });
     } catch (err) {
       setPassError(err.message || 'No se pudo cambiar la contraseña.');
     } finally {
@@ -124,7 +124,7 @@ function GestionCuentaCliente() {
       setModalEliminar(false);
     }
   };
-
+  /*
   const solicitarReintegro = async (e) => {
     e.preventDefault();
     setReintegroError('');
@@ -147,7 +147,7 @@ function GestionCuentaCliente() {
       setReintegroCargando(false);
     }
   };
-
+  */
   return (
     <LayoutPrivado titulo="Mi Cuenta">
       <button style={s.botonVolver} onClick={() => navigate(-1)}>← Volver</button>
@@ -190,6 +190,7 @@ function GestionCuentaCliente() {
       </div>
 
       {/* ── Solicitar reintegro de cuenta ──────────── */}
+      {/*
       <div style={s.seccion}>
         <p style={s.titulo}>Solicitar reintegro de cuenta</p>
         <p style={{ fontSize: '14px', color: 'var(--color-texto-suave)', marginBottom: '16px', lineHeight: 1.5 }}>
@@ -219,7 +220,7 @@ function GestionCuentaCliente() {
           </form>
         )}
       </div>
-
+      */}
       {/* ── Zona de peligro ───────────────────────── */}
       <div style={{ ...s.seccion, borderTop: '3px solid #dc2626' }}>
         <p style={{ ...s.titulo, color: '#dc2626' }}>Zona de peligro</p>

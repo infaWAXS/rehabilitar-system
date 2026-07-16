@@ -41,8 +41,8 @@ const s = {
     }),
     chipTipo: (tipo) => ({
         display: 'inline-block', padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600',
-        background: tipo === 'PAYMENT' ? '#dcfce7' : tipo === 'ACTIVITY' ? '#dbeafe' : '#fee2e2',
-        color: tipo === 'PAYMENT' ? '#166534' : tipo === 'ACTIVITY' ? '#1d4ed8' :'#b91c1c',
+        background: tipo === 'PAYMENT' ? '#dcfce7' : tipo === 'ACTIVITY' ? '#dbeafe' : '#FEF3C7',
+        color: tipo === 'PAYMENT' ? '#166534' : tipo === 'ACTIVITY' ? '#1d4ed8' :'#92400E',
     }),
     vacio: { textAlign: 'center', padding: '40px', color: 'var(--color-texto-suave)', fontSize: '14px' },
 }
@@ -97,7 +97,7 @@ function ListaAuditoria() {
             <div style={s.filtros}>
                 <input
                     type="text"
-                    placeholder="Buscar por usuario"
+                    placeholder="Buscar por texto"
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
                     style={s.inputBuscar} />

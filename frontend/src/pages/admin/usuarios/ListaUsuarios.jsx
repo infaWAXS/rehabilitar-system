@@ -143,6 +143,7 @@ function ListaUsuarios() {
       await deleteUser(usuarioAEliminar.id);
       setUsuarios((prev) => prev.filter((u) => u.id !== usuarioAEliminar.id));
       cerrarModal();
+      setErrorBanner('Usuario ' + usuarioAEliminar.email + ' eliminado');
     } catch (err) {
       setErrorBanner(err.message || 'No se pudo eliminar el usuario.');
       cerrarModal();

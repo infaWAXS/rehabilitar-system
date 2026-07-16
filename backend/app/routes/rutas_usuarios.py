@@ -140,7 +140,7 @@ def list_pending_medical(token: str, db: Session = Depends(get_db)):
 def get_user(user_id: int, token: str, db: Session = Depends(get_db)):
     current_user = get_current_user(token, db)
     
-    if (current_user.role != "admin" and current_user.id != user_id):
+    if (current_user.role not in ["admin", "receptionist"] and current_user.id != user_id):
         raise forbidden_exception()
     
     user = get_user_by_id(user_id, db)

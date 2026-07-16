@@ -160,52 +160,54 @@ export default function VerPerfil() {
           )}
 
           {/* ── Apto físico ──────────────────────────────── */}
-          <div style={s.seccion}>
-            <p style={s.titulo}>Apto Físico</p>
-            {(() => {
-              const cert = estadoCertificadoLabel(usuario.medical_certificate_status);
-              return cert ? (
-                <div style={{ marginBottom: '12px' }}>
-                  <span style={{ ...s.badge, ...cert.estilo }}>{cert.texto}</span>
-                </div>
-              ) : (
-                <p style={{ fontSize: '13px', color: 'var(--color-texto-suave)', marginBottom: '12px' }}>
-                  No has subido ningún apto físico todavía.
-                </p>
-              );
-            })()}
+          {usuario.role === 'client' && (
+            <div style={s.seccion}>
+              <p style={s.titulo}>Apto Físico</p>
+              {(() => {
+                const cert = estadoCertificadoLabel(usuario.medical_certificate_status);
+                return cert ? (
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={{ ...s.badge, ...cert.estilo }}>{cert.texto}</span>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '13px', color: 'var(--color-texto-suave)', marginBottom: '12px' }}>
+                    No has subido ningún apto físico todavía.
+                  </p>
+                );
+              })()}
 
-            {aptoError && <div style={s.alerta('error')}>{aptoError}</div>}
-            {aptoExito && <div style={s.alerta('ok')}>{aptoExito}</div>}
+              {aptoError && <div style={s.alerta('error')}>{aptoError}</div>}
+              {aptoExito && <div style={s.alerta('ok')}>{aptoExito}</div>}
 
-            {usuario.medical_certificate_status !== 'pending' && usuario.medical_certificate_status !== 'approved' && (
-              <form onSubmit={subirApto} style={s.aptoBox}>
-                <label style={s.label}>
-                  {usuario.medical_certificate_status === 'none' ? 'Subir apto físico' : 'Actualizar apto físico'}
-                </label>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  style={s.aptoInput}
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    const tiposPermitidos = ['image/jpeg', 'image/png', 'application/pdf'];
-                    if (!tiposPermitidos.includes(file.type)) {
-                      setAptoError('Solo se permiten archivos JPG, PNG y PDF');
-                      e.target.value = null;
-                      return;
-                    }
-                    setAptoFile(file);
-                  }}
-                />
-                <button type="submit" style={s.aptoBoton} disabled={aptoSubiendo}>
-                  {aptoSubiendo ? 'Subiendo...' : 'Enviar'}
-                </button>
-              </form>
-            )}
-          </div>
-
+              {usuario.medical_certificate_status !== 'pending' && usuario.medical_certificate_status !== 'approved' && (
+                <form onSubmit={subirApto} style={s.aptoBox}>
+                  <label style={s.label}>
+                    {usuario.medical_certificate_status === 'none' ? 'Subir apto físico' : 'Actualizar apto físico'}
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    style={s.aptoInput}
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      const tiposPermitidos = ['image/jpeg', 'image/png', 'application/pdf'];
+                      if (!tiposPermitidos.includes(file.type)) {
+                        setAptoError('Solo se permiten archivos JPG, PNG y PDF');
+                        e.target.value = null;
+                        return;
+                      }
+                      setAptoFile(file);
+                    }}
+                  />
+                  <button type="submit" style={s.aptoBoton} disabled={aptoSubiendo}>
+                    {aptoSubiendo ? 'Subiendo...' : 'Enviar'}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+          
           {/* ── Información del Registro ──────────────────── */}
           <div style={s.seccion}>
             <p style={s.titulo}>Información del Registro</p>
@@ -234,7 +236,7 @@ export default function VerPerfil() {
                 color: 'var(--color-texto)', fontWeight: '600', fontSize: '14px', textDecoration: 'none',
               }}
             >
-              Cambiar contraseña
+              Gestionar cuenta
             </Link>
           </p>
         </>

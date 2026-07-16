@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.user import User
+from app.models.user_suspension import UserSuspension
 from app.models.activity import Activity
 
 from app.utils.security import hash_password, verify_password, create_access_token, verify_token, generate_temporary_password
@@ -201,7 +202,6 @@ def register_user_by_admin(user_data, db: Session, current_user: User):
 # E5b: cuenta disabled → HTTP 403
 def login_user(request: UserLogin, db: Session):
 
-
     existing_user = db.query(User).filter(
         User.email == request.email,
         User.is_deleted == False,
@@ -213,14 +213,29 @@ def login_user(request: UserLogin, db: Session):
             detail="Email invalido"
         )
 
+    access_token = create_access_token(
+        data={
+            "sub": existing_user.email
+        }
+    )
+
+    if existing_user.account_status.lower() == "suspended":
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "role": existing_user.role,
+            "name": existing_user.name,
+            "lastname": existing_user.lastname,
+            "account_status": existing_user.account_status,
+            "suspension_reason": existing_user.suspension_reason,
+            "id": existing_user.id,
+        }
 
     if existing_user.account_status.lower() == "disabled":
-
         raise HTTPException(
             status_code=403,
             detail="Cuenta deshabilitada"
         )
-
 
     password_correct = verify_password(
         request.password,
@@ -232,6 +247,20 @@ def login_user(request: UserLogin, db: Session):
 
         if existing_user.failed_login_attempts >= 3:
             existing_user.account_status = "disabled"
+            if existing_user.role in ["admin", "receptionist", "professor"]:
+                register_audit(
+                    db=db,
+                    user_id=existing_user.id,
+                    type=AuditType.ACCOUNT,
+                    action=AuditAction.LOGIN,
+                    result=AuditResult.ERROR,
+                    detail=f"Intento de login fallido número {existing_user.failed_login_attempts} para {existing_user.name} {existing_user.lastname} por contraseña incorrecta."
+                )
+            db.commit()
+            raise HTTPException(
+                status_code=403,
+                detail="Cuenta deshabilitada"
+            )
 
         if existing_user.role in ["admin", "receptionist", "professor"]:
             register_audit(
@@ -240,7 +269,7 @@ def login_user(request: UserLogin, db: Session):
                 type=AuditType.ACCOUNT,
                 action=AuditAction.LOGIN,
                 result=AuditResult.ERROR,
-                detail=f"Intento de login fallido para {existing_user.name} {existing_user.lastname} por contraseña incorrecta."
+                detail=f"Intento de login fallido número {existing_user.failed_login_attempts} para {existing_user.name} {existing_user.lastname} por contraseña incorrecta."
             )
         db.commit()
 
@@ -263,12 +292,6 @@ def login_user(request: UserLogin, db: Session):
         )
     db.commit()
     
-    access_token = create_access_token(
-        data={
-            "sub": existing_user.email
-        }
-    )
-
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -477,6 +500,12 @@ def request_password_recovery(email: str, http_request, db: Session):
             detail="El correo no está registrado en el sistema"
         )
 
+    if user.account_status =="suspended":
+        raise HTTPException(
+            status_code=403,
+            detail="Cuenta suspendida"
+        )
+
     # Generar token con expiración de 30 minutos
     recovery_token = create_access_token(
         data={"sub": user.email, "type": "recovery"},
@@ -536,7 +565,8 @@ def reset_password(token: str, new_password: str, confirm_password: str, db: Ses
 
     hashed_password = hash_password(new_password)
     user.password = hashed_password
-    user.account_status = "active"
+    if user.failed_login_attempts == 3:
+        user.account_status = "active"
     user.failed_login_attempts = 0
 
     if user.role in ["admin", "receptionist", "professor"]:
@@ -638,14 +668,19 @@ def delete_user(user_id: int, deleted_by_id: int, db: Session):
     user.deleted_by = deleted_by_id
 
     current_user = db.query(User).filter(User.id == deleted_by_id).first()
+    print(current_user.role)
     if current_user.role in ["admin", "receptionist", "professor"]:
+        if current_user.id == user.id:
+            detalle = f"{name} eliminó su propia cuenta."
+        else:
+            detalle = f"Admin {current_user.name} {current_user.lastname} eliminó la cuenta de {name} (id {user.id})."
         register_audit(
             db=db,
             user_id=current_user.id,
             type=AuditType.ACCOUNT,
             action=AuditAction.DELETE,
             result=AuditResult.SUCCESS,
-            detail=f"Admin {current_user.name} {current_user.lastname} eliminó la cuenta de {name} (id {user.id})"
+            detail=detalle,
         )
     db.commit()
 
@@ -690,18 +725,6 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
     if not employee:
         raise user_not_found_exception()
 
-    if name is not None:
-        employee.name = name
-
-    if lastname is not None:
-        employee.lastname = lastname
-
-    if email is not None and email != employee.email:
-        existing = db.query(User).filter(User.email == email, User.id != employee_id).first()
-        if existing:
-            raise email_already_exists_exception()
-        employee.email = email
-
     if specialization is not None:
         # Solo los profesores pueden tener especialidad asignada
         if employee.role != "professor":
@@ -717,6 +740,18 @@ def modify_employee(employee_id: int, name: str = None, lastname: str = None, em
                 Activity.status == "active",
             ).update({Activity.professor: None}, synchronize_session=False)
         employee.specialization = specialization
+
+    if name is not None:
+        employee.name = name
+
+    if lastname is not None:
+        employee.lastname = lastname
+
+    if email is not None and email != employee.email:
+        existing = db.query(User).filter(User.email == email, User.id != employee_id).first()
+        if existing:
+            raise email_already_exists_exception()
+        employee.email = email
 
     if direccion is not None:
         employee.direccion = direccion
@@ -806,6 +841,7 @@ def get_user_with_plan_specialization(user: User, db: Session):
         "tiene_clases_activas": None,
         "birth_date": user.birth_date,
         "plan_specialization": plan_specialization,
+        "created_at":user.created_at,
     }
     return user_dict
 
