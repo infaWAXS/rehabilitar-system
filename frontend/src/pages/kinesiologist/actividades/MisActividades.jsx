@@ -54,6 +54,12 @@ const s = {
     background: '#dcfce7', color: '#16a34a',
     fontSize: '13px', fontWeight: '600', cursor: 'pointer',
   },
+  // Histórico: acción de consulta, en gris, para que no compita con las accionables.
+  botonConsultar: {
+    padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--color-borde)',
+    background: 'transparent', color: 'var(--color-texto-suave)',
+    fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+  },
   vacio: {
     textAlign: 'center', padding: '32px',
     color: 'var(--color-texto-suave)', fontSize: '14px',
@@ -88,11 +94,74 @@ const s = {
   },
 };
 
+// Instante de inicio de una actividad, para ordenarlas de la más próxima a la más lejana.
+// Las fijas legacy sin specific_date no tienen un momento concreto: se mandan al fondo con
+// un valor finito, porque restar dos Infinity da NaN y deja el sort indefinido.
+const SIN_FECHA = Number.MAX_SAFE_INTEGER;
+
+// Minutos que una clase sigue contando como vigente después de terminar. Espeja a
+// GRACIA_ASISTENCIA_MIN del backend: es la ventana en la que todavía se puede registrar
+// asistencia, así que hasta que no vence la clase no es "pasada".
+const GRACIA_ASISTENCIA_MIN = 30;
+
+// Minutos desde medianoche de inicio y fin. Las fijas traen el rango completo en schedule
+// ("Jueves · 12:00–13:00"); las individuales solo time_slot, y duran una hora.
+function horariosDe(activity) {
+  const enSchedule = [...(activity.schedule || '').matchAll(/(\d{1,2}):(\d{2})/g)];
+  if (enSchedule.length >= 2) {
+    const inicio = Number(enSchedule[0][1]) * 60 + Number(enSchedule[0][2]);
+    let fin = Number(enSchedule[1][1]) * 60 + Number(enSchedule[1][2]);
+    // Clase que cruza medianoche ("23:00–00:00" da fin=0): termina al día siguiente.
+    if (fin <= inicio) fin += 24 * 60;
+    return { inicio, fin };
+  }
+  const slot = (activity.time_slot || '').match(/(\d{1,2}):(\d{2})/);
+  if (slot) {
+    const inicio = Number(slot[1]) * 60 + Number(slot[2]);
+    return { inicio, fin: inicio + 60 };
+  }
+  return null;
+}
+
+function medianocheDe(activity) {
+  if (!activity.specific_date) return null;
+  const dia = new Date(`${activity.specific_date}T00:00:00`);
+  return Number.isNaN(dia.getTime()) ? null : dia.getTime();
+}
+
+function instanteInicio(activity) {
+  const medianoche = medianocheDe(activity);
+  if (medianoche === null) return SIN_FECHA;
+  const horarios = horariosDe(activity);
+  return medianoche + (horarios ? horarios.inicio : 0) * 60000;
+}
+
+// Espejo de _ya_paso del backend. Sin fecha (fijas legacy) no hay nada que haya pasado;
+// sin horario parseable, la clase vence a la medianoche siguiente.
+function yaPaso(activity, ahora) {
+  const medianoche = medianocheDe(activity);
+  if (medianoche === null) return false;
+  const horarios = horariosDe(activity);
+  if (!horarios) return medianoche + 24 * 60 * 60000 <= ahora;
+  return medianoche + (horarios.fin + GRACIA_ASISTENCIA_MIN) * 60000 <= ahora;
+}
+
+function porProximidad(a, b) {
+  return instanteInicio(a) - instanteInicio(b);
+}
+
+// Las pasadas van de la más reciente a la más vieja: lo último que dictó el profesor es lo
+// que más le interesa ver primero.
+function porMasReciente(a, b) {
+  return instanteInicio(b) - instanteInicio(a);
+}
+
 export default function MisActividades() {
   const nombreProfesor = `${localStorage.getItem('user_name') || ''} ${localStorage.getItem('user_lastname') || ''}`.trim();
   const navigate = useNavigate();
 
   const [actividades, setActividades] = useState([]);
+  const [actividadesPasadas, setActividadesPasadas] = useState([]);
   const [actividadesParaAsumir, setActividadesParaAsumir] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
@@ -117,17 +186,36 @@ export default function MisActividades() {
         // El filtrado de "puedo asumir esto" lo resuelve el backend: aplica las mismas
         // reglas que al asumir (especialidad, sin profesor y sin choque de día/horario
         // con las que ya tengo), así no se ofrece nada que después sea rechazado.
+        // include_past trae también el histórico, que por defecto el backend oculta. Solo
+        // lo pide esta pantalla: el resto del sistema sigue viendo solo las vigentes.
         const [todasActs, paraAsumir] = await Promise.all([
-          getActivities(),
+          getActivities({ include_past: true }),
           getAssumableActivities(),
         ]);
 
+        const ahora = Date.now();
         const misActs = todasActs.filter(
           (a) => a.status === 'active' && a.professor === nombreProfesor
         );
+        const vigentes = misActs.filter((a) => !yaPaso(a, ahora)).sort(porProximidad);
+        const pasadas = misActs.filter((a) => yaPaso(a, ahora)).sort(porMasReciente);
 
-        setActividades(misActs);
-        setActividadesParaAsumir(paraAsumir);
+        setActividades(vigentes);
+        setActividadesPasadas(pasadas);
+        setActividadesParaAsumir([...paraAsumir].sort(porProximidad));
+
+        // El chip "En curso" de cada tarjeta sale de esto: sin poblarlo, todas las
+        // actividades se dibujan como "Fuera de curso" aunque estén transcurriendo. Las
+        // pasadas no se consultan: nunca están en curso y serían decenas de requests.
+        const visibles = [...vigentes, ...paraAsumir];
+        const estados = await Promise.allSettled(
+          visibles.map((a) => getAttendanceSessionStatus(a.id))
+        );
+        const mapa = {};
+        estados.forEach((res, i) => {
+          if (res.status === 'fulfilled') mapa[visibles[i].id] = res.value.session_active;
+        });
+        setEstadoSesiones(mapa);
       } catch (e) {
         setError('No se pudieron cargar las actividades.');
       } finally {
@@ -159,7 +247,7 @@ export default function MisActividades() {
     setError('');
     try {
       const activityActualizada = await assumeActivity(assumeTarget.id);
-      setActividades((prev) => [...prev, activityActualizada]);
+      setActividades((prev) => [...prev, activityActualizada].sort(porProximidad));
       setActividadesParaAsumir((prev) => prev.filter((a) => a.id !== assumeTarget.id));
       setExito(`Asumiste la actividad "${assumeTarget.nombre}" correctamente.`);
       setAssumeTarget(null);
@@ -276,6 +364,32 @@ function obtenerDiaYFecha(activity) {
               onClick={() => setAssumeTarget({ id: a.id, nombre: a.name })}
             >
               Asumir
+            </button>
+          </div>
+        ))
+      )}
+
+      {/* Sección: histórico. La única acción es consultar las asistencias en modo lectura;
+          renunciar a una clase que ya se dictó no significa nada. */}
+      <h2 style={s.seccionTitulo}>Actividades pasadas</h2>
+
+      {!cargando && actividadesPasadas.length === 0 ? (
+        <div style={s.vacio}>Todavía no dictaste ninguna actividad.</div>
+      ) : (
+        actividadesPasadas.map((a) => (
+          <div key={a.id} style={{ ...s.tarjeta, opacity: 0.7 }}>
+            <div>
+              <div style={s.nombreAct}>{a.name}</div>
+              <div style={s.detalle}>{a.activity_type === 'fixed' ? 'Fija' : 'Individual'}</div>
+              <div style={s.detalle}>{a.specialization || 'No definida'}</div>
+              <div style={s.detalle}>{obtenerDiaYFecha(a)}</div>
+              <div style={s.detalle}>{obtenerRangoHorario(a)}</div>
+            </div>
+            <button
+              style={s.botonConsultar}
+              onClick={() => navigate(`/profesor/actividades/${a.id}/asistencias?solo-lectura=1`)}
+            >
+              Asistencia
             </button>
           </div>
         ))

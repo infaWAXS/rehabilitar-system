@@ -1,7 +1,7 @@
 // Responsable: Ezequiel
 // HU: Registrar asistencia por DNI · Dejar/Modificar/Eliminar comentario
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import LayoutPrivado from '../../../layouts/LayoutPrivado';
 import { getActivityById } from '../../../services/activitiesService';
@@ -203,6 +203,7 @@ const s = {
 
 export default function RegistrarAsistencia() {
   const { id: actividadId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [actividad, setActividad] = useState(null);
@@ -284,7 +285,11 @@ useEffect(() => {
     };
   }, [actividadId]);
 
-  const bloqueoPorSesion = restriccionesActivas && !sesionActiva;
+  // Las clases pasadas se abren desde "Mis Actividades" con ?solo-lectura=1: se ve lo mismo
+  // que al registrar, pero sin poder tocar nada. Va por query param y no por state de
+  // navegación para que sobreviva a un refresh o a compartir el link.
+  const soloLectura = searchParams.get('solo-lectura') === '1';
+  const bloqueoPorSesion = soloLectura || (restriccionesActivas && !sesionActiva);
   const controlesBloqueados = cargandoSesion || bloqueoPorSesion;
 
   const cargarAsistencias = useCallback(() => {
@@ -432,7 +437,9 @@ useEffect(() => {
 
       {!cargandoSesion && bloqueoPorSesion && (
         <div style={s.alerta('error')}>
-          La clase aún no está en curso. Las funcionalidades de asistencia están bloqueadas.
+          {soloLectura
+            ? 'La clase ya finalizó. Podés consultar las asistencias registradas, pero no modificarlas.'
+            : 'La clase aún no está en curso. Las funcionalidades de asistencia están bloqueadas.'}
         </div>
       )}
 
