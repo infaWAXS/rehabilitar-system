@@ -24,11 +24,61 @@ const DURACION = (dias) => {
   return `${dias} días`;
 };
 
+// Fecha de una clase del token, como "jue 16 jul". Se muestra solo el día: la hora es
+// la misma para todas las clases del mes y ya va aparte, al lado de la actividad.
+function fmtClase(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+// El descuento pendiente es uno solo (no se acumula), pero puede deberse a dos cosas
+// distintas y el cliente necesita saber a cuál: no es lo mismo un beneficio por haber
+// cancelado un turno que la compensación por un plan que le cubrió menos clases.
+const MOTIVO_DESCUENTO = {
+  cancelacion: 'por una cancelación previa',
+  mes_corto: 'porque tu plan anterior cubrió un mes con menos clases',
+};
+
+// Cada suscripción es un token de un solo uso que NO vence: por eso no hay "Vencida".
+// O está sin usar (disponible para inscribirte cuando quieras) o ya la usaste.
 const ESTADO_LABEL = {
-  active: { texto: 'Activa', color: '#15803d', fondo: '#dcfce7' },
-  expired: { texto: 'Vencida', color: '#6b7280', fondo: '#f3f4f6' },
+  available: { texto: 'Sin usar', color: '#15803d', fondo: '#dcfce7' },
+  used: { texto: 'Usada', color: '#6b7280', fondo: '#f3f4f6' },
   cancelled: { texto: 'Cancelada', color: '#dc2626', fondo: '#fef2f2' },
 };
+
+// Qué dice cada suscripción según su estado.
+//
+// El token no vence, así que no hay nada que "quede por vencer": o lo usaste (y te
+// anotó a las clases del mes de la actividad que elegiste) o lo tenés guardado para
+// cuando quieras. Si está sin usar se muestra `enrollable_fixed_classes`, las clases
+// que REALMENTE existen para anotarte: si la especialidad no tiene actividades es 0, y
+// decirle "podés anotarte a 4" sería mentirle.
+function textoCupoFijas(plan) {
+  if (plan.status === 'cancelled') {
+    return 'Suscripción cancelada';
+  }
+
+  if (plan.status === 'used') {
+    // Una suscripción usada no vuelve atrás aunque canceles los turnos: ahí ya corre la
+    // política de cancelación (créditos y descuentos). Por eso puede quedar en 0 clases.
+    const usadas = plan.classes_used ?? 0;
+    if (usadas === 0) {
+      return 'Ya la usaste · cancelaste todas sus clases';
+    }
+    return usadas === 1
+      ? 'Ya la usaste · te anotó a 1 clase fija'
+      : `Ya la usaste · te anotó a ${usadas} clases fijas`;
+  }
+
+  const anotables = plan.enrollable_fixed_classes ?? 0;
+  if (anotables === 0) {
+    return 'Sin usar · por ahora no hay clases de esta especialidad para anotarte';
+  }
+  return anotables === 1
+    ? 'Sin usar · podés anotarte a 1 clase fija de esta especialidad'
+    : `Sin usar · podés anotarte a ${anotables} clases fijas de esta especialidad`;
+}
 
 const s = {
   titulo: { fontSize: '22px', fontWeight: '700', color: 'var(--color-texto)', marginBottom: '8px' },
@@ -58,6 +108,12 @@ const s = {
   },
   itemPlanNombre: { fontSize: '14px', fontWeight: '700', color: 'var(--color-texto)' },
   itemPlanSub: { fontSize: '12px', color: 'var(--color-texto-suave)', marginTop: '3px' },
+  clasesDelToken: {
+    marginTop: '8px', padding: '8px 10px', borderRadius: '6px',
+    background: '#eff6ff', border: '1px solid #bfdbfe',
+    fontSize: '12px', color: '#1d4ed8',
+  },
+  clasesFechas: { marginTop: '3px', opacity: 0.9, lineHeight: 1.5 },
   badgeEstado: (estado) => ({
     padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700',
     color: (ESTADO_LABEL[estado] || ESTADO_LABEL.expired).color,
@@ -133,6 +189,7 @@ export default function MisSuscripciones() {
   const [errorCarga, setErrorCarga] = useState('');
   const [misPlanes, setMisPlanes]   = useState([]);
   const [pendingDiscount, setPendingDiscount] = useState(0);
+  const [pendingReason, setPendingReason] = useState(null);
   const [ageDiscount, setAgeDiscount] = useState(0);
   const [planInfo, setPlanInfo]     = useState(null);
   const [aptoAprobado, setAptoAprobado] = useState(null); // null = cargando, true/false = resuelto
@@ -154,6 +211,7 @@ export default function MisSuscripciones() {
     getMyPlan()
       .then((data) => {
         setPendingDiscount(data.pending_discount_percent ?? 0);
+        setPendingReason(data.pending_discount_reason ?? null);
         setAgeDiscount(data.age_discount_percent ?? 0);
         setPlanInfo(data);
       })
@@ -165,6 +223,7 @@ export default function MisSuscripciones() {
       .then(([planesData, miPlanData, misPlanesData]) => {
         setPlanes(planesData);
         setPendingDiscount(miPlanData.pending_discount_percent ?? 0);
+        setPendingReason(miPlanData.pending_discount_reason ?? null);
         setAgeDiscount(miPlanData.age_discount_percent ?? 0);
         setPlanInfo(miPlanData);
         setMisPlanes(Array.isArray(misPlanesData) ? misPlanesData : []);
@@ -181,9 +240,10 @@ export default function MisSuscripciones() {
       .catch(() => setAptoAprobado(false));
   }, []);
 
-  // Especialidades en las que el cliente ya tiene una suscripción activa: no se ofrecen de nuevo.
+  // Especialidades con un token sin usar: no se ofrecen de nuevo hasta gastarlo.
+  // Una vez usado, el cliente puede volver a comprar esa especialidad.
   const especialidadesConSuscripcionActiva = new Set(
-    misPlanes.filter((p) => p.status === 'active').map((p) => p.specialization)
+    misPlanes.filter((p) => p.status === 'available').map((p) => p.specialization)
   );
   const especialidadesDisponibles = ESPECIALIZACIONES.filter(
     (esp) => !especialidadesConSuscripcionActiva.has(esp)
@@ -328,7 +388,7 @@ export default function MisSuscripciones() {
           <span style={s.badgeAbonado}>Abonado activo</span>
           {pendingDiscount > 0 && (
             <div style={s.alerta('success')}>
-              Tenés un <strong>{pendingDiscount}% de descuento</strong> pendiente por cancelación. Se aplicará automáticamente en el pago de tu próxima suscripción.
+              Tenés un <strong>{pendingDiscount}% de descuento</strong> pendiente {MOTIVO_DESCUENTO[pendingReason] || MOTIVO_DESCUENTO.cancelacion}. Se aplicará automáticamente en tu próxima compra de suscripción.
             </div>
           )}
           <div style={s.creditosBox}>
@@ -364,8 +424,17 @@ export default function MisSuscripciones() {
               <div>
                 <div style={s.itemPlanNombre}>{p.plan_name} · {p.specialization}</div>
                 <div style={s.itemPlanSub}>
-                  {p.start_date} → {p.end_date} · Clases usadas: {p.classes_used}/{p.classes_max}
+                  {textoCupoFijas(p)}
                 </div>
+                {p.enrolled_classes?.length > 0 && (
+                  <div style={s.clasesDelToken}>
+                    <strong>{p.enrolled_classes[0].activity_name}</strong>
+                    {p.enrolled_classes[0].time_slot ? ` · ${p.enrolled_classes[0].time_slot}` : ''}
+                    <div style={s.clasesFechas}>
+                      {p.enrolled_classes.map((c) => fmtClase(c.reservation_date)).join(' · ')}
+                    </div>
+                  </div>
+                )}
               </div>
               <span style={s.badgeEstado(p.status)}>{(ESTADO_LABEL[p.status] || ESTADO_LABEL.expired).texto}</span>
             </div>
@@ -393,7 +462,9 @@ export default function MisSuscripciones() {
             {descuentoEfectivo > 0 && !resultado && (
               <div style={s.alerta('success')}>
                 Tenés un <strong>{descuentoEfectivo}% de descuento</strong>{' '}
-                {descuentoEsPorEdad ? 'por ser adulto mayor (65 años o más)' : 'acumulado por cancelación'}. Se aplicará automáticamente a este pago.
+                {descuentoEsPorEdad
+                  ? 'por ser adulto mayor (65 años o más)'
+                  : (MOTIVO_DESCUENTO[pendingReason] || MOTIVO_DESCUENTO.cancelacion)}. Se aplicará automáticamente a este pago.
               </div>
             )}
 

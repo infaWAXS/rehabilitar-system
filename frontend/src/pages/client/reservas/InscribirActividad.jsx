@@ -217,6 +217,63 @@ function turnosDeActividad(actividad) {
   return turnos;
 }
 
+const fmtFecha = (iso) =>
+  new Date(iso + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+
+// "Tu situación" tiene que hablar de ESTA actividad, no de si el cliente es abonado en
+// general: tener una suscripción de Pilates no sirve de nada para inscribirse a una
+// clase de Fisioterapia. El dato correcto viene por actividad en inscriptionOptions
+// (backend: check_subscription_availability), que ya sabe si hay un token usable para
+// la especialidad de la actividad elegida.
+function situacionSuscripcion(opts, tipoReserva) {
+  if (!opts) return null;
+
+  if (tipoReserva !== 'fixed') {
+    return { color: null, texto: 'La suscripción no aplica a las actividades individuales' };
+  }
+  if (opts.can_use_subscription) {
+    return {
+      color: 'green',
+      texto: `Tenés una suscripción de ${opts.plan_specialization} sin usar: te inscribe a las clases del mes`,
+    };
+  }
+  // Tiene un plan de esta especialidad, pero el token ya está gastado.
+  if (opts.plan_specialization) {
+    return {
+      color: 'yellow',
+      texto: `Ya usaste tu suscripción de ${opts.plan_specialization}. Para inscribirte por suscripción necesitás comprar otra.`,
+    };
+  }
+  return {
+    color: null,
+    texto: `No tenés una suscripción de ${opts.activity_specialization || 'esta especialidad'}`,
+  };
+}
+
+// El plan cubre el mes: inscribirse por suscripción a una clase fija anota también al
+// resto de las clases del mes. El backend devuelve qué reservó y qué quedó en lista de
+// espera; sin esto el cliente no se entera de que quedó anotado a las 4.
+function detalleInscripcionMes(respuesta) {
+  if (!respuesta) return null;
+  const total = respuesta.month_enrolled_count ?? 1;
+  const enEspera = respuesta.month_waitlisted_dates ?? [];
+  if (total <= 1 && enEspera.length === 0) return null;
+
+  const partes = [];
+  if (total > 1) {
+    partes.push(`Tu plan cubre el mes, así que te inscribimos en las ${total} clases del mes.`);
+  }
+  if (enEspera.length > 0) {
+    const fechas = enEspera.map(fmtFecha).join(', ');
+    partes.push(
+      enEspera.length === 1
+        ? `La clase del ${fechas} estaba completa: quedaste en la lista de espera con prioridad.`
+        : `Las clases del ${fechas} estaban completas: quedaste en la lista de espera con prioridad.`
+    );
+  }
+  return partes.join(' ');
+}
+
 function InscribirActividad() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -337,7 +394,13 @@ function InscribirActividad() {
       normStr(a.professor || '').includes(q)
     );
   }, [actividades, filtro]);
-  const hayCupos = cuposDisponibles !== null ? cuposDisponibles > 0 : (actividad ? actividad.capacity > 0 : false);
+  // Mientras el backend no responda no se sabe si hay cupos: el fallback a
+  // actividad.capacity es la capacidad TOTAL, no los libres, así que daría "hay cupos"
+  // en una actividad llena. Por eso se bloquea "Siguiente" hasta tener el dato real
+  // (ver cuposCargando): si no, se avanza con un método de pago elegido sobre datos
+  // viejos y el Confirmar termina abriendo Mercado Pago para una clase sin cupos.
+  const cuposCargando = Boolean(actividadId) && cuposDisponibles === null;
+  const hayCupos = cuposDisponibles !== null ? cuposDisponibles > 0 : false;
   const cuposMostrar = cuposDisponibles ?? actividad?.capacity ?? 0;
   const precioBase = actividad?.price || 0;
   const descuento = inscriptionOptions?.has_age_discount && tipoReserva === 'fixed' ? precioBase * 0.2 : 0;
@@ -356,27 +419,51 @@ function InscribirActividad() {
       setError('Selecciona una fecha y hora.');
       return;
     }
+    // Sin el dato real de cupos no se puede elegir el método: avanzar acá es lo que
+    // dejaba a un cliente pagando una clase completa.
+    if (cuposCargando) {
+      setError('Estamos verificando los cupos de este turno. Probá de nuevo en un segundo.');
+      return;
+    }
 
     setError('');
-    if (!hayCupos) setMetodo('waitlist');
-    else if (inscriptionOptions?.can_use_subscription) setMetodo('subscription');
-    else if (credits > 0) setMetodo('credit');
-    else setMetodo('full_payment');
+    setMetodo(metodoPorDefecto());
     setPaso(1);
   };
 
-  const handleWaitlist = async () => {
+  // Qué método corresponde según la disponibilidad real y la situación del cliente.
+  function metodoPorDefecto() {
+    if (!hayCupos) {
+      // Sin cupos solo se puede esperar. El abonado entra a la lista prioritaria sin
+      // pagar; el no abonado tiene que abonar para reservar su lugar en la cola.
+      return esAbonado ? 'waitlist' : 'full_payment';
+    }
+    if (inscriptionOptions?.can_use_subscription) return 'subscription';
+    if (credits > 0) return 'credit';
+    return 'full_payment';
+  }
+
+  // paymentMethod solo viene cuando el cliente NO es abonado: en ese caso abonó para
+  // reservar su lugar en la cola y hay que registrar ese pago en la entrada.
+  const handleWaitlist = async (paymentMethod = null) => {
     setCargando(true);
     setError('');
 
     try {
-      await addToWaitlist(actividad.id);
+      const pago = paymentMethod
+        ? { deposit_percent: paymentMethod === 'partial_payment' ? depositPercent : 100 }
+        : {};
+      await addToWaitlist(actividad.id, pago);
       // Quitar la actividad del listado: el usuario ya está anotado en la lista de espera
       setActividades((prev) => prev.filter((a) => a.id !== actividad.id));
-      setResultado({
-        tipo: 'lista_espera',
-        mensaje: 'Te notificaremos cuando haya un cupo disponible.',
-      });
+
+      let mensaje = 'Te notificaremos cuando haya un cupo disponible.';
+      if (paymentMethod === 'full_payment') {
+        mensaje = `Abonaste ${formatPrecio(precioFinal)}. Si se libera un cupo tu inscripción queda confirmada; si la clase pasa sin que te toque, te devolvemos el total.`;
+      } else if (paymentMethod === 'partial_payment') {
+        mensaje = `Abonaste ${formatPrecio(sena)} (${depositPercent}%). Si se libera un cupo, tu inscripción queda pendiente por los ${formatPrecio(precioFinal - sena)} restantes; si la clase pasa sin que te toque, te devolvemos lo abonado.`;
+      }
+      setResultado({ tipo: 'lista_espera', mensaje });
       setPaso(2);
     } catch (err) {
       setError(err.message || 'No se pudo agregar a la lista de espera.');
@@ -400,7 +487,7 @@ function InscribirActividad() {
       };
 
       const fn = tipoReserva === 'fixed' ? reserveFixed : reserveIndividual;
-      await fn(payload);
+      const respuesta = await fn(payload);
 
       // Quitar la actividad del listado: el usuario ya tiene una reserva activa
       setActividades((prev) => prev.filter((a) => a.id !== actividad.id));
@@ -411,14 +498,18 @@ function InscribirActividad() {
           mensaje: `Monto abonado: ${formatPrecio(sena)}. Monto restante: ${formatPrecio(precioFinal - sena)}.`,
         });
       } else {
-        setResultado({ tipo: 'confirmada', mensaje: 'Inscripcion confirmada. Tu lugar esta reservado.' });
+        setResultado({
+          tipo: 'confirmada',
+          mensaje: 'Inscripción confirmada. Tu lugar está reservado.',
+          detalleMes: detalleInscripcionMes(respuesta),
+        });
       }
       setPaso(2);
     } catch (err) {
       const esPago = paymentMethod === 'full_payment' || paymentMethod === 'partial_payment';
       const mensaje = esPago
         ? 'Hubo un error en el pago. Intenta nuevamente.'
-        : (err.message || 'Hubo un error al procesar tu inscripcion.');
+        : (err.message || 'Hubo un error al procesar tu inscripción.');
       setResultado({ tipo: 'error', mensaje });
       setPaso(2);
     } finally {
@@ -434,6 +525,16 @@ function InscribirActividad() {
       {
         onResultado: (scenario) => {
           setEsperandoPago(false);
+          // Sin cupos el pago no compra una reserva: compra el lugar en la cola.
+          if (!hayCupos) {
+            if (scenario === 'success') {
+              handleWaitlist(metodo);
+            } else {
+              setResultado({ tipo: 'error', mensaje: 'Hubo un error en el pago. Intenta nuevamente.' });
+              setPaso(2);
+            }
+            return;
+          }
           handleReservar(metodo, scenario);
         },
         onCancelado: (motivo) => {
@@ -559,11 +660,13 @@ function InscribirActividad() {
                     Tu situacion
                   </p>
 
-                  {esAbonado ? (
-                    <div style={{ ...s.infoBox('green'), marginBottom: '8px' }}>Suscripción activa detectada — accedés a beneficios de abonado</div>
-                  ) : (
-                    <div style={{ fontSize: '13px', color: 'var(--color-texto-suave)', marginBottom: '8px' }}>Sin suscripción activa</div>
-                  )}
+                  {(() => {
+                    const sit = situacionSuscripcion(inscriptionOptions, tipoReserva);
+                    if (!sit) return null;
+                    return sit.color
+                      ? <div style={{ ...s.infoBox(sit.color), marginBottom: '8px' }}>{sit.texto}</div>
+                      : <div style={{ fontSize: '13px', color: 'var(--color-texto-suave)', marginBottom: '8px' }}>{sit.texto}</div>;
+                  })()}
                   {esAbonado && (
                     <div style={{ fontSize: '13px', color: 'var(--color-texto)', marginBottom: '6px', opacity: !hayCupos ? 0.45 : 1 }}>
                       Créditos disponibles: 
@@ -603,7 +706,8 @@ function InscribirActividad() {
                 Turno: {new Date(fecha).toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
               </div>
 
-              {!hayCupos ? (
+              {!hayCupos && esAbonado ? (
+                // Abonado sin cupos: no paga, va derecho a la cola prioritaria.
                 <>
                   <div style={s.infoBox('yellow')}>Sin cupos disponibles. Solo podes anotarte en la lista de espera.</div>
                   {inscriptionOptions?.has_age_discount && (
@@ -612,8 +716,45 @@ function InscribirActividad() {
                   <div style={s.metodosGrid}>
                     <button style={s.metodoBtn(metodo === 'waitlist')} onClick={() => setMetodo('waitlist')}>
                       Esperar en la lista
-                      <div style={s.metodoBtnSub}>{inscriptionOptions?.can_use_subscription ? 'Lista prioritaria (abonado)' : 'Lista general'}</div>
+                      <div style={s.metodoBtnSub}>Lista prioritaria (abonado) — sin cargo</div>
                     </button>
+                  </div>
+                </>
+              ) : !hayCupos ? (
+                // No abonado sin cupos: reserva su lugar en la cola general abonando el
+                // total o una seña. Si la clase pasa y nunca le tocó el cupo, se le
+                // reintegra automáticamente.
+                <>
+                  <div style={s.infoBox('yellow')}>
+                    Sin cupos disponibles. Podés reservar tu lugar en la lista de espera abonando ahora:
+                    si se libera un cupo es tuyo, y si la clase pasa sin que te toque, te devolvemos lo que pagaste.
+                  </div>
+                  {inscriptionOptions?.has_age_discount && (
+                    <div style={s.infoBox('green')}>Tienes descuento por mayor de 65 años</div>
+                  )}
+                  <div style={s.metodosGrid}>
+                    <button style={s.metodoBtn(metodo === 'full_payment')} onClick={() => setMetodo('full_payment')}>
+                      Abonar total - {formatPrecio(precioFinal)}
+                      <div style={s.metodoBtnSub}>Lista general — si se libera un cupo, queda confirmado</div>
+                    </button>
+                    <button style={s.metodoBtn(metodo === 'partial_payment')} onClick={() => setMetodo('partial_payment')}>
+                      Abonar seña - {formatPrecio(sena)} ({depositPercent}%)
+                      <div style={s.metodoBtnSub}>Lista general — mínimo 50%. Si se libera un cupo, queda pendiente por el resto</div>
+                    </button>
+                    {metodo === 'partial_payment' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 4px 0' }}>
+                        <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-texto)' }}>Porcentaje a abonar:</label>
+                        <select
+                          value={depositPercent}
+                          onChange={(e) => setDepositPercent(Number(e.target.value))}
+                          style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--color-borde)', fontSize: '13px' }}
+                        >
+                          {[50, 60, 70, 80, 90, 100].map((p) => (
+                            <option key={p} value={p}>{p}%</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
@@ -681,17 +822,20 @@ function InscribirActividad() {
               {resultado.tipo === 'confirmada' && (
                 <>
                   <div style={s.exito}> {resultado.mensaje}</div>
+                  {resultado.detalleMes && (
+                    <div style={s.infoBox('blue')}>{resultado.detalleMes}</div>
+                  )}
                 </>
               )}
               {resultado.tipo === 'pendiente' && (
                 <>
-                  <div style={{ ...s.infoBox('yellow'), fontSize: '15px', fontWeight: '600' }}>Inscripcion en estado pendiente</div>
+                  <div style={{ ...s.infoBox('yellow'), fontSize: '15px', fontWeight: '600' }}>Inscripción en estado pendiente</div>
                   <p style={{ fontSize: '14px', color: 'var(--color-texto)', lineHeight: 1.6 }}>{resultado.mensaje}</p>
                 </>
               )}
               {resultado.tipo === 'lista_espera' && (
                 <div style={s.infoBox('blue')}>
-                  <strong>Agregado a la lista de espera</strong><br />
+                  <strong>Agregado a la lista de espera.</strong><br />
                   {resultado.mensaje}
                 </div>
               )}

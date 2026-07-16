@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from datetime import datetime
 from threading import Thread
 import re
+import uuid
 
 from app.models.activity import Activity
 from app.models.room import Room
@@ -342,10 +343,16 @@ def crear_actividad(datos, db: Session, current_user) -> list:
     base_data = datos.model_dump(exclude={"repetitions", "dates"})
     creadas = []
 
+    # Todas las ocurrencias de esta alta comparten un id de lote: son "la misma clase"
+    # dictada N veces. Inscribirse por suscripción a una de ellas anota a las demás del
+    # mes (servicio_reservas._inscribir_ocurrencias_del_mes).
+    group_id = str(uuid.uuid4()) if datos.activity_type == "fixed" else None
+
     for fecha in fechas_a_crear:
         data_i = dict(base_data)
         if datos.activity_type == "fixed" and fecha:
             data_i["specific_date"] = fecha
+            data_i["activity_group_id"] = group_id
             dia_nombre = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][
                 fecha.weekday()
             ]
@@ -621,6 +628,54 @@ def renunciar_actividad(activity_id: int, current_user, db: Session) -> Activity
     Thread(target=_notificar_renuncia_async, args=(actividad.id, nombre_completo), daemon=True).start()
 
     return actividad
+
+
+def listar_actividades_asumibles(current_user, db: Session) -> List[Activity]:
+    """Actividades que el profesor autenticado puede asumir ahora mismo.
+
+    Aplica los mismos filtros que asumir_actividad, así la lista nunca ofrece algo que
+    después vaya a ser rechazado: activa, sin profesor, de su especialidad y sin
+    solapamiento de día/horario con las actividades que ya tiene asignadas.
+    """
+    if not current_user.specialization:
+        return []
+
+    especialidad = current_user.specialization.strip().lower()
+    nombre_completo = f"{current_user.name} {current_user.lastname}".strip()
+
+    # listar_actividades ya descarta las que están canceladas o las que ya empezaron.
+    candidatas = [
+        actividad
+        for actividad in listar_actividades(None, None, "active", db)
+        if not actividad.professor
+        and (actividad.specialization or "").strip().lower() == especialidad
+    ]
+
+    propias = (
+        db.query(Activity)
+        .filter(Activity.professor == nombre_completo, Activity.status == "active")
+        .all()
+    )
+    if not propias:
+        return candidatas
+
+    asumibles = []
+    for candidata in candidatas:
+        # Se compara con una copia en memoria: asignarle el profesor a la candidata real
+        # la ensuciaría y el autoflush terminaría guardando el cambio.
+        propuesta = Activity(
+            room_id=candidata.room_id,
+            activity_type=candidata.activity_type,
+            schedule=candidata.schedule,
+            specific_date=candidata.specific_date,
+            time_slot=candidata.time_slot,
+            status="active",
+            professor=nombre_completo,
+        )
+        if not any(_solapa_en_profesor(propuesta, propia) for propia in propias):
+            asumibles.append(candidata)
+
+    return asumibles
 
 
 def asumir_actividad(activity_id: int, current_user, db: Session) -> Activity:

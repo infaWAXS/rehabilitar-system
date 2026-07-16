@@ -645,6 +645,89 @@ def notify_reservation_created(user_id: int, activity_id: int, db: Session) -> N
     )
 
 
+MESES_ES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+]
+DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+def _fecha_clase(fecha, hora: Optional[str]) -> str:
+    """'jueves 16/07 · 10:00' — como el cliente lee su agenda."""
+    base = f"{DIAS_ES[fecha.weekday()]} {fecha.strftime('%d/%m')}"
+    return f"{base} · {hora}" if hora else base
+
+
+def notify_month_subscription_enrollment(user_id: int, activity_id: int, fechas_reservadas: list,
+                                          fechas_espera: list, discount_percent: int, db: Session) -> None:
+    """Aviso ÚNICO (email + in-app) por la inscripción al mes con la suscripción.
+
+    El cliente hizo una sola acción —gastar el token en una actividad— y quedó anotado a
+    todas las clases de ese mes. Mandarle un mail por clase sería spamear por algo que
+    para él fue un solo evento: va un aviso con todas las fechas juntas.
+
+    Reemplaza a notify_reservation_created en este flujo; no se usan los dos.
+    """
+    usuario = db.query(User).filter(User.id == user_id).first()
+    actividad = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not usuario or not actividad:
+        return
+
+    hora = actividad.time_slot
+    mes = MESES_ES[actividad.specific_date.month - 1] if actividad.specific_date else "el mes"
+    total = len(fechas_reservadas)
+
+    lineas_reservadas = "\n".join(f"  - {_fecha_clase(f, hora)}" for f in fechas_reservadas)
+    subject = f"Inscripción confirmada: {actividad.name or 'Actividad'} ({total} {'clase' if total == 1 else 'clases'} de {mes})"
+
+    cuerpo = [
+        f"Hola {usuario.name} {usuario.lastname},",
+        "",
+        f"Tu suscripción de {actividad.specialization} te inscribió a las clases de {mes} "
+        f"de '{actividad.name}':",
+        "",
+        lineas_reservadas,
+    ]
+
+    if fechas_espera:
+        cuerpo += [
+            "",
+            "Estas clases estaban completas, así que quedaste en la lista de espera con prioridad "
+            "por ser abonado/a:",
+            "",
+            "\n".join(f"  - {_fecha_clase(f, hora)}" for f in fechas_espera),
+            "",
+            "Te avisaremos apenas se libere un cupo.",
+        ]
+
+    if discount_percent:
+        cuerpo += [
+            "",
+            f"Como este mes tenía menos clases de las que cubre tu plan, te otorgamos un "
+            f"{discount_percent}% de descuento para tu próxima suscripción.",
+        ]
+
+    cuerpo += ["", "Podés ver el detalle en la sección Mis reservas.", "", "Saludos cordiales."]
+
+    if getattr(usuario, "email", None):
+        _send_email(usuario.email, subject, "\n".join(cuerpo))
+
+    resumen = f"Quedaste inscripto/a a {total} {'clase' if total == 1 else 'clases'} de '{actividad.name}' en {mes}: "
+    resumen += ", ".join(_fecha_clase(f, hora) for f in fechas_reservadas) + "."
+    if fechas_espera:
+        resumen += f" Quedaste en lista de espera con prioridad en {len(fechas_espera)} clase(s) que estaban completas."
+    if discount_percent:
+        resumen += f" Te otorgamos un {discount_percent}% de descuento para tu próxima suscripción."
+
+    crear_notificacion(
+        user_id,
+        f"Inscripción confirmada: {actividad.name or 'Actividad'}",
+        resumen,
+        db,
+        link="/cliente/reservas",
+    )
+
+
 def notify_subscription_confirmed(user_id: int, plan_name: str, specialization: str,
                                    end_date, price_paid: float, discount_percent: int,
                                    db: Session, discount_reason: str = "por cancelación previa") -> None:
@@ -757,6 +840,36 @@ def notify_waitlist_removed(user_id: int, activity_id: int, db: Session) -> None
         f"Fuiste dado/a de baja en la lista de espera de '{actividad.name}' programada para {when}.",
         db,
     )
+
+
+def notify_waitlist_refunded(user_id: int, activity_id: int, refund_percent: int, db: Session) -> None:
+    """Notifica (email + in-app) que se le reintegró lo que pagó por la lista de espera.
+
+    Pasa cuando la clase se dictó y nunca se liberó un cupo para él: pagó por un lugar
+    que no llegó a tener.
+    """
+    from app.models.activity import Activity as _Activity
+    usuario = db.query(User).filter(User.id == user_id).first()
+    actividad = db.query(_Activity).filter(_Activity.id == activity_id).first()
+    if not usuario or not actividad:
+        return
+
+    when = _when_label(actividad)
+    subject = f"Reintegro por lista de espera: {actividad.name or 'Actividad'}"
+    cuerpo = (
+        f"La clase '{actividad.name}' programada para {when} ya se dictó y no llegó a "
+        f"liberarse un cupo para vos, así que te reintegramos el {refund_percent}% que "
+        "habías abonado al anotarte en la lista de espera."
+    )
+    body_email = (
+        f"Hola {usuario.name} {usuario.lastname},\n\n"
+        f"{cuerpo}\n\n"
+        "Podés volver a anotarte en otra clase cuando quieras.\n\n"
+        "Saludos cordiales."
+    )
+    if getattr(usuario, "email", None):
+        _send_email(usuario.email, subject, body_email)
+    crear_notificacion(user_id, subject, cuerpo, db)
 
 
 def notify_class_cancelled_by_center(user_id: int, activity_id: int, credito_otorgado: bool,

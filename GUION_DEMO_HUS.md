@@ -1,27 +1,45 @@
 # Guión de Demo — Historias de Usuario RehabilitAR
 
 > Rama de trabajo: `angel`
-> Última actualización: 2026-07-14
-> HU1–HU8 revisadas contra el código real (backend + frontend) y el seed. HU9–HU10 (inscripciones) se conservan de la versión anterior.
+> Última actualización: 2026-07-16
+> HU1–HU8 revisadas contra el código real (backend + frontend) y el seed.
+> HU9–HU19 revisadas y verificadas contra el código el 2026-07-15.
+> **HU 9 reescrita y HU 20–HU 21 agregadas el 2026-07-16**, verificadas end-to-end contra el código y el seed.
 
-## Preparación previa (ejecutar una sola vez)
+## Preparación previa
 
 ```powershell
-# Activar entorno virtual
-& .venv\Scripts\Activate.ps1
+# 1) Backend (dejar corriendo). OJO: hay que estar parado en backend/
+cd backend
+& ..\.venv\Scripts\Activate.ps1
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# Correr seed (crea usuarios, salas, planes, notificaciones y datos demo)
-python backend/database/seed_mock.py
+# 2) Seed, en OTRA terminal, también parado en backend/
+cd backend
+& ..\.venv\Scripts\Activate.ps1
+python database/seed_mock.py
 
-# Iniciar backend
-python backend/main.py
-
-# Iniciar frontend (otra terminal)
+# 3) Frontend (otra terminal)
 cd frontend
 npm start
 ```
 
-> El seed es **idempotente y aditivo**: se puede correr varias veces sin duplicar datos. También se ejecuta solo al iniciar `main.py`.
+> ⚠️ **Correr el seed el mismo día de la demo, poco antes de empezar.** Los turnos de la HU 19 (Cancelar turno) se calculan como offsets desde "ahora" (+10 h, +36 h, +60 h…). Volver a correr el seed también es la forma de **resetear** esa HU si ya cancelaste los turnos.
+
+### ⚠️ Hay dos `database.db` — usar siempre la de `backend/`
+
+`DATABASE_URL` es **relativa al directorio actual** ([connection.py:5](backend/database/connection.py#L5)), así que la base que se usa depende de desde dónde arranques:
+
+| Cómo arrancás | Base que usa |
+|---|---|
+| `cd backend` + `uvicorn main:app` ← **el correcto** | `backend/database.db` |
+| `python backend/main.py` desde la raíz | `database.db` (raíz) — **base vieja, no la de la demo** |
+
+Los datos de demo viven en **`backend/database.db`**. Si corrés el seed desde la raíz, siembra la base equivocada y en la app no vas a ver nada.
+
+> **`python backend/main.py` no levanta el servidor.** `main.py` no tiene bloque `__main__` ni `uvicorn.run`: importarlo corre las migraciones y el seed, y termina. El servidor se levanta sí o sí con `uvicorn main:app` desde `backend/`.
+
+> El seed es **idempotente y aditivo** salvo el bloque de la HU 19, que se reconstruye entero en cada corrida (a propósito). También se ejecuta solo al iniciar el backend — ojo con `--reload`: **guardar un archivo del backend durante la demo re-corre el seed** y resetea los créditos y el descuento pendiente de `abonado@`.
 
 ---
 
@@ -38,6 +56,35 @@ npm start
 | **Profesor (Yoga)**         | **Alex Rivas**   | **alex@rehabilitar.com**    | **Profesor123** |
 | Profesor (Kinesiología dep.)| Pepe Muñoz       | pepemunoz@rehabilitar.com   | Profesor123  |
 | Cliente abonado             | Ana Abonada      | abonado@rehabilitar.com     | Abonado123   |
+| **Profesor (Kin. respiratoria)** | **Franco Ibarra** | **franco@rehabilitar.com** | **Profesor123** |
+| **Profesora (Kin. traumatológica)** | **Ámbar Soto** | **ambar@rehabilitar.com** | **Profesor123** |
+| **Profesor (Kin. traumatológica)** | **Pablo Ruiz** | **pablo@rehabilitar.com** | **Profesor123** |
+| **Profesor (Osteopatía)**   | **Ariel Gómez**  | **profe@gmail.com**         | **Profesor123** |
+| **Cliente inscripto (HU 16 y 17)** | **Nadia Pilatera** | **pilates.demo@rehabilitar.com** | **Cliente123** |
+| **Cliente abonado Kin. deportiva (HU 9 E4)** | **Diego Deportivo** | **deportivo@rehabilitar.com** | **Cliente123** |
+| **Cliente de 75 años (HU 21 E4)** | **Juan Mayor** | **juan.mayor@rehabilitar.com** | **Cliente123** |
+| **Cliente SIN apto físico (HU 20 E3 · HU 21 E5)** | **Pepe SinApto** | **pepe.sinapto@rehabilitar.com** | **Cliente123** |
+
+> **Los 3 últimos los agregó el seed el 16/07** para las HU 9 E4, 20 y 21. **Pepe queda sin apto físico a propósito** — `_seed_apto_fisico_demo` lo excluye explícitamente, porque es el cliente que demuestra el bloqueo por apto pendiente.
+
+> **Diego existe para no romper "Adquirir plan".** La HU 9 E4 necesita un abonado de *Kinesiología deportiva*, pero si ese token fuera de Ana, ella no podría **comprar** esa especialidad (el sistema no deja comprar un token de una especialidad que ya tenés sin usar) y se caería la HU 21 E2, que es la única con descuento pendiente.
+
+> Los 5 de abajo los agregó el seed para las HU 16–19. Franco, Ámbar/Pablo y Ariel tienen **especialidades exclusivas** a propósito: así el selector de profesor y las listas de "actividades para asumir" muestran justo lo que pide cada HU y nada más.
+
+> **Nadia existe para no ensuciar a `cliente@`.** Es la inscripta en las actividades de las HU 16 y 17, que solo están para demostrar los avisos a clientes. Si esas inscripciones fueran de `cliente@`, aparecerían en su "Mis reservas" mezcladas con los turnos de la HU 19 y es facilísimo cancelarlas sin querer (ya pasó).
+
+### ⚠️ Dos cosas para revisar antes de la demo (datos arrastrados de sesiones previas)
+
+1. **El apellido de `profesor@rehabilitar.com` quedó como "aaaaaa"** (`Marcos aaaaaa`) — alguien lo pisó probando la edición de perfil. El seed **no** lo corrige a propósito: no toca cuentas activas para no pisar ediciones hechas adrede. Se ve en varias pantallas de la demo. Para dejarlo prolijo:
+   ```powershell
+   cd backend
+   & ..\.venv\Scripts\Activate.ps1
+   python -c "import sys; sys.path.insert(0,'.'); from database.connection import SessionLocal; from app.models.user import User; db=SessionLocal(); u=db.query(User).filter(User.email=='profesor@rehabilitar.com').first(); u.lastname='Profesor'; db.commit(); print('ok', u.name, u.lastname)"
+   ```
+   Ojo: las actividades ya sembradas guardan el nombre del profesor como texto (`Marcos aaaaaa`). Después de renombrarlo, volvé a correr el seed **no** las arregla; si te importa que quede perfecto, renombrá **antes** y borrá las actividades `Cancelación %` para que el seed las recree.
+
+2. **Hay varias "Yoga" viejas** en la base (de demos anteriores, especialidad *Fisioterapia*, ya pasadas o canceladas). Las que importan son dos: la del **19/10/2027** (HU 16 E1, Sala 2, Alex Rivas) y la del **próximo martes** (HU 5, Sala 4, sin profesor). Identificalas por **fecha**, no por nombre.
+   El 15/07 se limpiaron las **duplicadas** que pisaban la misma sala, día y hora: las generaba un bug del seed que ya está corregido (buscaba la "Yoga" de *Asumir* filtrando por `professor IS NULL`, así que apenas Alex la asumía dejaba de encontrarla y creaba otra encima).
 
 ---
 
@@ -46,7 +93,7 @@ npm start
 - **No hay override de fecha en el backend.** "Hoy" es el reloj del sistema (al momento de armar este guión, **2026-07-14**).
 - Los **feriados** se calculan en el frontend con la librería `date-holidays` (Argentina) — ver [frontend/src/utils/feriados.js](frontend/src/utils/feriados.js). Para "simular" un feriado alcanza con **elegir una fecha que realmente sea feriado**. No hay que esperar la fecha real.
 - El campo de fecha (individual) tiene `min = hoy`, así que **no se pueden elegir fechas pasadas** desde el date-picker.
-- **Ninguna de estas 8 HUs usa Mercado Pago.** El simulador de pago aplica solo a las HU9/HU10 (inscripciones).
+- **Ninguna de estas 8 HUs usa Mercado Pago.** El simulador de pago aplica a las **HU 9 / HU 10** (inscripciones) y a la **HU 21** (adquirir plan). En los tres casos es el mismo simulador: **no hace falta una cuenta ni un pago real**, se elige el resultado desde la ventana emergente.
 
 ### Fechas reales útiles para la demo (calculadas con `date-holidays` AR 2026)
 
@@ -156,6 +203,21 @@ PY
 
 > Verificación de inboxes: admin (`admin@`) y cliente (`cliente@`) → campana. La HU escribe el profesor como "Alex"; el sistema muestra el **nombre completo** ("Alex Rivas"), que es dato, no texto fijo.
 
+### 🔧 Cambio del 15/07: la lista "Actividades que podés asumir" ahora filtra por choque de horario
+
+Antes la lista mostraba **todas** las actividades sin profesor de tu especialidad, aunque se superpusieran con una clase que ya tenías: al hacer click en **Asumir** el backend las rechazaba con *"El profesor X ya tiene una actividad asignada en ese horario."* Ahora **no se muestran**.
+
+El filtro lo hace el backend en [`listar_actividades_asumibles`](backend/app/services/servicio_actividades.py#L690), reutilizando el **mismo** `_solapa_en_profesor` que usa `asumir_actividad` para validar — por eso la lista y el botón no pueden discrepar. Se muestra una actividad solo si cumple **todo**:
+
+- está **activa** y **no empezó** todavía;
+- **no tiene profesor**;
+- su especialidad es **la tuya**;
+- **no se superpone** con ninguna de tus actividades activas.
+
+Sobre el solapamiento, el criterio es el del backend: si **las dos** actividades tienen fecha puntual, solo chocan si es **la misma fecha** y los horarios se pisan; si a alguna le falta la fecha, se compara por **día de la semana**.
+
+> 💡 **Para mostrarlo en vivo:** entrá como `admin@` y asigná a **Alex Rivas** como profesor de cualquier actividad de **Yoga** que caiga el **martes a las 10:00**. La "Yoga" de esta HU **desaparece** de su lista de "podés asumir". Sacale esa asignación y vuelve a aparecer.
+
 ---
 
 ## HU 6 — Sugerir Actividad
@@ -221,23 +283,61 @@ PY
 
 ## HU 9 — Inscribir a Actividad Fija
 
-**Precondición:** El seed crea "Rehabilitar Codo" (fija, Martes · 10:00–11:00, capacidad 3, $5000, Fisioterapia, Sala 1). `abonado@rehabilitar.com` tiene plan activo de Fisioterapia (cubre la actividad). **Flujo:** Reservas → seleccionar "Rehabilitar Codo" → **Inscribirse / Siguiente** → elegir método → **Confirmar**. En cada confirmación el sistema además **notifica al usuario** (inbox + email). **Ref. código:** [InscribirActividad.jsx](frontend/src/pages/client/reservas/InscribirActividad.jsx).
+**Flujo:** Reservas → seleccionar la actividad → **Siguiente** → elegir método → **Confirmar**. En cada confirmación el sistema además **notifica al usuario** (inbox + email). **Ref. código:** [InscribirActividad.jsx](frontend/src/pages/client/reservas/InscribirActividad.jsx) · [servicio_reservas.py:176](backend/app/services/servicio_reservas.py#L176) (`create_reservation`).
 
-**Simulación de Mercado Pago (Abonar Total / Abonar Seña):** al **Confirmar** aparece el overlay **"Esperando pago... Completá el pago en la ventana de Mercado Pago que se abrió."** ([OverlayEsperandoPago.jsx:36](frontend/src/components/OverlayEsperandoPago.jsx#L36)) y se abre la ventana [/pago/mercadopago](frontend/src/pages/pago/PagoMercadoPago.jsx) con *"Elegí un escenario para simular"* → **"✅ Pago exitoso"** / **"❌ Fondos insuficientes"**. *(Habilitar ventanas emergentes.)*
+### 🔑 Lo primero que hay que entender: la suscripción cubre EL MES, no una clase
 
-> Único desvío (cosmético): la app muestra los textos **sin tildes** ("Inscripcion... Tu lugar esta reservado."); la HU los escribe con tildes.
+Un plan es un **token de un solo uso** atado a una especialidad. Al inscribirte por suscripción a una clase fija, el sistema te anota **a las 4 clases de ese mes de una sola vez** ([servicio_reservas.py:52](backend/app/services/servicio_reservas.py#L52), `_inscribir_ocurrencias_del_mes`) y el token queda **gastado**. No se gasta "de a una clase": o está entero, o está usado.
 
-> 🔧 **Datos a preparar (no vienen en el seed):** para **E4/E5** (lista de espera) llenar antes los **3 cupos** de "Rehabilitar Codo" con otros clientes; para **E6** (créditos) el abonado necesita `credits > 0`. El **20% para mayores de 65** se aplica automáticamente (en esta versión de la HU ya no tiene escenario propio). Puedo sembrarlos si querés (ver pregunta final).
+Por eso en **E1** las "clases usadas" pasan de **0 a 4**, no de 0 a 1, y el cupo baja **en las 4 clases** — que es exactamente lo que pide la HU ("decrementa el cupo disponible a las 4 clases, inscribe al cliente en las 4 actividades"). Verificado end-to-end el 16/07.
+
+### Datos que deja el seed (16/07 — antes no existían)
+
+| Dato | Detalle |
+|---|---|
+| **"Rehabilitar Codo"** (E1/E2/E3/E6/E7) | **4 clases** del **mes que viene**, Martes · 10:00–11:00, Sala 1, cap. **3**, $5000, Fisioterapia, prof. Marcos. Las 4 son **filas hermanas** (mismo lote). |
+| **"Rehabilitar tobillo"** (E4) | **4 clases**, Miércoles · 10:00–11:00, Sala 2, cap. **3**, $6000, **Kinesiología deportiva**, prof. Sofia. La **primera del mes está llena** (3/3). |
+| **"Rehabilitar Codo" 12:00** (E5) | La de la **lista de espera**: próximo martes, **0 cupos** (llena por los clientes de relleno). |
+| Suscripciones | `abonado@` → **Fisioterapia sin usar** · `deportivo@` → **Kin. deportiva sin usar** · `cliente@` → **ninguna (no abonado)**. |
+
+> ⚠️ **Los lotes se programan en el MES QUE VIENE, no en el actual.** El mes en curso puede tener menos de 4 martes por delante, y el sistema solo cuenta las clases **futuras**: con **2 clases o menos** el token dispararía además el descuento por "mes corto" ([subscriptions.py:18](backend/app/utils/subscriptions.py#L18)), que no es lo que describe la HU.
+
+> ⚠️ **En la lista van a aparecer 6 tarjetas "Rehabilitar Codo".** Las 4 del lote (martes **10:00**, una por fecha), la de lista de espera (martes **12:00**) y la **individual** de la HU 10 (viernes 14:00). **Identificalas por hora y fecha**, no por nombre. Es a propósito: los escenarios se contradicen sobre la misma actividad (E1/E2/E3 piden cupo libre, E5 pide 0 cupos).
+
+**Simulación de Mercado Pago (Abonar Total / Abonar Seña):** al **Confirmar** aparece el overlay **"Esperando pago… Completá el pago en la ventana de Mercado Pago que se abrió."** ([OverlayEsperandoPago.jsx:36](frontend/src/components/OverlayEsperandoPago.jsx#L36)) y se abre la ventana [/pago/mercadopago](frontend/src/pages/pago/PagoMercadoPago.jsx) con *"Elegí un escenario para simular"* → **"✅ Pago exitoso"** / **"❌ Fondos insuficientes"**. *(Habilitar ventanas emergentes.)*
 
 | # | Escenario | Datos a usar | Pasos | Resultado esperado |
 |---|-----------|--------------|-------|--------------------|
-| E1 | Confirmada por suscripción activa (abonado) | `abonado@` | Seleccionar "Rehabilitar Codo" → **Siguiente** → **Confirmar por suscripción activa** → **Confirmar** | Inscripción **confirmada**, decrementa cupo, **"Inscripción confirmada. Tu lugar está reservado."** y **notifica** al usuario. |
-| E2 | Confirmada con pago total | `cliente@`, simulador **✅ Pago exitoso** | Seleccionar → Siguiente → **Abonar Total** → Confirmar → (overlay "Esperando pago…") → **✅ Pago exitoso** | **Confirmada**, decrementa cupo, **"Inscripción confirmada. Tu lugar está reservado."** y notifica. |
-| E3 | Confirmada con seña | `cliente@`, simulador **✅ Pago exitoso** | Seleccionar → Siguiente → **Abonar Seña** → elegir **% a abonar** → Confirmar → (overlay) → **✅ Pago exitoso** | Calcula la seña, registra **Pendiente**, decrementa cupo, **"Inscripcion en estado pendiente"** + "Monto abonado / Monto restante" y notifica. |
-| E4 | Lista de espera (abonado, 0 cupos) | `abonado@`, cupos llenos | Seleccionar → Siguiente → **Esperar en la Lista** → Confirmar | Agregado **con prioridad**, **"Agregado a la lista de espera. Te notificaremos cuando haya un cupo disponible."** y notifica. |
-| E5 | Lista de espera (no abonado, 0 cupos) | `cliente@`, cupos llenos | Seleccionar → Siguiente → **Esperar en la Lista** → Confirmar | Agregado a la lista **general** (sin prioridad), mismo mensaje y notifica. |
-| E6 | Confirmada con créditos | `abonado@` con `credits > 0` | Seleccionar → Siguiente → **Usar crédito** → Confirmar | **Confirmada**, decrementa **cupo y crédito**, **"Inscripción confirmada. Tu lugar esta reservado."** y notifica. |
-| E7 | Fallida por error en el pago | `cliente@`, simulador **❌ Fondos insuficientes** | Seleccionar → Siguiente → método de pago → Confirmar → (overlay) → **❌ Fondos insuficientes** | **"Hubo un error en el pago. Intenta nuevamente."** y **cancela** la inscripción. |
+| E1 | Confirmada por suscripción activa | **`abonado@`** (token Fisioterapia sin usar) | Seleccionar **cualquiera** de las 4 "Rehabilitar Codo" de las **10:00** → **Siguiente** → **Confirmar por suscripción activa** → **Confirmar** | Inscripción **confirmada**, cupo **3→2 en las 4 clases**, clases usadas **0→4**: **"Inscripción confirmada. Tu lugar está reservado."** ✅ *literal* + recuadro *"Tu plan cubre el mes, así que te inscribimos en las 4 clases del mes."* · **Inbox:** `Inscripción confirmada: Rehabilitar Codo` ✅ *literal* + mail. |
+| E2 | Confirmada con pago total | **`cliente@`** (no abonado), simulador **✅ Pago exitoso** | Seleccionar una "Rehabilitar Codo" de las 10:00 → Siguiente → **Abonar Total** → Confirmar → (overlay) → **✅ Pago exitoso** | **Confirmada**, decrementa cupo **solo de esa clase**: **"Inscripción confirmada. Tu lugar está reservado."** y notifica. |
+| E3 | Confirmada con seña | `cliente@`, simulador **✅ Pago exitoso** | Seleccionar → Siguiente → **Abonar Seña** → elegir **% a abonar** → Confirmar → (overlay) → **✅ Pago exitoso** | Calcula la seña, registra **Pendiente**: **"Inscripción en estado pendiente"** + "Monto abonado: $X. Monto restante: $Y." y notifica. |
+| E4 | Lista de espera **con prioridad** (abonado) | **`deportivo@`** · **"Rehabilitar tobillo"** — la **primera clase del mes** (la llena) | Seleccionar esa clase → Siguiente → **Esperar en la lista** → Confirmar | Agregado **con prioridad** (`waitlist_type = priority`, verificado): **"Agregado a la lista de espera. Te notificaremos cuando haya un cupo disponible."** ✅ *literal* y notifica. |
+| E5 | Lista de espera **general** (no abonado) | `cliente@` · **"Rehabilitar Codo" de las 12:00** (0 cupos) | Seleccionar esa clase → Siguiente → **Abonar Total** o **Abonar Seña** → Confirmar → **✅ Pago exitoso** | Agregado a la lista **general**. ⚠️ **No dice el texto de la HU** — ver el desvío de abajo. |
+| E6 | Confirmada con créditos | `abonado@` (el seed lo deja con **saldo 1**) | Seleccionar una "Rehabilitar Codo" de las 10:00 → Siguiente → **Usar crédito** → Confirmar | **Confirmada**, decrementa **cupo y crédito**: **"Inscripción confirmada. Tu lugar está reservado."** y notifica. |
+| E7 | Fallida por error en el pago | `cliente@`, simulador **❌ Fondos insuficientes** | Seleccionar → Siguiente → método de pago → Confirmar → (overlay) → **❌ Fondos insuficientes** | **"Hubo un error en el pago. Intenta nuevamente."** ✅ *literal* y **cancela** la inscripción. |
+
+> ⚠️ **Orden: E1 y E6 se pisan entre sí — corré el seed entre los dos.** Los dos son de `abonado@` sobre "Rehabilitar Codo":
+> - **E1 después de E6** → E1 informa **"te inscribimos en las 3 clases del mes"** en vez de 4, porque la clase que Ana ya reservó con el crédito se saltea.
+> - **E6 después de E1** → E1 la anotó a **las 4** clases, así que las 4 tarjetas **desaparecen** de su lista (la pantalla oculta las actividades en las que ya estás inscripto) y E6 se queda sin actividad.
+>
+> Correr el seed tarda segundos y deja todo como estaba, así que lo más prolijo es **E1 → seed → E6**. E2/E3/E7 son de `cliente@` y E4 de `deportivo@`: **no se pisan** con E1/E6 ni entre sí.
+
+### ❗ Desvío real de E5: el sistema NO le ofrece "Esperar en la Lista" al no abonado
+
+La HU dice que el no abonado elige *"Esperar en la Lista"* y queda en la cola gratis. **El sistema no hace eso**: al no abonado sin cupos lo obliga a **abonar** (total o seña) para reservar su lugar en la cola ([InscribirActividad.jsx:723](frontend/src/pages/client/reservas/InscribirActividad.jsx#L723)), y el mensaje final es **"Abonaste $X. Si se libera un cupo tu inscripción queda confirmada; si la clase pasa sin que te toque, te devolvemos el total."**
+
+**Está así a propósito y no lo toqué:** hay una regla de reintegro implementada alrededor ([servicio_reintegros.py](backend/app/services/servicio_reintegros.py)) que le devuelve la plata si la clase pasa sin que le toque el cupo. El abonado sí entra gratis y con prioridad (E4), que es la diferencia de beneficio entre uno y otro. **Decisión pendiente tuya:** si la HU manda, hay que agregar el botón "Esperar en la lista" sin pago para no abonados.
+
+### Reglas del código a tener en cuenta
+
+- **Sin apto físico aprobado no hay inscripción**, en ningún escenario ([servicio_reservas.py:192](backend/app/services/servicio_reservas.py#L192)). El seed lo aprueba para todos los clientes de demo **menos Pepe**.
+- La **seña** tiene que estar entre **50% y 100%** ([servicio_reservas.py:232](backend/app/services/servicio_reservas.py#L232)) — coincide con la regla de negocio de la HU ("al menos el 50% como seña").
+- `subscription`, `full_payment` y `credit` → **confirmada**; `partial_payment` (seña) → **pendiente** ([servicio_reservas.py:254](backend/app/services/servicio_reservas.py#L254)).
+- Un token cuenta como **usado** si existe *cualquier* reserva imputada a él, **incluidas las canceladas** ([subscriptions.py:67](backend/app/utils/subscriptions.py#L67)). Cancelar los turnos **no** revive la suscripción — por eso el seed borra esas reservas para poder repetir la demo.
+
+> 🔧 **Corregido el 16/07:** faltaba el **punto** después de "Agregado a la lista de espera" ([InscribirActividad.jsx:838](frontend/src/pages/client/reservas/InscribirActividad.jsx#L838)); ahora el texto es literal el de la HU. También se cambió `Esperando pago...` por **`Esperando pago…`** (elipsis, como la escribe la HU).
+
+> 🔧 **Bug de datos corregido el 16/07:** el token de Fisioterapia de `abonado@` estaba **gastado** en la base (por reservas canceladas de demos anteriores), así que **E1 fallaba** con *"No tenés una suscripción disponible para esta especialidad"*. Además `cliente@` tenía **3 suscripciones viejas** y figuraba como **abonado**, lo que rompía E2/E3/E5 (que lo piden **no abonado**). El seed ahora normaliza las suscripciones de los clientes de demo en cada corrida.
 
 ---
 
@@ -245,14 +345,16 @@ PY
 
 **Precondición:** El seed crea "Rehabilitar Codo" (individual, fecha = hoy + 14 días al momento del seed, hora 14:00, $8000, capacidad 3, Sala 1). Si esa fecha ya pasó, crear una nueva individual vía HU 8 E2. **Mismo simulador de Mercado Pago, overlay "Esperando pago…" y mismos textos de resultado que HU 9.** El cliente puede ser abonado o no abonado; el 20% por edad **no** aplica a individuales (solo a fijas).
 
-> Tu HU individual mantiene los textos viejos ("Tu inscripción quedo confirmada…") en E1/E2; la tabla usa el texto **real de la app** ("Inscripción confirmada. Tu lugar esta reservado."). En E2 (seña) la HU dice "confirmada" pero pago parcial = **pendiente**.
+**Dos desvíos de la HU individual — los dos son error de la HU, no del sistema:**
+1. **E1/E2 arrastran textos viejos** ("Tu inscripción quedo confirmada. Podes verla en Mis Reservas."). Ese texto **no existe** en ninguna parte del código, y la HU fija (HU 9) pide **otro** texto para el mismo evento. Se dejó el de la HU 9, que es el que la app usa en las dos pantallas (es el mismo componente).
+2. **E2 dice "confirmada" para un pago con seña.** Es imposible por regla de negocio: pago parcial ⇒ **pendiente** ([servicio_reservas.py:101](backend/app/services/servicio_reservas.py#L101)). La propia HU 9 E3 lo dice bien.
 
-| # | Escenario | Datos a usar | Pasos | Resultado esperado (app · *HU*) |
+| # | Escenario | Datos a usar | Pasos | Resultado esperado |
 |---|-----------|--------------|-------|--------------------|
-| E1 | Inscripción con pago total | `cliente@`, simulador **✅ Pago exitoso** | Inscribirse en "Rehabilitar Codo" (individual) → Siguiente → **Abonar Total** → Confirmar → **✅ Pago exitoso** | Inscripción **confirmada**, decrementa cupo: **"Inscripcion confirmada. Tu lugar esta reservado."** *(HU: "Tu inscripción quedo confirmada. Podes verla en Mis Reservas.")* |
-| E2 | Inscripción con seña | `cliente@`, simulador **✅ Pago exitoso** | Inscribirse → Siguiente → **Abonar Seña** → Confirmar → **✅ Pago exitoso** | Reserva **pendiente**: **"Inscripcion en estado pendiente"** + montos. *(La HU dice "confirmada" — es error de la HU: pago parcial = pendiente.)* |
-| E3 | Lista de espera general (0 cupos) | `cliente@`, cupos llenos | Inscribirse → Siguiente → **Esperar en la lista** → Confirmar | Agregado a la lista de espera general: **"Agregado a la lista de espera"** + "Te notificaremos cuando haya un cupo disponible." |
-| E5 | Fallida por error en el pago | `cliente@`, simulador **❌ Fondos insuficientes** | Inscribirse → Siguiente → Abonar Total/Seña → Confirmar → **❌ Fondos insuficientes** | **"Hubo un error en el pago. Intenta nuevamente."** + "La inscripcion fue cancelada. Podes intentarlo nuevamente." (no se inscribe). |
+| E1 | Inscripción con pago total | `cliente@`, simulador **✅ Pago exitoso** | Inscribirse en "Rehabilitar Codo" (individual) → Siguiente → **Abonar Total** → Confirmar → **✅ Pago exitoso** | Inscripción **confirmada**, decrementa cupo: **"Inscripción confirmada. Tu lugar está reservado."** *(la HU pide "Tu inscripción quedo confirmada. Podes verla en Mis Reservas." — ver desvío 1)* |
+| E2 | Inscripción con seña | `cliente@`, simulador **✅ Pago exitoso** | Inscribirse → Siguiente → **Abonar Seña** → Confirmar → **✅ Pago exitoso** | Reserva **pendiente**: **"Inscripción en estado pendiente"** + montos *(la HU dice "confirmada" — ver desvío 2)* |
+| E3 | Lista de espera general (0 cupos) | `cliente@`, cupos llenos | Inscribirse → Siguiente → **Esperar en la lista** → Confirmar | Agregado a la lista de espera general: **"Agregado a la lista de espera"** + "Te notificaremos cuando haya un cupo disponible." *(la HU escribe "Fuiste agregado a la lista de espera…"; la HU 9 escribe "Agregado a la lista de espera…" para el mismo mensaje — la app usa esta última)* |
+| E5 | Fallida por error en el pago | `cliente@`, simulador **❌ Fondos insuficientes** | Inscribirse → Siguiente → Abonar Total/Seña → Confirmar → **❌ Fondos insuficientes** | **"Hubo un error en el pago. Intenta nuevamente."** (no se inscribe). |
 
 > La HU individual no tiene "Escenario 4"; la numeración salta de E3 a E5, respetada acá.
 
@@ -332,3 +434,190 @@ PY
 | E2 | Falla por discrepancia | token válido, **helloWord** / **helloword** | **Restablecer contraseña** | **"Las contraseñas no coinciden."** |
 | E3 | Restablecimiento exitoso | token válido, **abcdefg** / **abcdefg** | **Restablecer contraseña** | Guarda la contraseña y redirige a `/login` con **"Contraseña actualizada. Podés iniciar sesión."** |
 | E4 | Enlace inválido o expirado | token inválido o ausente en la URL | Abrir `/restablecer-contrasena` con token inválido | **"Token inválido o expirado. Solicitá uno nuevo desde Recuperar contraseña."** |
+
+---
+
+## HU 16 — Modificar Actividad (Admin)
+
+**Flujo:** entrar como `admin@` → **Actividades** → **Editar** en la actividad → cambiar Sala y/o Profesor → **Guardar cambios**.
+**Ref. código:** [EditarActividad.jsx](frontend/src/pages/admin/actividades/EditarActividad.jsx) · [servicio_actividades.py:393](backend/app/services/servicio_actividades.py#L393) (`editar_actividad`) · [notifications.py:264](backend/app/utils/notifications.py#L264) (`notify_activity_modified`).
+
+**Reglas que impone el código (no están en la HU, pero condicionan la demo):**
+- **Solo se puede cambiar sala y profesor.** El resto (nombre, horario, precio) queda fijo al crear ([servicio_actividades.py:394](backend/app/services/servicio_actividades.py#L394)).
+- El selector de **Sala** solo ofrece salas con **capacidad ≥ la de la sala original** y libres ese día/hora ([EditarActividad.jsx:186](frontend/src/pages/admin/actividades/EditarActividad.jsx#L186)). El backend rechaza bajar de capacidad con un 400 ([servicio_actividades.py:412](backend/app/services/servicio_actividades.py#L412)).
+- El selector de **Profesor** solo ofrece profesores de **la misma especialidad** que la actividad y sin choque de horario ([EditarActividad.jsx:160](frontend/src/pages/admin/actividades/EditarActividad.jsx#L160)). Eso es lo que hace que "Pablo cumple la condición". **Ojo:** esa validación es **solo del frontend** — `editar_actividad` no revalida la especialidad, así que por API se podría asignar un profesor de otra especialidad.
+
+> 🔎 **La HU E1 se contradice a sí misma.** El "Dado" habla de *Sala 5 (cap. 6) → Sala 6 (cap. 10)*, pero el mensaje esperado dice *"Sala: Sala 2 → Sala 3"*. Se sembró la actividad en **Sala 2** para que la notificación salga **palabra por palabra** como la pide la HU. (Además *Sala 5 → Sala 6* sería **imposible** en el sistema: Sala 6 tiene capacidad 5 y Sala 5 tiene 8 — bajar de capacidad está prohibido.)
+
+| # | Escenario | Datos a usar | Pasos | Resultado esperado |
+|---|-----------|--------------|-------|--------------------|
+| E1 | Modificación de **sala** exitosa | `admin@`. Actividad **"Yoga"** del **19/10/2027** (Martes · 10:00–11:00, Sala 2, cap. 6, prof. **Alex Rivas**, `cliente@` inscripto) | Actividades → **Editar** en "Yoga" del 19/10/2027 → Sala: **Sala 3** → **Guardar cambios** | Guarda el cambio y **notifica al profesor (Alex) y al cliente (Carlos)**. Inbox de ambos:<br>**Título:** `Actividad modificada (la sala): Yoga`<br>**Cuerpo:** `Se modificó la sala de 'Yoga'. Sala: Sala 2 → Sala 3.` ✅ *coincide literal con la HU* |
+| E2 | Modificación de **profesor** exitosa | `admin@`. Actividad **"Tren superior"** del **20/08/2026** (Jueves · 13:00–14:00, Sala 3, prof. **Ámbar Soto**, `cliente@` inscripto) | Actividades → **Editar** en "Tren superior" del 20/08/2026 → Profesor: **Pablo Ruiz** → **Guardar cambios** | Guarda y manda **3 notificaciones**:<br>→ **Pablo**: `Asignación a actividad: Tren superior` / `Fuiste asignado/a como profesor/a de 'Tren superior' programada para Jueves 2026-08-20 · 13:00–14:00.`<br>→ **Ámbar**: `Cambio en actividad: Tren superior` / `Fuiste removido/a de la actividad 'Tren superior' programada para Jueves 2026-08-20 · 13:00–14:00.`<br>→ **cliente@**: `Actividad modificada (el profesor): Tren superior` / `Se modificó el profesor de 'Tren superior'. Profesor: Ámbar Soto → Pablo Ruiz.` |
+
+**Desvíos de E2 respecto del texto de la HU** (ambos son la *misma variable* renderizada distinto, no un bug):
+- La HU escribe la fecha como `2026-08-20 13:00`; la app la escribe `Jueves 2026-08-20 · 13:00–14:00`. El formato corto es el de las actividades **individuales**; "Tren superior" es **fija**, y para las fijas el sistema arma la etiqueta con día + rango ([notifications.py:242](backend/app/utils/notifications.py#L242), `_when_label`).
+- La HU dice `Ámbar → Pablo`; la app usa **nombre + apellido** (`Ámbar Soto → Pablo Ruiz`), porque el campo `professor` guarda el nombre completo.
+
+> 🔁 **Para repetir la demo:** volvé a correr el seed. Desde el 15/07 estas actividades se **auto-restauran** al estado inicial de la HU: si una demo les cambió la sala o el profesor, o las canceló, el seed las devuelve a Sala 2 / Alex Rivas y Sala 3 / Ámbar Soto. También repone la inscripción de Nadia si se dio de baja.
+
+> **El inscripto es Nadia (`pilates.demo@`), no `cliente@`** — a propósito. `cliente@` es quien usa "Mis reservas" en la HU 19, y estos turnos le aparecían ahí mezclados con los de cancelar turno: ya pasó que se cancelaran sin querer y la HU 16 se quedara sin clientes a los que avisar.
+
+---
+
+## HU 17 — Cancelar Actividad (Admin)
+
+**Flujo:** `admin@` → **Actividades** → botón **Cancelar** en la fila → modal **"Confirmar cancelación"** → **Confirmar** o **Cancelar**.
+**Ref. código:** [ListaActividades.jsx:115](frontend/src/pages/admin/actividades/ListaActividades.jsx#L115) · [servicio_actividades.py:464](backend/app/services/servicio_actividades.py#L464) (`cancelar_actividad`) · [notifications.py:213](backend/app/utils/notifications.py#L213).
+
+> La actividad **no se borra**: pasa a `status="cancelled"` ([servicio_actividades.py:525](backend/app/services/servicio_actividades.py#L525)). Por eso el aula queda libre, que es lo que pide el título de la HU.
+
+> ⚠️ **Orden obligatorio: E2 antes que E1.** Los dos usan la **misma** "Rehabilitar Muñeca" (la del profesor Franco): E2 aborta la cancelación y E1 la concreta. Si hacés E1 primero, E2 ya no tiene qué cancelar.
+
+| # | Escenario | Datos a usar | Pasos | Resultado esperado |
+|---|-----------|--------------|-------|--------------------|
+| **E2** *(hacer primero)* | Cancelación **abortada** | `admin@`. **"Rehabilitar Muñeca"** con prof. **Franco Ibarra** (Lunes · 10:00–11:00, Sala 6, **sin inscriptos**) | Actividades → **Cancelar** → en el modal, **Cancelar** | Se cierra el modal y **no pasa nada**: la actividad sigue activa en la lista. |
+| **E1** *(después de E2)* | Cancelación exitosa **con profesor** | La misma "Rehabilitar Muñeca" de E2 | Actividades → **Cancelar** → **Confirmar** | Cancela la actividad y notifica a **Franco**:<br>**Título:** `Actividad cancelada: Rehabilitar Muñeca`<br>**Cuerpo:** `Te informamos que la actividad 'Rehabilitar Muñeca' programada para Lunes 2026-07-27 · 10:00–11:00 fue cancelada.` |
+| E3 | Cancelación exitosa **sin profesor** | `admin@`. La **otra** "Rehabilitar Muñeca" — la de **Lunes · 12:00–13:00** (Sala 6, **sin profesor** ni inscriptos) | Actividades → **Cancelar** → **Confirmar** | Cancela la actividad **sin mandar ninguna notificación** (`notify_activity_cancellation` corta al toque si no hay profesor — [notifications.py:189](backend/app/utils/notifications.py#L189)). |
+| E4 | Cancelación **fallida** por inscriptos | `admin@`. **"Pilates"** de **Viernes · 17:00–18:00** (Sala 5, prof. Carlos Pilates, **1 inscripta**: Nadia) | Actividades → **Cancelar** → **Confirmar** | Error: **`No se puede eliminar la actividad: tiene clientes inscriptos.`** ✅ *literal* · La actividad **sigue activa**. |
+
+**Sobre la fecha de E1:** la HU dice `Lunes 2026-06-29 · 10:00–11:00`, que **ya pasó** (hoy es 15/07/2026). El seed la programa el **próximo lunes futuro**, así que la fecha del mensaje cambia. **El formato es idéntico** al de la HU (`Lunes YYYY-MM-DD · HH:MM–HH:MM`) — lo único distinto es el día concreto.
+
+**Hay dos "Rehabilitar Muñeca" a propósito** (E1/E2 usan la de las 10:00 **con** Franco; E3 usa la de las 12:00 **sin** profesor). Se distinguen por **hora y profesor** en la lista. La de E3 usa la especialidad *Electroterapia*, que no tiene ningún profesor asignado, justamente para que no aparezca en la lista de "actividades para asumir" de nadie.
+
+> ⚠️ **Ojo con "Pilates":** en la base hay **8 "Pilates" viejas canceladas** de los viernes 15:00 (basura de demos de *Aceptar sugerencia*). La de esta HU es la de las **17:00**, y es la única **activa**. También existe una **sugerencia** pendiente llamada "Pilates" (Sala 2, viernes 15:00) que usa la HU 4 — **no la toques acá**.
+
+> 🔁 **Para repetir:** volvé a correr el seed. Desde el 15/07 **reactiva** las actividades demo que hayan quedado canceladas, en vez de saltearlas. Antes había que borrarlas a mano — y como el seed creaba una nueva en lugar de reutilizar la vieja, cada ciclo dejaba una fila muerta: así se acumularon las 8 "Pilates" y las "Yoga" repetidas que arrastra la base.
+
+---
+
+## HU 18 — Renunciar a Actividad (Profesor)
+
+**Flujo:** entrar como el profesor → **Mis actividades** → **Renunciar** → modal **"Confirmar renuncia"** → **Sí, renunciar**.
+**Ref. código:** [MisActividades.jsx:155](frontend/src/pages/kinesiologist/actividades/MisActividades.jsx#L155) · [servicio_actividades.py:550](backend/app/services/servicio_actividades.py#L550) (`renunciar_actividad`) · [notifications.py:967](backend/app/utils/notifications.py#L967).
+
+| # | Escenario | Datos a usar | Pasos | Resultado esperado |
+|---|-----------|--------------|-------|--------------------|
+| E1 | Baja exitosa | **`profe@gmail.com`** / `Profesor123` (Ariel Gómez). Actividad fija **"Tren superior"** — la de **Lunes · 09:00–10:00** del **10/08/2026** (Sala 5, Osteopatía) | Mis actividades → **Renunciar** en "Tren superior" → **Sí, renunciar** | Renuncia y muestra **`Renunciaste a la actividad "Tren superior" correctamente.`** ✅ *literal* · La actividad **queda sin profesor** (`professor = None`, [servicio_actividades.py:600](backend/app/services/servicio_actividades.py#L600)) → el cupo de profesor queda libre · Se **avisa al admin**: `Renuncia de profesor: Tren superior` / `El profesor Ariel Gómez renunció a 'Tren superior' programada para Lunes 2026-08-10 · 09:00–10:00.` |
+
+**Ojo con los dos "Tren superior":** el de esta HU es el de **Ariel Gómez / Lunes 09:00 / Sala 5**. El otro (Ámbar → Pablo, Jueves 13:00, Sala 3) es de la **HU 16 E2** — son actividades separadas **a propósito**, para que las dos HUs no se pisen y puedas demostrarlas **en cualquier orden**.
+
+> 🔁 **Para repetir:** hay dos formas. La rápida en vivo: después de renunciar, la actividad queda libre y aparece en su sección **"Actividades que podés asumir"** (verificado el 15/07 con el ciclo completo renunciar → asumir), así que Ariel puede **volver a asumirla** ahí mismo — y de paso demostrás la HU 5. La otra: volver a correr el seed, que le devuelve el profesor.
+
+---
+
+## HU 19 — Cancelar Turno (Cliente abonado / no abonado)
+
+**Flujo:** entrar como cliente → **Mis reservas** → **Cancelar turno** → modal **"¿Cancelar turno?"** → **Confirmar cancelación**.
+**Ref. código:** [MisReservas.jsx](frontend/src/pages/client/reservas/MisReservas.jsx) · [servicio_reservas.py:240](backend/app/services/servicio_reservas.py#L240) (`cancel_reservation_with_policy`) · [credits.py](backend/app/utils/credits.py).
+
+### Regla de los descuentos (24-48 h)
+
+**20% en la primera cancelación del mes, 30% en la segunda, sin descuento a partir de la tercera.** El descuento es **total, no acumulativo**: el de la segunda reemplaza al de la primera, no se suman. El código ya lo implementa así ([servicio_reservas.py:319](backend/app/services/servicio_reservas.py#L319)) — verificado el 15/07 corriendo los 8 escenarios.
+
+> ⚠️ **El texto de la HU tiene los porcentajes al revés.** La versión escrita de esta HU dice "30% en la primera, 20% en la segunda" (y sus escenarios E2/E3 repiten esa inversión, incluido el literal *"Tenés un 20%…"* en E3). La regla correcta, confirmada el 15/07, es **20% → 30%**. Esta tabla sigue la regla correcta, no el texto de la HU.
+
+### Cómo se simulan las ventanas de tiempo
+
+**No hay override de fecha en el backend.** El seed crea 8 turnos con la hora de inicio calculada como **offset desde el momento en que corrés el seed** (+10 h, +12 h, +30 h, +36 h, +40 h, +44 h, +60 h, +72 h). La política lee `reservation.reservation_date`, así que con eso alcanza: no hay que esperar ninguna fecha real.
+
+> ⚠️ **Corré el seed el mismo día de la demo.** Los turnos "de menos de 24 h" quedan a ~10-12 h: si el seed es de ayer, esos turnos ya empezaron y el botón **Cancelar turno** aparece **deshabilitado** ("La clase ya comenzó o finalizó"). Volver a correr el seed regenera los 8 turnos y **resetea** créditos y descuento.
+
+### ⚠️ Orden obligatorio: E2 → E3 → E4
+
+Los tres dependen de **cuántas veces cancelaste en la franja 24-48 h este mes** ([servicio_reservas.py:292](backend/app/services/servicio_reservas.py#L292)). Si los hacés desordenados, los porcentajes salen mal. **E1, E5, E6, E7 y E8 son independientes** y se pueden hacer en cualquier momento.
+
+> 💡 **Mirá "Mis Suscripciones" justo después de E2 y de E3.** El descuento pendiente se **pisa** en cada cancelación, y **E4 lo borra** (lo deja en 0). Si hacés E4 y después vas a mirar, no vas a ver ningún descuento.
+
+| # | Escenario | Datos a usar | Pasos | Resultado esperado |
+|---|-----------|--------------|-------|--------------------|
+| E1 | Cancelación con **crédito** (>48 h) | `abonado@` · turno **"Cancelación +48h (abonado)"** (~60 h) | Mis reservas → **Cancelar turno** → **Confirmar cancelación** | Cancela y otorga 1 crédito: **`Turno cancelado. Se te otorgó un crédito para tu próxima clase.`** ✅ *literal* |
+| **E2** *(1ro)* | **Primera** cancelación con descuento (24-48 h) | `abonado@` · turno **"Cancelación 24-48h (1ra)"** (~36 h) | **Cancelar turno** → **Confirmar cancelación** | Cancela y da **20%**: **`Turno cancelado. Tendrás un 20% de descuento en el pago de tu próxima suscripción mensual.`** → en **Mis Suscripciones**: **`Tenés un 20% de descuento pendiente por cancelación. Se aplicará automáticamente en el pago de tu próxima renovación de suscripción.`** |
+| **E3** *(2do)* | **Segunda** cancelación con descuento (24-48 h) | `abonado@` · turno **"Cancelación 24-48h (2da)"** (~40 h) | **Cancelar turno** → **Confirmar cancelación** | Cancela y da **30%**, que **reemplaza** al 20% anterior: **`Turno cancelado. Tendrás un 30% de descuento (total, no acumulativo) en el pago de tu próxima suscripción mensual.`** → en **Mis Suscripciones** el cartel ahora dice **30%** |
+| **E4** *(3ro)* | **Tercera** cancelación, **sin** descuento | `abonado@` · turno **"Cancelación 24-48h (3ra)"** (~44 h) | **Cancelar turno** → **Confirmar cancelación** | Cancela **sin descuento**: **`Turno cancelado. Perdiste el beneficio de descuento por cancelaciones repetidas este mes.`** · el descuento pendiente **vuelve a 0** |
+| E5 | Cancelación **sin beneficios** (<24 h) | `abonado@` · turno **"Cancelación -24h (abonado)"** (~12 h) | **Cancelar turno** → **Confirmar cancelación** | **`Turno cancelado. No recibís crédito ni devolución: cancelaste con menos de 24 hs de anticipación.`** |
+| E6 | Cancelación **con devolución de seña** (>24 h) | `cliente@` (**no** abonado) · turno **"Cancelación +24h (no abonado)"** (~30 h, seña 50%) | **Cancelar turno** → **Confirmar cancelación** | **`Turno cancelado. Se te reintegra el 50% que habías abonado.`** · queda el reintegro en la **auditoría** ([servicio_reservas.py:338](backend/app/services/servicio_reservas.py#L338)) |
+| E7 | Cancelación **sin devolución** (<24 h) | `cliente@` · turno **"Cancelación -24h (no abonado)"** (~10 h, seña 50%) | **Cancelar turno** → **Confirmar cancelación** | **`Turno cancelado. No se reintegra lo abonado: cancelaste con menos de 24 hs de anticipación.`** |
+| E8 | Cancelación **sin crédito** (clase reservada con crédito) | `abonado@` · turno **"Cancelación con crédito (+48h)"** (~72 h) | **Cancelar turno** → **Confirmar cancelación** | **`Turno cancelado. No se otorga crédito: esta clase fue reservada usando un crédito.`** ✅ *literal* |
+
+### Notas de la HU 19
+
+- **E8 tiene que ser >48 h, no >24 h.** La HU dice "faltan más de 24 hs", pero el chequeo de "reservada con crédito" solo vive en la rama de **>48 h** ([servicio_reservas.py:301](backend/app/services/servicio_reservas.py#L301)). Entre 24 y 48 h caería en la rama de descuento y daría otro mensaje. El turno sembrado está a ~72 h.
+- **E2 y E4 no fijan texto literal en la HU** ("se informan ambas operaciones" / "se informa que el turno se canceló sin aplicar descuento"). La tabla pone el texto **real** de la app.
+- **El descuento se ve en "Mis Suscripciones", no en "Mi perfil".** La HU E3 dice "Mi perfil", pero la sección se movió — está en [MisSuscripciones.jsx:331](frontend/src/pages/client/pagos/MisSuscripciones.jsx#L331) (el propio código lo comenta: *"movido desde Mi Perfil"*).
+- **Estado de créditos que deja el seed para `abonado@`:** 2 ganados y 1 gastado (el de E8) → **saldo 1**. Ese crédito libre es el que usa la **HU 9 E6** (inscripción con crédito). Con 2 ganados sigue debajo del tope de 3, así que E1 todavía puede otorgar el suyo. Después de E1 quedan **3 ganados** = tope alcanzado: otra cancelación >48 h diría *"Ya alcanzaste el límite de 3 créditos este mes."* ([credits.py:19](backend/app/utils/credits.py#L19)).
+- **La HU dice "menos de 3 créditos"**, que suena a *saldo*; el código mira **ganados en el mes**, no el saldo ([credits.py:70](backend/app/utils/credits.py#L70)). Con los datos del seed las dos lecturas dan lo mismo, así que no cambié nada.
+- **Por qué los turnos demo tienen profesor asignado:** hay un job que corre **cada 15 minutos** y cancela automáticamente las clases **sin profesor** que empiezan en ≤12 h ([servicio_auto_cancelacion.py:34](backend/app/services/servicio_auto_cancelacion.py#L34)). Los turnos de E5/E7 están dentro de esa ventana: sin profesor, el job se los comería en pleno demo.
+
+---
+
+## HU 20 — Ver planes y abonos (Cliente)
+
+**Flujo:** entrar como cliente → menú **Suscripciones** (`/cliente/suscripciones`).
+**Ref. código:** [MisSuscripciones.jsx](frontend/src/pages/client/pagos/MisSuscripciones.jsx) · [servicio_pagos.py:106](backend/app/services/servicio_pagos.py#L106) (`get_my_plans`) · [rutas_pagos.py:46](backend/app/routes/rutas_pagos.py#L46) (`/my-plan`).
+
+La pantalla tiene **siempre las mismas 3 secciones, en este orden**: **"Adquirir un plan"** ([:332](frontend/src/pages/client/pagos/MisSuscripciones.jsx#L332)) → **"Mi abono"** ([:383](frontend/src/pages/client/pagos/MisSuscripciones.jsx#L383)) → **"Mis suscripciones"** ([:415](frontend/src/pages/client/pagos/MisSuscripciones.jsx#L415)). Lo que cambia entre escenarios es **qué dice cada una**. Los 4 escenarios son **solo de lectura**: no consumen ni ensucian datos, se pueden mostrar en cualquier orden y repetir.
+
+| # | Escenario | Datos a usar | Pasos | Resultado esperado |
+|---|-----------|--------------|-------|--------------------|
+| E1 | Visualización **con** suscripciones | **`abonado@`** (Ana) — token **Fisioterapia sin usar** + apto aprobado + **1 crédito** | Login → **Suscripciones** | **"Adquirir un plan"**: la tarjeta **Mensual · $20.000**. · **"Mi abono"**: badge **"Abonado activo"** + **"🎫 Créditos disponibles este mes: 1 / 3"**. · **"Mis suscripciones"**: fila **`Mensual · Fisioterapia`** con estado **"Sin usar"** y el detalle **"Sin usar · podés anotarte a 4 clases fijas de esta especialidad"**. |
+| E2 | Visualización **sin** suscripciones | **`cliente@`** (Carlos) — **ninguna** suscripción + apto aprobado | Login → **Suscripciones** | **"Adquirir un plan"**: la tarjeta Mensual con el botón **Suscribirse** habilitado. · **"Mi abono"**: **"Todavía no sos abonado. Suscribite a un plan para acceder a beneficios de abonado, descuentos y reservas prioritarias."** ✅ *literal* · **"Mis suscripciones"**: **"Todavía no tenés ninguna suscripción. Elegí un plan más arriba para empezar."** ✅ *literal* |
+| E3 | Visualización **sin apto físico** | **`pepe.sinapto@`** (Pepe) — apto **pendiente** | Login → **Suscripciones** | En **"Adquirir un plan"**, cartel amarillo: **"No podés suscribirte a ningún plan hasta que tu apto físico esté aprobado. Subilo desde tu perfil y esperá la aprobación del administrador."** ✅ *literal* · El botón **Suscribirse** queda **deshabilitado** (gris, tooltip *"Necesitás tu apto físico aprobado para suscribirte"*). |
+| E4 | Visualización **con descuento** | **`abonado@`** — **después de correr la HU 19 E2** (ver nota) | HU 19 E2 → volver a **Suscripciones** | **"Mi abono"**: badge "Abonado activo" + los créditos + cartel verde **"Tenés un 20% de descuento pendiente por una cancelación previa. Se aplicará automáticamente en tu próxima compra de suscripción."** · Las otras dos secciones, igual que en E1. |
+
+### Notas de la HU 20
+
+- **E4 depende de la HU 19: el seed deja el descuento en 0 a propósito.** No hay ningún dato "descuento pendiente" sembrado — el seed lo resetea en cada corrida ([seed_mock.py](backend/database/seed_mock.py), bloque de Cancelar turno) para que los escenarios E2/E3/E4 de la HU 19 den los porcentajes correctos. **Para demostrar E4 hay que cancelar antes un turno de la franja 24-48 h** (HU 19 E2 → 20%, o E3 → 30%). Si hacés **HU 19 E4**, el descuento vuelve a **0** y E4 de esta HU deja de verse.
+- **"Mi abono" solo muestra el descuento si el cliente es abonado** ([:389](frontend/src/pages/client/pagos/MisSuscripciones.jsx#L389)) — coincide con el "Dado una cuenta abonada" de la HU.
+- **El descuento tiene dos motivos posibles** y la pantalla los distingue ([:37](frontend/src/pages/client/pagos/MisSuscripciones.jsx#L37)): *"por una cancelación previa"* (el de esta HU) o *"porque tu plan anterior cubrió un mes con menos clases"*. La HU solo contempla el primero.
+- **"El estado de uso y el historial" de E1 se ven mejor encadenando con la HU 9 E1:** después de que Ana gaste el token, la fila pasa a **"Usada"** y muestra **"Ya la usaste · te anotó a 4 clases fijas"** + las 4 fechas concretas. Ese es el *historial*. Volvé a correr el seed para dejarla otra vez en "Sin usar".
+- **No hay estado "Vencida":** los tokens **no vencen** ([subscriptions.py:3](backend/app/utils/subscriptions.py#L3)). Los estados posibles son **Sin usar / Usada / Cancelada**.
+- La HU escribe *"Mis sucripciones"* (sin la `s`); la pantalla dice **"Mis suscripciones"**. Es un typo de la HU, no del sistema.
+
+---
+
+## HU 21 — Adquirir plan (Cliente)
+
+**Flujo:** **Suscripciones** → **Suscribirse** en la tarjeta del plan → en el modal, elegir **Especialidad** → **Pagar** → simulador de Mercado Pago.
+**Ref. código:** [MisSuscripciones.jsx:446](frontend/src/pages/client/pagos/MisSuscripciones.jsx#L446) (modal) · [servicio_pagos.py:157](backend/app/services/servicio_pagos.py#L157) (`simulate_mercadopago_payment`).
+
+**Cómo se simula el pago (no hace falta Mercado Pago real):** al presionar **Pagar** aparece el overlay **"Esperando pago… Completá el pago en la ventana de Mercado Pago que se abrió."** y se abre la ventana [/pago/mercadopago](frontend/src/pages/pago/PagoMercadoPago.jsx) con *"Elegí un escenario para simular"* → **"✅ Pago exitoso"** / **"❌ Fondos insuficientes"**. *(Habilitar ventanas emergentes.)*
+
+**Regla de negocio (verificada):** **20% de descuento para clientes de 65 años o más** ([subscriptions.py:33](backend/app/utils/subscriptions.py#L33)). Los descuentos **no se acumulan**: se aplica **el mayor** entre el de edad y el pendiente por cancelación ([servicio_pagos.py:196](backend/app/services/servicio_pagos.py#L196)). Si gana el de edad, el pendiente por cancelación **no se consume** y le queda para la próxima.
+
+| # | Escenario | Datos a usar | Pasos | Resultado esperado |
+|---|-----------|--------------|-------|--------------------|
+| E1 | Adquisición exitosa | **`cliente@`** (sin suscripciones ni descuentos) | Suscripciones → **Suscribirse** → Especialidad **Kinesiologia deportiva** → **Pagar** → (overlay) → **✅ Pago exitoso** | **"Pago aprobado. Te suscribiste al plan 'Mensual' en Kinesiologia deportiva."** ✅ *literal, verificado* · **Inbox:** `Suscripción confirmada: Mensual` + mail. |
+| E2 | Adquisición exitosa **con descuento por cancelación** | **`abonado@`** — **correr antes la HU 19 E2** (deja 20% pendiente) | Suscripciones → **Suscribirse** → **Kinesiologia deportiva** → **Pagar** → **✅ Pago exitoso** | El modal muestra **~~$20.000~~ $16.000** y el cartel del descuento. Al confirmar: **"Pago aprobado. Te suscribiste al plan 'Mensual' en Kinesiologia deportiva. Se aplicó un 20% de descuento por cancelación previa (pagaste $16000.00 en lugar de $20000.00)."** ✅ *verificado* · El descuento pendiente **se consume** (vuelve a 0). |
+| E3 | Adquisición **fallida** por error en el pago | `cliente@` (o cualquiera), simulador **❌ Fondos insuficientes** | **Suscribirse** → cualquier especialidad → **Pagar** → (overlay) → **❌ Fondos insuficientes** | **"Hubo un error al completar el pago. Intentalo nuevamente."** ✅ *literal* · **No** se crea la suscripción. |
+| E4 | Adquisición exitosa **con descuento por edad** | **`juan.mayor@`** (Juan, **75 años**) | Suscripciones → **Suscribirse** → Especialidad **Masoterapia** → **Pagar** → **✅ Pago exitoso** | Antes de pagar, en "Adquirir un plan": **"🎉 Por tener 65 años o más, tenés un 20% de descuento…"**. Al confirmar: **"Pago aprobado. Te suscribiste al plan 'Mensual' en Masoterapia. Se aplicó un 20% de descuento por ser adulto mayor (65 años o más) (pagaste $16000.00 en lugar de $20000.00)."** ✅ *verificado* — ver nota, **el texto de la HU E4 está mal copiado**. |
+| E5 | Adquisición **fallida** por falta de apto físico | **`pepe.sinapto@`** (Pepe) | Login → **Suscripciones** | **"No podés suscribirte a ningún plan hasta que tu apto físico esté aprobado. Subilo desde tu perfil y esperá la aprobación del administrador."** ✅ *literal* · El botón **Suscribirse** está **deshabilitado**: no se llega ni al pago. *(Es el mismo escenario que la HU 20 E3.)* |
+
+### Notas de la HU 21
+
+- **El texto esperado de E4 en la HU está mal copiado.** Dice *"…en Kinesiologia deportiva. Se aplicó un 20% de descuento **por cancelación previa**"*, pero el escenario es **Masoterapia** y el descuento es **por edad**. Es un copy-paste de E2. El texto de la tabla es el que devuelve el sistema, y es el correcto.
+- **E1 escribe el plan sin comillas** (*"al plan Mensual"*) pero **E2 y E4 lo escriben con comillas** (*"al plan 'Mensual'"*). El sistema usa **comillas** siempre, así que coincide con E2/E4.
+- **El paréntesis con los montos** (*"(pagaste $16000.00 en lugar de $20000.00)"*) es un agregado del sistema que la HU no menciona. **Lo dejamos a propósito**: no contradice a la HU y hace verificable el descuento en vivo.
+- **E3 dice "el sistema realiza el descuento"** en un escenario de **fallo**. No tiene sentido y es otro arrastre de E2: si el pago falla, no se descuenta ni se crea nada.
+- **La especialidad se escribe sin tilde** en todo el sistema (**"Kinesiologia deportiva"**), porque así está el catálogo ([MisSuscripciones.jsx:11](frontend/src/pages/client/pagos/MisSuscripciones.jsx#L11)). La HU la escribe con tilde. Es **dato**, no texto fijo.
+- **No se puede comprar dos veces la misma especialidad sin usar la primera:** el sistema responde **"Ya tenés una suscripción sin usar en la especialidad 'X'. Usala antes de comprar otra."** ([servicio_pagos.py:182](backend/app/services/servicio_pagos.py#L182)). Por eso E1 y E2 usan **clientes distintos** y ambos compran *Kinesiologia deportiva*.
+- 🔁 **Para repetir:** volvé a correr el seed. Desde el 16/07 **borra las suscripciones que las demos anteriores dejaron** y devuelve a cada cliente a su estado inicial (`SUSCRIPCIONES_DEMO` en [seed_mock.py](backend/database/seed_mock.py)).
+
+---
+
+## 🔧 Cambios de código del 16/07 (resumen)
+
+| Archivo | Cambio | Por qué |
+|---|---|---|
+| [InscribirActividad.jsx:838](frontend/src/pages/client/reservas/InscribirActividad.jsx#L838) | `Agregado a la lista de espera` → **`Agregado a la lista de espera.`** | Faltaba el punto que pide la HU 9 E4/E5. |
+| [OverlayEsperandoPago.jsx:36](frontend/src/components/OverlayEsperandoPago.jsx#L36) | `Esperando pago...` → **`Esperando pago…`** | La HU usa el carácter de elipsis. Afecta a las HU 9, 10 y 21. |
+| [servicio_reservas.py:653](backend/app/services/servicio_reservas.py#L653) | `age > 65` → **`get_age_discount_percent(user) > 0`** (65 o más) | **Bug real:** la regla de los 65 estaba implementada **dos veces y distinto** — `>= 65` al comprar un plan y `> 65` al inscribirse. Un cliente de **exactamente 65** tenía descuento en una pantalla y no en la otra. |
+| [seed_mock.py](backend/database/seed_mock.py) | Plan **"Plan Mensual" → "Mensual"** (renombra la fila, no crea otra) | El mensaje de la HU 21 es literal *"al plan 'Mensual'"*; con el nombre viejo decía *"al plan 'Plan Mensual'"*. Se renombra la fila para no dejar colgadas las suscripciones ya compradas. |
+| [seed_mock.py](backend/database/seed_mock.py) | **Lotes de 4 clases** (`Rehabilitar Codo`, `Rehabilitar tobillo`) + clientes Diego/Juan/Pepe + normalización de suscripciones | Sin esto la HU 9 E1 **no se podía reproducir** (la fija era una sola fila sin fecha, así que nunca anotaba al mes) y E4 no tenía actividad. |
+| [servicio_reservas.py:165](backend/app/services/servicio_reservas.py#L165) | Descuento por mes corto: `clases_del_mes != 2` → **`> 2`** (o sea, **2 o menos**) | **Bug real:** solo compensaba el mes de **exactamente 2** clases. Un mes con **1** clase daba **0%** — y es el caso en que el cliente **menos** recibió por lo que pagó. Pasa cuando gasta el token sobre el final del mes: solo se cuentan las clases **futuras**. |
+| [servicio_reservas.py:174](backend/app/services/servicio_reservas.py#L174) | Devuelve **0** (antes: el descuento que ya tenía) cuando no otorga nada nuevo | **Aviso engañoso:** si el cliente ya tenía un 30% por cancelación, el mail/inbox le decía *"Como este mes tenía menos clases de las que cubre tu plan, te otorgamos un 30% de descuento"* — un descuento que ni era nuevo ni era por mes corto (el motivo guardado seguía siendo `cancelacion`). El descuento que tiene el cliente **no cambia**: se sigue respetando el mayor. |
+
+**Lo que NO se cambió, y por qué:**
+- **El asunto del mail** de la inscripción por suscripción dice `Inscripción confirmada: Rehabilitar Codo (4 clases de agosto)` ([notifications.py:681](backend/app/utils/notifications.py#L681)). La HU fija el texto de **la notificación al usuario**, y esa —la del inbox— dice exactamente **`Inscripción confirmada: Rehabilitar Codo`** ([notifications.py:724](backend/app/utils/notifications.py#L724)). El asunto del mail agrega contexto útil y la HU no lo especifica.
+- **El botón "Esperar en la lista" para no abonados** (HU 9 E5) — ver el desvío documentado en la HU 9.
+
+---

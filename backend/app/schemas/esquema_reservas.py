@@ -1,5 +1,5 @@
 # Responsable: Francis - Esquemas de Reservas y Lista de Espera
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -34,6 +34,13 @@ class ReservationResponse(BaseModel):
     created_at: datetime
     deposit_percent: Optional[int] = None  # % abonado al reservar (solo full/partial payment)
 
+    # Inscripción por suscripción a una clase fija: el plan cubre el mes, así que anota
+    # también al resto de las clases del mes. Vacío/1 en el resto de los métodos de pago.
+    month_enrolled_count: int = 1                      # clases anotadas, incluida la elegida
+    month_enrolled_dates: List[str] = []               # fechas del resto del mes que se reservaron
+    month_waitlisted_dates: List[str] = []             # las que estaban llenas y fueron a lista de espera
+    month_skipped_dates: List[str] = []                # las que no entraron (tope del plan)
+
     class Config:
         from_attributes = True
 
@@ -63,6 +70,9 @@ class ReservationConActividad(BaseModel):
 class WaitlistCreate(BaseModel):
     """Esquema para añadir a lista de espera"""
     activity_id: int
+    # % que abona el cliente para reservar su lugar en la cola (50-100). El abonado no
+    # paga y lo manda vacío; al no abonado el backend se lo exige.
+    deposit_percent: Optional[int] = None
 
 
 class WaitlistResponse(BaseModel):
@@ -73,6 +83,8 @@ class WaitlistResponse(BaseModel):
     status: str
     position: int
     waitlist_type: str  # "priority" (abonados) | "general"
+    payment_status: str = "none"        # "none" (abonado) | "completed" | "partial"
+    deposit_percent: Optional[int] = None
     created_at: datetime
     # Datos de actividad (incluidos solo en GET /waitlist/me)
     activity_name: Optional[str] = None

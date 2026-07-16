@@ -50,6 +50,9 @@ def get_my_plan(
         "credits_cap": MONTHLY_CREDIT_CAP,
         "credits_by_type": credits_by_type,
         "pending_discount_percent": current_user.pending_discount_percent,
+        # Motivo del descuento pendiente ("cancelacion" | "mes_corto"): el monto es uno
+        # solo pero el texto que ve el cliente cambia según por qué se lo debemos.
+        "pending_discount_reason": current_user.pending_discount_reason,
         "age_discount_percent": age_discount,
     }
 

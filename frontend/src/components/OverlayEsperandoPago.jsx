@@ -33,7 +33,7 @@ export default function OverlayEsperandoPago({ visible, onCancelar }) {
       <style>{'@keyframes mp-spin { to { transform: rotate(360deg); } }'}</style>
       <div style={s.card}>
         <div style={s.spinner} />
-        <div style={s.titulo}>Esperando pago...</div>
+        <div style={s.titulo}>Esperando pago…</div>
         <div style={s.subtitulo}>
           Completá el pago en la ventana de Mercado Pago que se abrió.
         </div>

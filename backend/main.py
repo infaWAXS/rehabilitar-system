@@ -108,6 +108,9 @@ from database.connection import SessionLocal
 from app.services.servicio_auto_cancelacion import auto_cancel_unstaffed_classes
 
 
+from app.services.servicio_reintegros import refund_expired_waitlist_entries
+
+
 def _run_auto_cancel_job():
     db = SessionLocal()
     try:
@@ -116,8 +119,19 @@ def _run_auto_cancel_job():
         db.close()
 
 
+# Tarea programada: cierra las entradas de lista de espera cuya clase ya pasó y
+# reintegra a quien había pagado su lugar en la cola sin que le tocara el cupo.
+def _run_waitlist_refund_job():
+    db = SessionLocal()
+    try:
+        refund_expired_waitlist_entries(db)
+    finally:
+        db.close()
+
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(_run_auto_cancel_job, "interval", minutes=15)
+scheduler.add_job(_run_waitlist_refund_job, "interval", minutes=15)
 scheduler.start()
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
