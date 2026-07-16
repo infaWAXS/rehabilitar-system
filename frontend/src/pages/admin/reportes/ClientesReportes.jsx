@@ -387,12 +387,11 @@ export default function ClientesReportes() {
           </div>
 
           {/* 3. MÓDULO SANCIONES (Maneja su propio Empty State) */}
-          {!filtroEspecialidad && (
-            <div style={s.seccionReporte}>
-              <h2 style={s.subtitulo}>
-                Cuentas Suspendidas por Inasistencia
-                <span style={s.badgeGlobalTitulo}>Global</span>
-              </h2>
+          <div style={s.seccionReporte}>
+            <h2 style={s.subtitulo}>
+              Cuentas Suspendidas por Inasistencia
+              <span style={s.badgeGlobalTitulo}>Global</span>
+            </h2>
               <p style={s.bajada}>Análisis de deserción y motivos de penalización automática.</p>
               
               {sancionadosFiltrados.length > 0 ? (
@@ -458,7 +457,7 @@ export default function ClientesReportes() {
                 <ReportesEmptyState entidad="cuentas suspendidas" filtroEspecialidad="" />
               )}
             </div>
-          )}
+          
 
           {/* 4. MÓDULO CONCURRENCIA (Maneja su propio Empty State) */}
           <div style={s.seccionReporte}>
