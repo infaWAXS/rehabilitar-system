@@ -209,6 +209,10 @@ def create_reservation(user_id: int, activity_id: int, reservation_type: str,
 
     # Validar disponibilidad de crédito (el descuento se registra luego de crear la reserva)
     if payment_method == "credit":
+        # El crédito solo sirve para clases fijas (da igual la especialidad, a diferencia
+        # del token de suscripción que sí está atado a una).
+        if reservation_type != "fixed":
+            raise HTTPException(status_code=400, detail="El crédito solo se puede usar en clases fijas, no en actividades individuales.")
         if get_monthly_balance(user_id, db) <= 0:
             raise HTTPException(status_code=400, detail="No tenés créditos disponibles para usar este mes.")
 
