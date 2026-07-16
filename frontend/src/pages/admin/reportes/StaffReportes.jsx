@@ -70,7 +70,15 @@ export default function StaffReportes() {
   };
 
   const opcionesEspecialidades = reporte?.clases_lista ? [...new Set(reporte.clases_lista.map(c => c.tipo))].sort() : [];
-  const profesoresOrdenados = reporte ? procesarOrdenamiento(reporte.profesores_mayor_concurrencia, sortProfesores, filtroEspecialidad) : [];
+  
+  // Filtramos la lista para conservar únicamente profesores con al menos 1 clase dictada en el rango
+  const profesoresOrdenados = reporte 
+    ? procesarOrdenamiento(
+        reporte.profesores_mayor_concurrencia.filter(p => (p.cantidad_clases_dictadas ?? 0) >= 1), 
+        sortProfesores, 
+        filtroEspecialidad
+      ) 
+    : [];
   
   let totalAtendidosGlobal = 0;
   let totalCanceladosGlobal = 0;
@@ -384,8 +392,8 @@ export default function StaffReportes() {
                       const cupos = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.uso_cupos ?? 0.0) : p.porcentaje_ocupacion_clases;
                       const clasesDictadas = filtroEspecialidad ? (p.por_especialidad?.[filtroEspecialidad]?.cantidad_clases_dictadas ?? 0) : p.cantidad_clases_dictadas;
                       
-                      const matchesFiltro = !filtroEspecialidad || clasesDictadas > 0;
-                      if (!matchesFiltro && filtroEspecialidad) return null;
+                      // Si se filtra por especialidad y ese profesor no dio clases de esa especialidad, lo omitimos
+                      if (filtroEspecialidad && clasesDictadas === 0) return null;
 
                       return (
                         <tr key={i} style={{ background: filtroEspecialidad ? '#f0fdf4' : 'transparent' }}>
