@@ -67,6 +67,9 @@ export default function SalasReportes() {
 
   const mapaCalorTieneDatos = reporte?.mapa_infraestructura && listaHorarios.length > 0 && totalUsosGlobal > 0;
 
+  // 👇 AGREGÁ ESTA LÍNEA PARA FORZAR EL MÁXIMO A 100
+  const ocupacionPromedioSegura = Math.min(reporte?.resumen?.ocupacion_promedio || 0, 100);
+
   // 🚨 REGLA DE EXPORTACIÓN ESTRICTA Y MODULAR:
   const tieneDatosParaExportar = filtroEspecialidad 
     ? (topClasesFiltradas.length > 0 || totalUsosFiltrados > 0)
@@ -100,7 +103,7 @@ export default function SalasReportes() {
       const prefacio = generarPrefacioExcel("REPORTE DE LOGÍSTICA DE SALAS Y ACTIVIDADES", subTextoRango);
 
       const dataResumenRaw = [
-        { "Métrica": "Ocupación Promedio", "Valor": `${reporte.resumen?.ocupacion_promedio || 0}%` },
+        { "Métrica": "Ocupación Promedio", "Valor": `${ocupacionPromedioSegura}%` },
         { "Métrica": "Salas Reservadas", "Valor": reporte.resumen?.salas_reservadas || 0 },
         { "Métrica": "Lista de Espera", "Valor": reporte.resumen?.lista_espera || 0 },
       ];
@@ -200,7 +203,7 @@ export default function SalasReportes() {
       // Resumen Global
       doc.setFontSize(11);
       doc.setTextColor(0, 0, 0);
-      doc.text(`Ocupación Promedio de Salas: ${reporte.resumen?.ocupacion_promedio || 0}%`, 14, currentY); currentY += 6;
+      doc.text(`Ocupación Promedio de Salas: ${ocupacionPromedioSegura}%`, 14, currentY); currentY += 6;
       doc.text(`Salas Reservadas: ${reporte.resumen?.salas_reservadas || 0}`, 14, currentY); currentY += 6;
       doc.text(`Gente en Lista de Espera: ${reporte.resumen?.lista_espera || 0}`, 14, currentY); currentY += 14;
 
@@ -293,7 +296,7 @@ export default function SalasReportes() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '24px' }}>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Ocupación Promedio de Salas</span>
-              <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>{reporte.resumen?.ocupacion_promedio || 0}%</p>
+              <p style={{ ...s.valorMini, color: 'var(--color-primario-oscuro)' }}>{ocupacionPromedioSegura}%</p>
             </div>
             <div style={s.tarjetaMini}>
               <span style={s.labelMini}>Salas Reservadas</span>

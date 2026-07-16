@@ -375,17 +375,6 @@ export default function ClientesReportes() {
             </div>
           </div>
 
-          {/* 1. FILTRO POR ESPECIALIDAD */}
-          <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)', marginBottom: '24px' }}>
-            <div style={s.grupo}>
-              <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
-              <select id="filtroEsp" style={s.select} value={filtroEspecialidad} onChange={(e) => setFiltroEspecialidad(e.target.value)}>
-                <option value="">Mostrar todo (Perspectiva Global)</option>
-                {opcionesEspecialidades.map((op, i) => <option key={i} value={op}>{op}</option>)}
-              </select>
-            </div>
-          </div>
-
           {/* 3. MÓDULO SANCIONES (Maneja su propio Empty State) */}
           <div style={s.seccionReporte}>
             <h2 style={s.subtitulo}>
@@ -458,6 +447,16 @@ export default function ClientesReportes() {
               )}
             </div>
           
+           {/* 1. FILTRO POR ESPECIALIDAD */}
+          <div style={{ ...s.cardFiltros, background: 'var(--color-primario-suave, #f0fbfb)', border: '1px solid var(--color-primario)', marginBottom: '24px' }}>
+            <div style={s.grupo}>
+              <label style={{ ...s.label, color: 'var(--color-primario-oscuro)', fontWeight: '700' }} htmlFor="filtroEsp">Filtrar Segmento Operativo / Especialidad</label>
+              <select id="filtroEsp" style={s.select} value={filtroEspecialidad} onChange={(e) => setFiltroEspecialidad(e.target.value)}>
+                <option value="">Mostrar todo (Perspectiva Global)</option>
+                {opcionesEspecialidades.map((op, i) => <option key={i} value={op}>{op}</option>)}
+              </select>
+            </div>
+          </div>
 
           {/* 4. MÓDULO CONCURRENCIA (Maneja su propio Empty State) */}
           <div style={s.seccionReporte}>
