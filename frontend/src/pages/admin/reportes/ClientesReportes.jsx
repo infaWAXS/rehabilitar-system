@@ -173,12 +173,12 @@ export default function ClientesReportes() {
         });
       }
 
-      const dataMapaCalor = tieneDatosMapa ? reporte.mapa_calor.map(row => {
+        const dataMapaCalor = tieneDatosMapa ? reporte.mapa_calor.map(row => {
         const fila = { "Día / Módulo": row.dia };
         listaHorarios.forEach(h => {
           const cellData = row.horas[h];
-          const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
-          fila[`${h} hs`] = `${valorPct}%`;
+          const val = filtroEspecialidad ? cellData?.[filtroEspecialidad] : cellData?.general;
+          fila[`${h} hs`] = (val === null || val === undefined) ? "-" : `${val}%`;
         });
         return fila;
       }) : [];
@@ -276,10 +276,11 @@ export default function ClientesReportes() {
         doc.setFontSize(14);
         doc.text("Mapa de Calor: Ocupación (%)", 14, currentY);
         
-        const bodyMapa = reporte.mapa_calor.map(row => {
+          const bodyMapa = reporte.mapa_calor.map(row => {
           const celdasHoras = listaHorarios.map(h => {
             const cellData = row.horas[h];
-            return `${filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0)}%`;
+            const val = filtroEspecialidad ? cellData?.[filtroEspecialidad] : cellData?.general;
+            return (val === null || val === undefined) ? "-" : `${val}%`;
           });
           return [{ content: row.dia, styles: { fontStyle: 'bold' } }, ...celdasHoras];
         });
@@ -508,8 +509,14 @@ export default function ClientesReportes() {
                       <div style={s.celdaCalorDia}><strong>{row.dia}</strong></div>
                       {listaHorarios.map((h, idx) => {
                         const cellData = row.horas[h];
-                        const valorPct = filtroEspecialidad ? (cellData?.[filtroEspecialidad] ?? 0.0) : (cellData?.general ?? 0.0);
-                        return <div key={idx} style={s.celdaBloque(valorPct)}>{valorPct}%</div>;
+                        const valorRaw = filtroEspecialidad ? cellData?.[filtroEspecialidad] : cellData?.general;
+                        const esNulo = valorRaw === null || valorRaw === undefined;
+                        const valorVisual = esNulo ? "-" : `${valorRaw}%`;
+                        return (
+                          <div key={idx} style={s.celdaBloque(esNulo ? 0 : valorRaw)}>
+                            {valorVisual}
+                          </div>
+                        );
                       })}
                     </React.Fragment>
                   ))}

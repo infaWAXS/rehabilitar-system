@@ -172,34 +172,38 @@ def generar_reporte_clientes_service(db: Session, fecha_inicio: date, fecha_fin:
             
             acts_g = []
             for a in q_global:
-                if a.specific_date:
-                    if fecha_inicio <= a.specific_date <= fecha_fin and a.specific_date.weekday() == idx_dia:
-                        acts_g.append(a)
-                elif a.schedule and dia_n in a.schedule:
-                    acts_g.append(a)
-                elif a.activity_type == "fixed":
+                # Tratamos todas las clases por igual: validamos que tengan specific_date dentro del rango
+                # y que coincidan con el día de la semana iterado (idx_dia)
+                if a.specific_date and (fecha_inicio <= a.specific_date <= fecha_fin) and (a.specific_date.weekday() == idx_dia):
                     acts_g.append(a)
             
             cap_g = sum([a.capacity for a in acts_g])
-            val_g = 0.0
+            # Si no hay clases planificadas para el módulo general
             if cap_g > 0:
                 anot_g = db.query(func.count(Attendance.id)).filter(
                     Attendance.activity_id.in_([a.id for a in acts_g]), 
                     Attendance.timestamp.between(datetime_inicio, datetime_fin)
                 ).scalar() or 0
                 val_g = round(min((anot_g / cap_g * 100), 100), 1)
+            else:
+                val_g = None  # Indica que no hubo clases planificadas en este horario
 
             horas_alumnos[hora] = {"general": val_g}
+            
             for esp in lista_especialidades:
                 acts_e = [a for a in acts_g if a.specialization == esp]
                 cap_e = sum([a.capacity for a in acts_e])
-                val_e = 0.0
+                
+                # Si no hay clases planificadas para esta especialidad
                 if cap_e > 0:
                     anot_e = db.query(func.count(Attendance.id)).filter(
                         Attendance.activity_id.in_([a.id for a in acts_e]), 
                         Attendance.timestamp.between(datetime_inicio, datetime_fin)
                     ).scalar() or 0
                     val_e = round(min((anot_e / cap_e * 100), 100), 1)
+                else:
+                    val_e = None  # Indica que no hubo clases de la especialidad en este horario
+                    
                 horas_alumnos[hora][esp] = val_e
 
         mapa_calor_datos.append({"dia": dia_n, "horas": horas_alumnos})
