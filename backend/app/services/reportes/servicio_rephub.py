@@ -149,23 +149,22 @@ def generar_reporte_hub_service(db: Session, fecha_inicio: date, fecha_fin: date
             
             acts_g = []
             for a in q_global:
-                if a.specific_date:
-                    if fecha_inicio <= a.specific_date <= fecha_fin and a.specific_date.weekday() == idx_dia:
-                        acts_g.append(a)
-                elif a.schedule and dia_n in a.schedule:
-                    acts_g.append(a)
-                elif a.activity_type == "fixed":
+                # Tratamos todas las clases por igual: validamos que tengan specific_date dentro del rango
+                # y que coincidan con el día de la semana iterado (idx_dia)
+                if a.specific_date and (fecha_inicio <= a.specific_date <= fecha_fin) and (a.specific_date.weekday() == idx_dia):
                     acts_g.append(a)
             
             cap_g = sum([a.capacity for a in acts_g])
-            val_g = 0.0
+            # Si no hay capacidad ofertada, significa que no hubo clases planificadas en este horario
             if cap_g > 0:
                 anot_g = db.query(func.count(Attendance.id)).filter(
                     Attendance.activity_id.in_([a.id for a in acts_g]), 
                     Attendance.timestamp.between(datetime_inicio, datetime_fin)
                 ).scalar() or 0
                 val_g = round(min((anot_g / cap_g * 100), 100), 1)
-
+            else:
+                val_g = None  # Marcador para indicar que no hubo clases dictadas
+                
             horas_alumnos[hora] = {"general": val_g}
         
         mapa_calor_datos.append({"dia": dia_n, "horas": horas_alumnos})

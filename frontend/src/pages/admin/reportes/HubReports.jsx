@@ -64,7 +64,13 @@ export default function HubReports() {
   };
 
   const salasOrdenadas = reporte ? procesarOrdenamiento(reporte.ocupacion_aulas, sortSalas) : [];
-  const profesoresOrdenados = reporte ? procesarOrdenamiento(reporte.profesores_mayor_concurrencia, sortProfesores) : [];
+  // Filtramos para que solo pasen los profesores con 1 o más clases dictadas
+  const profesoresOrdenados = reporte 
+    ? procesarOrdenamiento(
+        reporte.profesores_mayor_concurrencia.filter(p => (p.cantidad_clases_dictadas ?? 0) >= 1), 
+        sortProfesores
+      ) 
+    : [];
   const listaHorarios = reporte?.mapa_calor?.[0] ? Object.keys(reporte.mapa_calor[0].horas).sort() : [];
 
   const handleExport = (formato) => {
@@ -90,7 +96,8 @@ export default function HubReports() {
         const dataMapaCalor = reporte.mapa_calor.map(row => {
           const fila = { "Día / Módulo": row.dia };
           listaHorarios.forEach(h => {
-            fila[`${h} hs`] = `${row.horas[h]?.general ?? 0.0}%`;
+            const val = row.horas[h]?.general;
+            fila[`${h} hs`] = (val === null || val === undefined) ? "-" : `${val}%`;
           });
           return fila;
         });
@@ -107,9 +114,15 @@ export default function HubReports() {
       wsSalas['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsSalas, "Ocupación de Salas");
 
-      const wsProfes = XLSX.utils.json_to_sheet(reporte.profesores_mayor_concurrencia.map(p => ({
-        "Kinesiólogo": p.nombre, "Alumnos Atendidos": p.total_alumnos_atendidos, "Clases Dadas": p.cantidad_clases_dictadas
-      })));
+      const wsProfes = XLSX.utils.json_to_sheet(
+        reporte.profesores_mayor_concurrencia
+          .filter(p => (p.cantidad_clases_dictadas ?? 0) >= 1)
+          .map(p => ({
+            "Kinesiólogo": p.nombre, 
+            "Alumnos Atendidos": p.total_alumnos_atendidos, 
+            "Clases Dadas": p.cantidad_clases_dictadas
+          }))
+      );
       wsProfes['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }];
       XLSX.utils.book_append_sheet(wb, wsProfes, "Concurrencia Profesores");
 
@@ -143,7 +156,8 @@ export default function HubReports() {
       doc.text(`Clientes Totales: ${reporte.resumen.clientes_totales}`, 14, currentY); currentY += 6;
       doc.text(`Ingresos por Planes: $${Number(reporte.resumen.ingresos_totales).toLocaleString('es-AR')}`, 14, currentY); currentY += 6;
       doc.text(`Staff de Profesores: ${reporte.resumen.profesores_totales}`, 14, currentY); currentY += 6;
-      doc.text(`Tasa de Presentismo: ${100 - (reporte.resumen.tasa_ausentismo || 0)}%`, 14, currentY);
+      doc.text(`Tasa de Presentismo: ${100 - (reporte.resumen.tasa_ausentismo || 0)}%`, 14, currentY); 
+      currentY += 14; // <-- Cambiamos esto para que sume 14 y dé un salto limpio antes de la siguiente sección
 
       const baseTableStyles = {
         theme: 'striped',
@@ -159,7 +173,10 @@ export default function HubReports() {
         doc.text("Mapa de Calor: Ocupacion Comercial (%)", 14, currentY);
         
         const bodyMapa = reporte.mapa_calor.map(row => {
-          const celdasHoras = listaHorarios.map(h => `${row.horas[h]?.general ?? 0.0}%`);
+          const celdasHoras = listaHorarios.map(h => {
+            const val = row.horas[h]?.general;
+            return (val === null || val === undefined) ? "-" : `${val}%`;
+          });
           return [{ content: row.dia, styles: { fontStyle: 'bold' } }, ...celdasHoras];
         });
 
@@ -194,7 +211,9 @@ export default function HubReports() {
         ...baseTableStyles,
         startY: currentY + 4,
         head: [['Kinesiologo', 'Alumnos Atendidos', 'Clases Dadas']],
-        body: reporte.profesores_mayor_concurrencia.map(p => [p.nombre, p.total_alumnos_atendidos, p.cantidad_clases_dictadas]),
+        body: reporte.profesores_mayor_concurrencia
+          .filter(p => (p.cantidad_clases_dictadas ?? 0) >= 1)
+          .map(p => [p.nombre, p.total_alumnos_atendidos, p.cantidad_clases_dictadas]),
         columnStyles: { 0: { cellWidth: 70 }, 1: { halign: 'center' }, 2: { halign: 'center' } }
       });
       currentY = doc.lastAutoTable.finalY + 14;
@@ -295,8 +314,14 @@ export default function HubReports() {
                     <React.Fragment key={i}>
                       <div style={s.celdaCalorDia}><strong>{row.dia}</strong></div>
                       {listaHorarios.map((h, idx) => {
-                        const valorPct = row.horas[h]?.general ?? 0.0;
-                        return <div key={idx} style={s.celdaBloque(valorPct)}>{valorPct}%</div>;
+                        const valorRaw = row.horas[h]?.general;
+                        const esNulo = valorRaw === null || valorRaw === undefined;
+                        const valorVisual = esNulo ? "-" : `${valorRaw}%`;
+                        return (
+                          <div key={idx} style={s.celdaBloque(esNulo ? 0 : valorRaw)}>
+                            {valorVisual}
+                          </div>
+                        );
                       })}
                     </React.Fragment>
                   ))}
