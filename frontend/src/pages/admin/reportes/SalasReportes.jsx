@@ -129,7 +129,8 @@ export default function SalasReportes() {
       const dataOcupacionFijaRaw = reporte.ocupacion_aulas
         ? reporte.ocupacion_aulas
             .filter(a => {
-              const pct = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+              const pctRenderRaw = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+              const pctRender = Math.min(pctRenderRaw, 100);
               return !filtroEspecialidad || pct > 0;
             })
             .map(a => {
@@ -262,7 +263,8 @@ export default function SalasReportes() {
             return !filtroEspecialidad || pct > 0;
           })
           .map(a => {
-            const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+            const pctRenderRaw = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+            const pctRender = Math.min(pctRenderRaw, 100);
             const usosRender = filtroEspecialidad ? (a.por_especialidad?.[`${filtroEspecialidad}_cantidad_usos`] ?? 0) : a.cantidad_usos;
             return [a.aula, a.capacidad, usosRender, `${a.porcentaje_reserva}%`, `${pctRender}%`, `${a.porcentaje_presentes}%`];
           });
@@ -409,7 +411,8 @@ export default function SalasReportes() {
             {(() => {
               // Filtramos las salas que de verdad tienen métricas válidas según el filtro actual
               const salasFiltradasParaMostrar = reporte.ocupacion_aulas?.filter(a => {
-                const pctRender = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+                const pctRenderRaw = filtroEspecialidad ? (a.por_especialidad?.[filtroEspecialidad] ?? 0) : a.porcentaje_ocupacion;
+                const pctRender = Math.min(pctRenderRaw, 100);
                 return !filtroEspecialidad || pctRender > 0;
               }) || [];
 
