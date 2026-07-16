@@ -636,17 +636,6 @@ useEffect(() => {
                     {resultadoFinal.mensaje}
                   </div>
                 )}
-                <button
-                  type="button"
-                  style={{ ...s.botonPrimario, width: '100%', opacity: finalizando ? 0.7 : 1 }}
-                  onClick={handleFinalizar}
-                  disabled={finalizando}
-                >
-                  {finalizando ? 'Finalizando...' : 'Finalizar clase y registrar inasistencias'}
-                </button>
-                <p style={{ fontSize: '12px', color: 'var(--color-texto-suave)', marginTop: '8px', textAlign: 'center' }}>
-                  Los ausentes quedarán registrados. Un cliente con más de 3 inasistencias o menos del 50% de asistencia mensual será suspendido automáticamente.
-                </p>
               </div>
             )}
           </div>
